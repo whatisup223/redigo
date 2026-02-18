@@ -1,11 +1,11 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  BarChart3, 
-  Settings, 
-  ShieldCheck, 
+import {
+  LayoutDashboard,
+  BarChart3,
+  Settings,
+  ShieldCheck,
   LogOut,
   Menu,
   X,
@@ -20,13 +20,12 @@ interface SidebarItemProps {
 }
 
 const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, active }) => (
-  <Link 
+  <Link
     to={path}
-    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
-      active 
-        ? 'bg-orange-600 text-white shadow-lg shadow-orange-200 font-semibold translate-x-1' 
+    className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${active
+        ? 'bg-orange-600 text-white shadow-lg shadow-orange-200 font-semibold translate-x-1'
         : 'text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm'
-    }`}
+      }`}
   >
     <Icon size={20} className={`${active ? 'text-white' : 'group-hover:text-orange-500 transition-colors'}`} />
     <span className="text-sm">{label}</span>
@@ -41,13 +40,12 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: Settings, label: 'Settings', path: '/settings' },
-    { icon: ShieldCheck, label: 'Admin', path: '/admin' },
   ];
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] flex font-['Outfit']">
       {/* Mobile Sidebar Toggle */}
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
         className="lg:hidden fixed bottom-6 right-6 z-50 p-4 bg-orange-600 text-white rounded-full shadow-2xl hover:scale-110 transition-transform active:scale-95"
       >
@@ -69,8 +67,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         <nav className="space-y-2">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-4">Main Menu</p>
           {menuItems.map((item) => (
-            <SidebarItem 
-              key={item.path} 
+            <SidebarItem
+              key={item.path}
               icon={item.icon}
               label={item.label}
               path={item.path}
@@ -88,8 +86,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-bold text-slate-900 truncate">Jane Doe</p>
                 <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pro Plan</p>
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pro Plan</p>
                 </div>
               </div>
             </div>

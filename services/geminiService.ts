@@ -1,9 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
 import { GeneratedReply, RedditPost } from "../types";
-
-// Always use a named parameter and process.env.API_KEY directly as per guidelines
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateRedditReply = async (
   post: RedditPost,
@@ -11,40 +6,38 @@ export const generateRedditReply = async (
   tone: string,
   audience: string
 ): Promise<GeneratedReply> => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Generate a value-add Reddit reply for this post.
-    Post Title: ${post.title}
-    Post Body: ${post.selftext.substring(0, 1000)}
-    Target Topic: ${topic}
-    Audience Level: ${audience}
-    Desired Tone: ${tone}
-    
-    The reply should be helpful, provide unique insights, and avoid common AI tropes.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          comment: { type: Type.STRING, description: 'The generated Reddit comment text.' },
-          tone: { type: Type.STRING, description: 'The tone used in the comment.' },
-          actionable_points: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: 'Key points addressed in the reply.'
-          },
-          keywords: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: 'Targeted keywords used for SEO/visibility.'
-          }
-        },
-        required: ["comment", "tone", "actionable_points", "keywords"]
+  try {
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      thinkingConfig: { thinkingBudget: 0 }
-    }
-  });
+      body: JSON.stringify({
+        prompt: `Generate a value-add Reddit reply for this post.
+        Post Title: ${post.title}
+        Post Body: ${post.selftext.substring(0, 1000)}
+        Target Topic: ${topic}
+        Audience Level: ${audience}
+        Desired Tone: ${tone}
+        
+        The reply should be helpful, provide unique insights, and avoid common AI tropes. Return STRICT JSON with keys: comment, tone, actionable_points, keywords.`,
+        context: { postId: post.id, subreddit: post.subreddit }
+      })
+    });
 
-  const text = response.text || '{}';
-  return JSON.parse(text) as GeneratedReply;
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.text;
+
+    // Clean up potential markdown code blocks if the AI returns them
+    const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+
+    return JSON.parse(cleanJson) as GeneratedReply;
+  } catch (error) {
+    console.error("Error generating reply via backend:", error);
+    throw error;
+  }
 };
