@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Zap,
-  Crown
+  Crown,
+  PenTool
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -41,6 +42,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+    { icon: PenTool, label: 'Post Architect', path: '/content-architect' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];

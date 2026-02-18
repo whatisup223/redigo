@@ -11,7 +11,9 @@ import {
     AlertCircle,
     Menu,
     X,
-    CreditCard
+    CreditCard,
+    Globe,
+    Sliders
 } from 'lucide-react';
 
 interface SidebarItemProps {
@@ -41,9 +43,8 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
     const menuItems = [
         { icon: LayoutDashboard, label: 'Overview', path: '/admin' },
         { icon: Users, label: 'User Management', path: '/admin/users' },
-        { icon: Settings, label: 'AI Configuration', path: '/admin/ai' },
+        { icon: Sliders, label: 'Configuration', path: '/admin/settings' },
         { icon: AlertCircle, label: 'System Logs', path: '/admin/logs' },
-        { icon: CreditCard, label: 'Payment Gateway', path: '/admin/payments' },
     ];
 
     return (
