@@ -2,7 +2,14 @@
 import React from 'react';
 import { User, CreditCard, Shield, Bell, Github, Globe, Link as LinkIcon, LogOut } from 'lucide-react';
 
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
 export const Settings: React.FC = () => {
+    const { user } = useAuth();
+
+    if (!user) return <div>Loading...</div>;
+
     return (
         <div className="max-w-4xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pb-20">
             <div className="space-y-2 border-b border-slate-100 pb-6">
@@ -28,11 +35,11 @@ export const Settings: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <label className="space-y-2">
                                 <span className="text-sm font-bold text-slate-700">Display Name</span>
-                                <input type="text" defaultValue="Jane Doe" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-700" />
+                                <input type="text" defaultValue={user.name} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-700" />
                             </label>
                             <label className="space-y-2">
                                 <span className="text-sm font-bold text-slate-700">Email Address</span>
-                                <input type="email" defaultValue="jane@example.com" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-700" />
+                                <input type="email" defaultValue={user.email} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-700" disabled />
                             </label>
                         </div>
                     </div>
@@ -83,11 +90,21 @@ export const Settings: React.FC = () => {
                         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                             <div>
                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Current Plan</p>
-                                <p className="text-3xl font-extrabold mb-2">Pro Plan</p>
-                                <p className="text-slate-400 text-sm">$29/month • Renews on Feb 28, 2026</p>
+                                <p className="text-3xl font-extrabold mb-2">{user.plan} Plan</p>
+                                <p className="text-slate-400 text-sm">
+                                    {user.plan === 'Free' ? 'Free Forever' : 'Renews automatically'}
+                                </p>
                             </div>
                             <div className="flex gap-3">
-                                <button className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-100 transition-colors">Manage Subscription</button>
+                                {user.plan === 'Free' ? (
+                                    <Link to="/pricing" className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-orange-500/30 transition-all">
+                                        Upgrade Plan
+                                    </Link>
+                                ) : (
+                                    <button className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-100 transition-colors">
+                                        Manage Subscription
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

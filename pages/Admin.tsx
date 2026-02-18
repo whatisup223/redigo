@@ -17,7 +17,8 @@ import {
     Shield,
     Zap,
     Trash2,
-    Edit2
+    Edit2,
+    CreditCard
 } from 'lucide-react';
 
 // Mock Data Types
@@ -38,6 +39,13 @@ interface AISettings {
     apiKey: string;
 }
 
+interface StripeSettings {
+    publishableKey: string;
+    secretKey: string;
+    webhookSecret: string;
+    isSandbox: boolean;
+}
+
 import { useLocation } from 'react-router-dom';
 
 export const Admin: React.FC = () => {
@@ -47,6 +55,7 @@ export const Admin: React.FC = () => {
         const path = location.pathname;
         if (path.includes('/users')) return 'users';
         if (path.includes('/ai')) return 'ai';
+        if (path.includes('/payments')) return 'payments';
         if (path.includes('/logs')) return 'logs';
         return 'overview';
     };
@@ -62,6 +71,12 @@ export const Admin: React.FC = () => {
         systemPrompt: '',
         apiKey: ''
     });
+    const [stripeSettings, setStripeSettings] = useState<StripeSettings>({
+        publishableKey: '',
+        secretKey: '',
+        webhookSecret: '',
+        isSandbox: true
+    });
     const [stats, setStats] = useState({
         totalUsers: 0,
         activeSubscriptions: 0,
@@ -74,15 +89,19 @@ export const Admin: React.FC = () => {
         setLoading(true);
         try {
             // Parallel requests for efficiency
-            const [statsRes, usersRes, aiRes] = await Promise.all([
+            const [statsRes, usersRes, aiRes, stripeRes] = await Promise.all([
                 fetch('/api/admin/stats'),
                 fetch('/api/admin/users'),
-                fetch('/api/admin/ai-settings')
+                fetch('/api/admin/ai-settings'),
+                fetch('/api/admin/stripe-settings')
             ]);
 
             if (statsRes.ok) setStats(await statsRes.json());
             if (usersRes.ok) setUsers(await usersRes.json());
             if (aiRes.ok) setAiSettings(await aiRes.json());
+            const stripeData = await stripeRes.json(); // May fail if not implemented on backend yet, define fallback
+            if (stripeRes.ok) setStripeSettings(stripeData);
+
 
         } catch (error) {
             console.error("Failed to fetch admin data", error);
@@ -113,6 +132,24 @@ export const Admin: React.FC = () => {
         }
     };
 
+    const handleSaveStripeSettings = async () => {
+        try {
+            const res = await fetch('/api/admin/stripe-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(stripeSettings)
+            });
+            if (res.ok) {
+                alert('Stripe settings saved successfully!');
+            } else {
+                alert('Failed to save Stripe settings.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving Stripe settings.');
+        }
+    };
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-fade-in font-['Outfit'] pb-20">
             {/* Header */}
@@ -123,6 +160,7 @@ export const Admin: React.FC = () => {
                             {activeTab === 'overview' && 'System Overview'}
                             {activeTab === 'users' && 'User Management'}
                             {activeTab === 'ai' && 'AI Intelligence'}
+                            {activeTab === 'payments' && 'Payment Gateway'}
                             {activeTab === 'logs' && 'System Logs'}
                         </h1>
                     </div>
@@ -130,6 +168,7 @@ export const Admin: React.FC = () => {
                         {activeTab === 'overview' && 'Real-time platform metrics.'}
                         {activeTab === 'users' && 'Manage access and subscriptions.'}
                         {activeTab === 'ai' && 'Configure Generative AI models.'}
+                        {activeTab === 'payments' && 'Manage Stripe integration.'}
                         {activeTab === 'logs' && 'Server events and activity.'}
                     </p>
                 </div>
@@ -359,6 +398,98 @@ export const Admin: React.FC = () => {
                                 >
                                     <Save size={20} />
                                     Save Configuration
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Payment Gateway Tab */}
+                    {activeTab === 'payments' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="col-span-2 space-y-8">
+                                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-6">
+                                    <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+                                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                                            <CreditCard size={24} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-slate-900">Stripe Configuration</h2>
+                                            <p className="text-slate-400 text-sm">Manage API keys and payment processing modes.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                                            <div>
+                                                <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
+                                                <p className="text-slate-500 text-xs">Enable for testing payments without real charges.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
+                                                className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                            </button>
+                                        </div>
+
+                                        <label className="block">
+                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key {stripeSettings.isSandbox && '(Test)'}</span>
+                                            <input
+                                                type="text"
+                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm leading-relaxed"
+                                                value={stripeSettings.publishableKey}
+                                                onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
+                                                placeholder={stripeSettings.isSandbox ? "pk_test_..." : "pk_live_..."}
+                                            />
+                                        </label>
+
+                                        <label className="block">
+                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key {stripeSettings.isSandbox && '(Test)'}</span>
+                                            <input
+                                                type="password"
+                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm leading-relaxed"
+                                                value={stripeSettings.secretKey}
+                                                onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
+                                                placeholder={stripeSettings.isSandbox ? "sk_test_..." : "sk_live_..."}
+                                            />
+                                        </label>
+
+                                        <label className="block">
+                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Signing Secret</span>
+                                            <input
+                                                type="password"
+                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm leading-relaxed"
+                                                value={stripeSettings.webhookSecret}
+                                                onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
+                                                placeholder="whsec_..."
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div className="bg-indigo-900 p-6 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                                    <div className="relative z-10 space-y-4">
+                                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                                            <Shield size={24} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-lg">Secure Integration</h3>
+                                            <p className="text-indigo-200 text-sm mt-2 opacity-80 leading-relaxed">
+                                                Your keys are encrypted at rest. We use industry-standard security practices to protect payment data.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleSaveStripeSettings}
+                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-indigo-600 hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <Save size={20} />
+                                    Save API Keys
                                 </button>
                             </div>
                         </div>

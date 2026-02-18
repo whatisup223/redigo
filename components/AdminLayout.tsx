@@ -8,8 +8,10 @@ import {
     Activity,
     LogOut,
     Shield,
+    AlertCircle,
     Menu,
-    X
+    X,
+    CreditCard
 } from 'lucide-react';
 
 interface SidebarItemProps {
@@ -23,8 +25,8 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, acti
     <Link
         to={path}
         className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${active
-                ? 'bg-slate-900 text-white shadow-lg shadow-slate-200 font-semibold translate-x-1'
-                : 'text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm'
+            ? 'bg-slate-900 text-white shadow-lg shadow-slate-200 font-semibold translate-x-1'
+            : 'text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm'
             }`}
     >
         <Icon size={20} className={`${active ? 'text-white' : 'group-hover:text-slate-900 transition-colors'}`} />
@@ -40,7 +42,8 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
         { icon: LayoutDashboard, label: 'Overview', path: '/admin' },
         { icon: Users, label: 'User Management', path: '/admin/users' },
         { icon: Settings, label: 'AI Configuration', path: '/admin/ai' },
-        { icon: Activity, label: 'System Logs', path: '/admin/logs' },
+        { icon: AlertCircle, label: 'System Logs', path: '/admin/logs' },
+        { icon: CreditCard, label: 'Payment Gateway', path: '/admin/payments' },
     ];
 
     return (
@@ -81,9 +84,9 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
                 </nav>
 
                 <div className="mt-auto absolute bottom-8 left-6 right-6">
-                    <Link to="/" className="w-full flex items-center gap-3 px-5 py-3 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm">
+                    <Link to="/login" className="w-full flex items-center gap-3 px-5 py-3 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm">
                         <LogOut size={18} />
-                        <span>Exit Admin</span>
+                        <span>Log Out</span>
                     </Link>
                 </div>
             </aside>

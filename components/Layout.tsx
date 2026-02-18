@@ -9,8 +9,10 @@ import {
   LogOut,
   Menu,
   X,
-  Zap
+  Zap,
+  Crown
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarItemProps {
   icon: any;
@@ -23,8 +25,8 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, acti
   <Link
     to={path}
     className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${active
-        ? 'bg-orange-600 text-white shadow-lg shadow-orange-200 font-semibold translate-x-1'
-        : 'text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm'
+      ? 'bg-orange-600 text-white shadow-lg shadow-orange-200 font-semibold translate-x-1'
+      : 'text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm'
       }`}
   >
     <Icon size={20} className={`${active ? 'text-white' : 'group-hover:text-orange-500 transition-colors'}`} />
@@ -35,6 +37,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, acti
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -78,21 +81,38 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         </nav>
 
         <div className="mt-auto absolute bottom-8 left-6 right-6 space-y-4">
+
+          {user?.plan === 'Free' && (
+            <Link to="/pricing" className="block bg-gradient-to-br from-orange-500 to-red-500 p-4 rounded-3xl shadow-lg shadow-orange-200 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mr-6 -mt-6 group-hover:scale-150 transition-transform duration-500"></div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2">
+                  <Crown size={18} className="text-yellow-300 fill-yellow-300 animate-pulse" />
+                  <span className="font-bold text-sm tracking-wide">Upgrade to Pro</span>
+                </div>
+                <p className="text-orange-100 text-[10px] leading-relaxed mb-3 font-medium">Unlock unlimited AI replies and advanced analytics.</p>
+                <button className="w-full py-2 bg-white text-orange-600 rounded-xl text-xs font-bold hover:bg-orange-50 transition-colors shadow-sm">
+                  Get Pro Access
+                </button>
+              </div>
+            </Link>
+          )}
+
           <div className="bg-white/80 border border-slate-200/60 p-4 rounded-3xl shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-200 to-slate-100 flex items-center justify-center text-slate-600 font-bold shadow-inner">
-                JD
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-200 to-slate-100 flex items-center justify-center text-slate-600 font-bold shadow-inner uppercase">
+                {user?.name ? user.name.substring(0, 2) : 'JD'}
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold text-slate-900 truncate">Jane Doe</p>
+                <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Guest User'}</p>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pro Plan</p>
+                  <span className={`w-1.5 h-1.5 rounded-full ${user?.plan === 'Free' ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`}></span>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{user?.plan || 'Guest'} Plan</p>
                 </div>
               </div>
             </div>
           </div>
-          <button className="w-full flex items-center gap-3 px-5 py-3 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm">
+          <button onClick={logout} className="w-full flex items-center gap-3 px-5 py-3 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm">
             <LogOut size={18} />
             <span>Log Out</span>
           </button>

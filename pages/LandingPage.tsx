@@ -46,14 +46,16 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-bold text-slate-500">
-            <a href="#features" className="hover:text-orange-600 transition-colors">Features</a>
-            <a href="#pricing" className="hover:text-orange-600 transition-colors">Pricing</a>
-            <a href="#testimonials" className="hover:text-orange-600 transition-colors">Testimonials</a>
+            <button onClick={() => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Home</button>
+            <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Features</button>
+            <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">How it Works</button>
+            <button onClick={() => document.getElementById('approach')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Live Demo</button>
+            <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Pricing</button>
           </div>
 
           <div className="flex items-center gap-4">
-            <Link to="/dashboard" className="hidden md:block px-6 py-3 text-slate-600 font-bold hover:text-slate-900 transition-colors">Log In</Link>
-            <Link to="/dashboard" className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold border border-slate-800 hover:bg-orange-600 hover:border-orange-500 transition-all shadow-xl hover:shadow-orange-200 active:scale-95 flex items-center gap-2">
+            <Link to="/login" className="hidden md:block px-6 py-3 text-slate-600 font-bold hover:text-slate-900 transition-colors">Log In</Link>
+            <Link to="/signup" className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold border border-slate-800 hover:bg-orange-600 hover:border-orange-500 transition-all shadow-xl hover:shadow-orange-200 active:scale-95 flex items-center gap-2">
               Get Started <ArrowRight size={16} />
             </Link>
           </div>
@@ -61,7 +63,7 @@ export const LandingPage: React.FC = () => {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-32 px-6 relative overflow-hidden">
+      <section id="home" className="pt-32 pb-32 px-6 relative overflow-hidden">
         {/* Animated Background Gradients */}
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-orange-200/40 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 -z-10 animate-pulse-slow"></div>
         <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-blue-200/30 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 -z-10 animate-pulse-slow delay-700"></div>
@@ -109,7 +111,7 @@ export const LandingPage: React.FC = () => {
 
           {/* Call to Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 animate-fade-in-up delay-300">
-            <Link to="/dashboard" className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-[2rem] font-bold text-xl hover:shadow-2xl hover:shadow-orange-500/40 hover:-translate-y-1 transition-all flex items-center justify-center gap-3">
+            <Link to="/signup" className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-[2rem] font-bold text-xl hover:shadow-2xl hover:shadow-orange-500/40 hover:-translate-y-1 transition-all flex items-center justify-center gap-3">
               <Zap size={24} className="text-white fill-white" />
               Activate Your AI Agent
             </Link>
@@ -209,7 +211,7 @@ export const LandingPage: React.FC = () => {
 
 
       {/* How it Works Section */}
-      <section className="py-24 bg-white relative">
+      <section id="how-it-works" className="py-24 bg-white relative">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Launch in 60 seconds.</h2>
@@ -258,7 +260,7 @@ export const LandingPage: React.FC = () => {
 
             {/* Left Content: Explanation */}
             <div className="space-y-8 relative z-10">
-              <span className="text-orange-600 font-bold tracking-widest text-sm uppercase">Our Approach</span>
+              <span className="text-orange-600 font-bold tracking-widest text-sm uppercase">Live Demo</span>
               <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 leading-tight">
                 Smart enough to sound <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">human.</span>
               </h2>
@@ -515,7 +517,7 @@ export const LandingPage: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-                <button className="w-full py-4 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-2xl font-bold transition-colors">Start Free</button>
+                <Link to="/signup" className="w-full py-4 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-2xl font-bold transition-colors text-center block">Start Free</Link>
               </div>
             </div>
 
@@ -543,7 +545,7 @@ export const LandingPage: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-                <button className="w-full py-4 bg-white text-orange-600 hover:bg-orange-50 rounded-2xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">Get Started</button>
+                <Link to="/signup" className="w-full py-4 bg-white text-orange-600 hover:bg-orange-50 rounded-2xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-center block">Get Started</Link>
               </div>
             </div>
 
@@ -594,7 +596,7 @@ export const LandingPage: React.FC = () => {
               </p>
 
               <div className="flex flex-col items-center pt-4">
-                <Link to="/dashboard" className="px-10 py-5 bg-white text-orange-600 rounded-full font-bold text-lg hover:bg-orange-50 hover:scale-105 transition-all shadow-xl shadow-orange-900/10 mb-6">
+                <Link to="/signup" className="px-10 py-5 bg-white text-orange-600 rounded-full font-bold text-lg hover:bg-orange-50 hover:scale-105 transition-all shadow-xl shadow-orange-900/10 mb-6">
                   Activate Your AI Agent
                 </Link>
                 <p className="text-orange-200 text-sm font-bold tracking-wide">
