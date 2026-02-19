@@ -33,8 +33,16 @@ const BRAND_TONES = [
 ];
 
 export const Settings: React.FC = () => {
-    const { user, logout, updateUser } = useAuth();
+    const { user, logout, updateUser, syncUser } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
+
+    useEffect(() => {
+        const queryParams = new URLSearchParams(window.location.search);
+        if (queryParams.get('success') === 'true') {
+            syncUser();
+            setActiveTab('billing'); // Automatically switch to billing so user sees the change
+        }
+    }, [syncUser]);
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [loading, setLoading] = useState(true);
     const [brandSaving, setBrandSaving] = useState(false);

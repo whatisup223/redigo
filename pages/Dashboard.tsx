@@ -145,7 +145,7 @@ const QuickAction = ({
 // ── main component ────────────────────────────────────────────────────────────
 
 export const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, syncUser } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,6 +153,12 @@ export const Dashboard: React.FC = () => {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
 
+  useEffect(() => {
+    // If we just returned from a successful payment, sync user data immediately
+    if (window.location.search.includes('success=true')) {
+      syncUser();
+    }
+  }, [syncUser]);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;

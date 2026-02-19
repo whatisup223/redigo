@@ -605,6 +605,19 @@ app.put('/api/admin/users/:id', adminAuth, (req, res) => {
   }
 });
 
+// Get Single User Profile (Safe)
+app.get('/api/users/:id', (req, res) => {
+  const { id } = req.params;
+  const user = users.find(u => u.id == id);
+
+  if (user) {
+    const { password, ...safeUser } = user;
+    res.json(safeUser);
+  } else {
+    res.status(404).json({ error: 'User not found' });
+  }
+});
+
 // User Self-Update Endpoint
 app.put('/api/users/:id', (req, res) => {
   const { id } = req.params;
@@ -910,54 +923,6 @@ app.get('/api/user/reddit/status', async (req, res) => {
   });
 });
 
-// Create Checkout Session
-app.post('/api/create-checkout-session', async (req, res) => {
-  const stripe = getStripe();
-  if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
-
-  const { plan, cycle, userEmail } = req.body; // plan: 'Growth' | 'Agency', cycle: 'monthly' | 'yearly'
-
-  const prices = {
-    'Growth': { monthly: 2900, yearly: 29000 },
-    'Agency': { monthly: 7900, yearly: 79000 }
-  };
-
-  const unitAmount = cycle === 'yearly' ? prices[plan].yearly : prices[plan].monthly;
-
-  try {
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `${plan} Plan (${cycle})`,
-            },
-            unit_amount: unitAmount,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment', // Use 'subscription' for recurring, 'payment' for one-time
-      customer_email: userEmail, // Pre-fill user email
-      metadata: {
-        plan: plan,
-        userEmail: userEmail,
-        credits: getPlanCredits(plan).toString() // Pass credits to metadata for webhook
-      },
-      success_url: `${baseUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `${baseUrl}/pricing?canceled=true`,
-    });
-
-    res.json({ id: session.id, url: session.url });
-  } catch (error) {
-    console.error('[Stripe Error]', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 app.post('/api/user/reddit/disconnect', (req, res) => {
   const { userId, username } = req.body;
@@ -985,77 +950,6 @@ const getPlanCredits = (planName) => {
   return p ? p.credits : 0;
 };
 
-// Webhook Handler (Mock)
-app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
-  const sig = request.headers['stripe-signature'];
-  const stripe = getStripe();
-
-  let event;
-
-  try {
-    if (stripeSettings.webhookSecret && stripe) {
-      event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
-    } else {
-      // For development/sandbox without secret locally
-      let bodyData = request.body;
-      if (Buffer.isBuffer(bodyData)) {
-        bodyData = bodyData.toString('utf8');
-      }
-      try {
-        if (typeof bodyData === 'string') {
-          event = JSON.parse(bodyData);
-        } else {
-          event = bodyData;
-        }
-      } catch (e) {
-        // If parsing fails, just use body directly if simplistic
-        event = request.body;
-      }
-    }
-  } catch (err) {
-    console.error(`[Webhook Error] ${err.message}`);
-    return response.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  // Handle the event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    // Metadata is critical here
-    const { userEmail, plan } = session.metadata || {};
-
-    console.log(`[Webhook] Payment successful for ${userEmail}. Plan: ${plan}`);
-
-    if (userEmail && plan) {
-      const userIndex = users.findIndex(u => u.email === userEmail);
-      if (userIndex !== -1) {
-
-        // 1. Determine Credits to Add
-        // User asked: "Shouldn't the points be added...?" -> YES.
-        const creditsToAdd = getPlanCredits(plan);
-        const currentCredits = users[userIndex].credits || 0;
-
-        // 2. Calculate Subscription Period (1 Month explicitly)
-        const now = new Date();
-        const oneMonthLater = new Date(now);
-        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
-
-        // 3. Update User
-        users[userIndex].plan = plan;
-        users[userIndex].status = 'Active';
-        users[userIndex].credits = currentCredits + creditsToAdd; // Accumulate
-        users[userIndex].subscriptionStart = now.toISOString();
-        users[userIndex].subscriptionEnd = oneMonthLater.toISOString();
-
-        saveSettings({ users });
-        console.log(`[Database] User ${userEmail} upgraded to ${plan}. Added ${creditsToAdd} credits. New Total: ${users[userIndex].credits}. Expires: ${oneMonthLater.toISOString()}`);
-      } else {
-        console.warn(`[Database] User ${userEmail} not found!`);
-      }
-    }
-  }
-
-  response.send();
-});
 
 // AI Generation Proxy (Backend)
 app.post('/api/generate', async (req, res) => {
