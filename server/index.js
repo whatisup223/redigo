@@ -33,71 +33,68 @@ const saveSettings = (data) => {
 const savedData = loadSettings();
 
 const app = express();
+app.set('trust proxy', true); // Trust reverse proxy (EasyPanel/Nginx)
 const PORT = process.env.PORT || 3001;
 
 // Webhook Handler (Must be before express.json)
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
   const sig = request.headers['stripe-signature'];
   const stripe = getStripe();
+  const stripeSettings = loadSettings().stripe || {};
 
   let event;
 
   try {
     if (stripeSettings.webhookSecret && stripe && sig) {
-      // Live Stripe Verification
       event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
     } else {
-      // Local/Dev without secret (if needed) or just fail
-      console.log('[Webhook] Received without verification (Dev Mode or Missing Secret/Signature)');
-      try {
-        event = JSON.parse(request.body.toString());
-      } catch (err) {
-        console.error('[Webhook] Payload parse error', err);
-        return response.status(400).send(`Webhook Error: ${err.message}`);
-      }
+      console.log('[Webhook] Received without verification (Dev or Missing Secret)');
+      event = JSON.parse(request.body.toString());
     }
   } catch (err) {
     console.error('[Webhook] Signature verification failed.', err.message);
     return response.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  console.log(`[Webhook] Event received: ${event.type}`);
+  console.log(`[Webhook] Event: ${event.type}`);
 
-  // Handle the event
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+
+    // RELOAD USERS FROM DISK
+    const freshData = loadSettings();
+    const localUsers = freshData.users || [];
+
     const { userEmail, plan, credits } = session.metadata || {};
+    const stripeCustomerEmail = session.customer_details?.email;
+    const emailToSearch = userEmail || stripeCustomerEmail;
 
-    console.log(`[Webhook] Checkout Completed. User: ${userEmail}, Plan: ${plan}, Credits: ${credits}`);
+    console.log(`[Webhook] Processing: ${emailToSearch} | Plan: ${plan}`);
 
-    if (userEmail && plan) {
-      // Case-insensitive email search
-      const userIndex = users.findIndex(u => u.email.toLowerCase() === userEmail.toLowerCase());
+    if (emailToSearch && plan) {
+      const userIndex = localUsers.findIndex(u => u.email.toLowerCase() === emailToSearch.toLowerCase());
 
       if (userIndex !== -1) {
-        // 1. Determine Credits to Add
         const creditsToAdd = credits ? parseInt(credits) : getPlanCredits(plan);
-        const currentCredits = users[userIndex].credits || 0;
-
-        // 2. Calculate Subscription Period
+        const currentCredits = localUsers[userIndex].credits || 0;
         const now = new Date();
         const oneMonthLater = new Date(now);
         oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
-        // 3. Update User
-        users[userIndex].plan = plan;
-        users[userIndex].status = 'Active';
-        users[userIndex].credits = currentCredits + creditsToAdd;
-        users[userIndex].subscriptionStart = now.toISOString();
-        users[userIndex].subscriptionEnd = oneMonthLater.toISOString();
+        localUsers[userIndex].plan = plan;
+        localUsers[userIndex].status = 'Active';
+        localUsers[userIndex].credits = currentCredits + creditsToAdd;
+        localUsers[userIndex].subscriptionStart = now.toISOString();
+        localUsers[userIndex].subscriptionEnd = oneMonthLater.toISOString();
 
-        saveSettings({ users });
-        console.log(`[Webhook] Database updated for ${userEmail}. New Total: ${users[userIndex].credits}`);
+        users = localUsers;
+        saveSettings({ users: localUsers });
+        console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
       } else {
-        console.warn(`[Webhook] User ${userEmail} NOT found in database! (Users count: ${users.length})`);
+        console.warn(`[Webhook] ERROR: User ${emailToSearch} not found.`);
       }
     } else {
-      console.warn(`[Webhook] Missing userEmail (${userEmail}) or plan (${plan}) in metadata`);
+      console.warn(`[Webhook] ERROR: Missing email or plan information in session.`);
     }
   }
 
@@ -478,9 +475,7 @@ app.post('/api/user/subscribe', async (req, res) => {
   // Create Stripe Session
   try {
     const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-    const host = req.get('host');
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    const baseUrl = `${protocol}://${host}`;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -930,9 +925,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
   const unitAmount = cycle === 'yearly' ? prices[plan].yearly : prices[plan].monthly;
 
   try {
-    const host = req.get('host');
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    const baseUrl = `${protocol}://${host}`;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
