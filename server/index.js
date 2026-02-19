@@ -923,6 +923,10 @@ app.post('/api/create-checkout-session', async (req, res) => {
   const unitAmount = cycle === 'yearly' ? prices[plan].yearly : prices[plan].monthly;
 
   try {
+    const host = req.get('host');
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const baseUrl = `${protocol}://${host}`;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -941,10 +945,11 @@ app.post('/api/create-checkout-session', async (req, res) => {
       customer_email: userEmail, // Pre-fill user email
       metadata: {
         plan: plan,
-        userEmail: userEmail
+        userEmail: userEmail,
+        credits: getPlanCredits(plan).toString() // Pass credits to metadata for webhook
       },
-      success_url: `http://localhost:5173/dashboard?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `http://localhost:5173/pricing?canceled=true`,
+      success_url: `${baseUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}&success=true`,
+      cancel_url: `${baseUrl}/pricing?canceled=true`,
     });
 
     res.json({ id: session.id, url: session.url });
