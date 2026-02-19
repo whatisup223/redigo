@@ -52,11 +52,11 @@ BRAND CONTEXT (use this to personalize the content naturally):
 
 const buildImageBrandContext = (profile: BrandProfile): string => {
   if (!profile || !profile.brandName) {
-    return 'Use Redigo brand colors: Vibrant Orange (#EA580C), Deep Slate Navy (#1E293B), and White.';
+    return 'CRITICAL: Use Redigo brand colors ONLY: Vibrant Orange (#EA580C) for primary elements/highlights, Deep Slate Navy (#1E293B) for backgrounds/contrast, and White for text/details.';
   }
   const primary = profile.primaryColor || '#EA580C';
   const secondary = profile.secondaryColor || '#1E293B';
-  return `Brand: ${profile.brandName}. Use brand colors: Primary ${primary}, Secondary ${secondary}, and White. Create a harmonious palette from these colors.`;
+  return `CRITICAL VISUAL IDENTITY: Strictly use the brand colors for ${profile.brandName}: Primary Color ${primary} (use for main objects and highlights), Secondary Color ${secondary} (use for backgrounds and accents), and White. Ensure the palette is dominated by these specific hex codes to maintain brand consistency.`;
 };
 
 // ─── Generate Reddit Reply ───────────────────────────────────────────────────

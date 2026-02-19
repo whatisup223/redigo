@@ -59,7 +59,7 @@ let plans = savedData.plans || [
     name: 'Starter',
     monthlyPrice: 0,
     yearlyPrice: 0,
-    credits: 20,
+    credits: 100,
     features: ['20 AI Actions/mo', 'Basic Reddit Analytics', '1 Connected Account', 'Community Support'],
     isPopular: false,
     isCustom: true
@@ -143,7 +143,7 @@ app.post('/api/auth/signup', (req, res) => {
     role: 'user',
     plan: 'Free',
     status: 'Active',
-    credits: 0, // Start with 0 credits until onboarding is complete
+    credits: 100, // Grant initial credits upon signup
     hasCompletedOnboarding: false
   };
 
@@ -170,10 +170,7 @@ app.post('/api/user/complete-onboarding', (req, res) => {
   const { userId } = req.body;
   const index = users.findIndex(u => u.id == userId);
   if (index !== -1) {
-    // Grant bonus credits if first time completing onboarding
-    if (!users[index].hasCompletedOnboarding) {
-      users[index].credits = (users[index].credits || 0) + 100;
-    }
+    // We already gave 100 at signup, so we just mark it as complete
     users[index].hasCompletedOnboarding = true;
     saveSettings({ users });
     res.json({
@@ -398,8 +395,9 @@ app.post('/api/user/brand-profile', (req, res) => {
   }
 });
 
-const saveTokens = (tokens) => {
-  userRedditTokens = { ...userRedditTokens, ...tokens };
+const saveTokens = (userId, username, tokenData) => {
+  if (!userRedditTokens[userId]) userRedditTokens[userId] = {};
+  userRedditTokens[userId][username] = tokenData;
   saveSettings({ userRedditTokens });
 };
 
@@ -623,24 +621,68 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
     const data = await response.json();
     if (data.error) throw new Error(data.error);
 
-    // Save tokens for this user
-    saveTokens({
-      [userId]: {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresAt: Date.now() + (data.expires_in * 1000)
+    // Fetch user info to get username and icon
+    const meRes = await fetch('https://oauth.reddit.com/api/v1/me', {
+      headers: {
+        'Authorization': `Bearer ${data.access_token}`,
+        'User-Agent': redditSettings.userAgent
       }
     });
+    const meData = await meRes.json();
+    const redditUsername = meData.name;
+    const redditIcon = meData.icon_img;
 
-    res.json({ success: true });
+    // Check plan limits
+    const user = users.find(u => u.id == userId);
+    if (user) {
+      const planLimits = { 'Free': 1, 'Starter': 1, 'Professional': 3, 'Pro': 3, 'Agency': 100 };
+      const limit = planLimits[user.plan] || 1;
+
+      const currentAccounts = user.connectedAccounts || [];
+      const alreadyConnected = currentAccounts.find(a => a.username === redditUsername);
+
+      if (!alreadyConnected && currentAccounts.length >= limit) {
+        return res.status(403).json({ error: `Account limit reached for ${user.plan} plan (${limit} accounts max).` });
+      }
+
+      // Update or add to connectedAccounts
+      if (alreadyConnected) {
+        alreadyConnected.icon = redditIcon;
+        alreadyConnected.lastSeen = new Date().toISOString();
+      } else {
+        if (!user.connectedAccounts) user.connectedAccounts = [];
+        user.connectedAccounts.push({
+          username: redditUsername,
+          icon: redditIcon,
+          connectedAt: new Date().toISOString(),
+          lastSeen: new Date().toISOString()
+        });
+      }
+      saveSettings({ users });
+    }
+
+    // Save tokens for this specific account
+    saveTokens(userId, redditUsername, {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt: Date.now() + (data.expires_in * 1000)
+    });
+
+    res.json({ success: true, username: redditUsername });
   } catch (error) {
     console.error('[Reddit OAuth Error]', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-const getValidToken = async (userId) => {
-  const tokens = userRedditTokens[userId];
+const getValidToken = async (userId, username) => {
+  if (!userRedditTokens[userId]) return null;
+
+  // If no username provided, try to get the first one (for backward compatibility if needed)
+  const targetUsername = username || Object.keys(userRedditTokens[userId])[0];
+  if (!targetUsername) return null;
+
+  const tokens = userRedditTokens[userId][targetUsername];
   if (!tokens) return null;
 
   if (Date.now() < tokens.expiresAt - 60000) {
@@ -668,11 +710,11 @@ const getValidToken = async (userId) => {
 
     const newTokens = {
       accessToken: data.access_token,
-      refreshToken: tokens.refreshToken, // Reddit might not return a new refresh token
+      refreshToken: tokens.refreshToken,
       expiresAt: Date.now() + (data.expires_in * 1000)
     };
 
-    saveTokens({ [userId]: newTokens });
+    saveTokens(userId, targetUsername, newTokens);
     return data.access_token;
   } catch (err) {
     console.error('[Reddit Token Refresh Error]', err);
@@ -684,29 +726,15 @@ app.get('/api/user/reddit/status', async (req, res) => {
   const { userId } = req.query;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-  const token = await getValidToken(userId);
-  if (!token) return res.json({ connected: false });
+  const user = users.find(u => u.id == userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  try {
-    const response = await fetch('https://oauth.reddit.com/api/v1/me', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'User-Agent': redditSettings.userAgent
-      }
-    });
+  const accounts = user.connectedAccounts || [];
 
-    if (!response.ok) throw new Error('Failed to fetch Reddit user data');
-
-    const data = await response.json();
-    res.json({
-      connected: true,
-      username: data.name,
-      icon: data.icon_img
-    });
-  } catch (err) {
-    console.error('[Reddit Status Error]', err);
-    res.json({ connected: false });
-  }
+  res.json({
+    connected: accounts.length > 0,
+    accounts: accounts
+  });
 });
 
 // Create Checkout Session
@@ -753,6 +781,24 @@ app.post('/api/create-checkout-session', async (req, res) => {
     console.error('[Stripe Error]', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+app.post('/api/user/reddit/disconnect', (req, res) => {
+  const { userId, username } = req.body;
+  if (!userId || !username) return res.status(400).json({ error: 'Missing userId or username' });
+
+  const user = users.find(u => u.id == userId);
+  if (user && user.connectedAccounts) {
+    user.connectedAccounts = user.connectedAccounts.filter(a => a.username !== username);
+    saveSettings({ users });
+  }
+
+  if (userRedditTokens[userId]) {
+    delete userRedditTokens[userId][username];
+    saveSettings({ userRedditTokens });
+  }
+
+  res.json({ success: true });
 });
 
 // Webhook Handler (Mock)
@@ -938,12 +984,12 @@ app.post('/api/generate-image', async (req, res) => {
 // Post Reply to Reddit
 app.post('/api/reddit/reply', async (req, res) => {
   try {
-    const { userId, postId, comment, postTitle, subreddit, productMention } = req.body;
+    const { userId, postId, comment, postTitle, subreddit, productMention, redditUsername } = req.body;
     if (!userId || !comment) return res.status(400).json({ error: 'Missing required fields' });
 
-    console.log(`[Reddit] Posting reply for user ${userId} on post ${postId}`);
+    console.log(`[Reddit] Posting reply for user ${userId} (account: ${redditUsername || 'default'}) on post ${postId}`);
 
-    const token = await getValidToken(userId);
+    const token = await getValidToken(userId, redditUsername);
     let redditResponse = { success: true, message: 'Simulated success (Mock Post)' };
 
     // If it's a real Reddit post (not from MOCK_POSTS), attempt real API call
@@ -991,6 +1037,7 @@ app.post('/api/reddit/reply', async (req, res) => {
       subreddit: subreddit || 'unknown',
       comment,
       productMention,
+      redditUsername: redditUsername || 'unknown', // Track which account was used
       deployedAt: new Date().toISOString(),
       status: 'Sent',
       ups: 0,
@@ -1026,12 +1073,12 @@ app.get('/api/user/replies', (req, res) => {
 // Create New Reddit Post
 app.post('/api/reddit/post', async (req, res) => {
   try {
-    const { userId, subreddit, title, text, kind } = req.body;
+    const { userId, subreddit, title, text, kind, redditUsername } = req.body;
     if (!userId || !subreddit || !title) return res.status(400).json({ error: 'Missing required fields' });
 
-    console.log(`[Reddit] Creating new post for user ${userId} in r/${subreddit}`);
+    console.log(`[Reddit] Creating new post for user ${userId} (account: ${redditUsername || 'default'}) in r/${subreddit}`);
 
-    const token = await getValidToken(userId);
+    const token = await getValidToken(userId, redditUsername);
     if (!token) return res.status(401).json({ error: 'Reddit account not linked' });
 
     const bodyParams = new URLSearchParams({
@@ -1123,11 +1170,11 @@ app.get('/api/user/replies/sync', async (req, res) => {
 
 // Fetch Real-time Reddit Profile (Karma)
 app.get('/api/user/reddit/profile', async (req, res) => {
-  const { userId } = req.query;
+  const { userId, username } = req.query;
   if (!userId) return res.status(400).json({ error: 'User ID required' });
 
   try {
-    const token = await getValidToken(userId);
+    const token = await getValidToken(userId, username);
     if (!token) return res.status(401).json({ error: 'Reddit account not linked' });
 
     const response = await fetch('https://oauth.reddit.com/api/v1/me', {

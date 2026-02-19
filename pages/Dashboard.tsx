@@ -18,6 +18,7 @@ import {
   MessageSquarePlus,
   ExternalLink,
   TrendingDown,
+  LayoutList,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CreditsBanner from '../components/CreditsBanner';
@@ -150,6 +151,7 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [redditConnected, setRedditConnected] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<any>(null);
 
 
   const fetchData = useCallback(async () => {
@@ -264,6 +266,80 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
+      {/* Detail Modal (Sync with Analytics) */}
+      {selectedEntry && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-4xl rounded-[2rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-orange-600 rounded-2xl text-white">
+                  <LayoutList size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900">Outreach Details</h2>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">r/{selectedEntry.subreddit} • {new Date(selectedEntry.deployedAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedEntry(null)}
+                className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors"
+              >
+                <RefreshCw size={24} className="rotate-45" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 space-y-10">
+              {/* Original Post */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Original Post</h3>
+                  </div>
+                  <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                    View on Reddit <ExternalLink size={12} />
+                  </a>
+                </div>
+                <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100">
+                  <h4 className="text-lg font-bold text-slate-900 mb-4">{selectedEntry.postTitle}</h4>
+                  <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{selectedEntry.postContent || "No body content available."}</p>
+                </div>
+              </div>
+
+              {/* Our AI Reply */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
+                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
+                </div>
+                <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative">
+                  <div className="absolute top-0 right-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest shadow-lg shadow-orange-200">
+                    {selectedEntry.productMention || 'Redigo'} Mentioned
+                  </div>
+                  <p className="text-slate-800 text-base leading-relaxed whitespace-pre-wrap italic font-medium">"{selectedEntry.comment}"</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
+              <button
+                onClick={() => setSelectedEntry(null)}
+                className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95"
+              >
+                Close
+              </button>
+              <a
+                href={selectedEntry.postUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2"
+              >
+                Verify on Live Reddit <ExternalLink size={18} />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -511,9 +587,18 @@ export const Dashboard: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-slate-500 shrink-0">
-                    <ThumbsUp size={13} className={row.ups > 0 ? 'text-green-500' : 'text-slate-300'} />
-                    <span className="text-xs font-bold">{row.ups ?? 0}</span>
+                  <div className="flex items-center gap-3 text-slate-500 shrink-0">
+                    <button
+                      onClick={() => setSelectedEntry(row)}
+                      className="p-2.5 bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all active:scale-95"
+                      title="View Details"
+                    >
+                      <LayoutList size={16} />
+                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <ThumbsUp size={13} className={row.ups > 0 ? 'text-green-500' : 'text-slate-300'} />
+                      <span className="text-xs font-bold">{row.ups ?? 0}</span>
+                    </div>
                   </div>
                   <a href={row.postUrl} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity">
                     <ExternalLink size={14} className="text-slate-400 hover:text-orange-600" />
@@ -533,14 +618,14 @@ export const Dashboard: React.FC = () => {
 
           <QuickAction
             icon={MessageSquarePlus}
-            title="Deploy AI Comment"
+            title="Comment Agent"
             desc="Find posts & generate replies"
             to="/comment-agent"
             accent="bg-orange-600"
           />
           <QuickAction
             icon={PenTool}
-            title="Post Architect"
+            title="Post Agent"
             desc="Create full Reddit posts with AI"
             to="/post-agent"
             accent="bg-blue-600"

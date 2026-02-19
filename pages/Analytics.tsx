@@ -81,6 +81,8 @@ export const Analytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'comments' | 'posts'>('comments');
+  const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
+  const [selectedAccount, setSelectedAccount] = useState<string>('all');
 
 
   // Date Filtering State
@@ -108,10 +110,17 @@ export const Analytics: React.FC = () => {
         }
 
         // Fetch profile
-        const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}`);
+        const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}`);
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           setProfile(profileData);
+        }
+
+        // Fetch reddit accounts
+        const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}`);
+        if (statusRes.ok) {
+          const status = await statusRes.json();
+          setRedditStatus(status);
         }
       } catch (err) {
         console.error('Failed to fetch data', err);
@@ -121,7 +130,7 @@ export const Analytics: React.FC = () => {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, selectedAccount]);
 
   // Filter History by Date Logic
   const filteredHistory = (activeTab === 'comments' ? history : postsHistory).filter(item => {
@@ -139,6 +148,9 @@ export const Analytics: React.FC = () => {
       return itemDate >= start && itemDate <= end;
     }
     return true;
+  }).filter(item => {
+    if (selectedAccount === 'all') return true;
+    return item.redditUsername === selectedAccount;
   });
 
   // Process active history based on tab
@@ -186,8 +198,8 @@ export const Analytics: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
       {/* Detail Modal */}
       {selectedEntry && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-4xl rounded-[2rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] animate-in zoom-in-95 duration-300">
             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-orange-600 rounded-2xl text-white">
@@ -284,6 +296,21 @@ export const Analytics: React.FC = () => {
             <ChevronDown size={18} className={`text-slate-300 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
           </button>
 
+          {/* Account Filter */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200/60 rounded-[1.5rem] px-4 py-3 shadow-sm">
+            <Users size={18} className="text-blue-600" />
+            <select
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+              className="bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none min-w-[140px] cursor-pointer"
+            >
+              <option value="all">All Accounts</option>
+              {(redditStatus.accounts || []).map(acc => (
+                <option key={acc.username} value={acc.username}>u/{acc.username}</option>
+              ))}
+            </select>
+          </div>
+
           {showFilterDropdown && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowFilterDropdown(false)}></div>
@@ -325,8 +352,8 @@ export const Analytics: React.FC = () => {
 
       {/* Custom Date Picker Modal */}
       {showDatePicker && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10 space-y-8 animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 space-y-6 md:space-y-8 animate-in zoom-in-95 duration-300">
             <div className="text-center space-y-2">
               <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <Calendar size={32} />
@@ -607,6 +634,7 @@ export const Analytics: React.FC = () => {
                 <tr className="bg-slate-50/50 text-slate-400 text-[11px] font-extrabold uppercase tracking-[0.2em]">
                   <th className="px-10 py-5">{activeTab === 'posts' ? 'Preview' : 'Origin'}</th>
                   <th className="px-10 py-5">Conversation</th>
+                  {selectedAccount === 'all' && <th className="px-10 py-5">Account</th>}
                   <th className="px-10 py-5">Impact</th>
                   <th className="px-10 py-5">Product</th>
                   <th className="px-10 py-5">Actions</th>
@@ -633,6 +661,14 @@ export const Analytics: React.FC = () => {
                         </div>
                       </div>
                     </td>
+                    {selectedAccount === 'all' && (
+                      <td className="px-10 py-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-lg bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400">u/</div>
+                          <span className="text-xs font-bold text-slate-600">{row.redditUsername || 'unknown'}</span>
+                        </div>
+                      </td>
+                    )}
                     <td className="px-10 py-6">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1.5 font-extrabold">
@@ -651,12 +687,23 @@ export const Analytics: React.FC = () => {
                       {row.productMention}
                     </td>
                     <td className="px-10 py-6">
-                      <button
-                        onClick={() => setSelectedEntry(row)}
-                        className="px-6 py-2 bg-slate-100 hover:bg-orange-600 hover:text-white rounded-xl font-bold transition-all active:scale-95"
-                      >
-                        View Details
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSelectedEntry(row)}
+                          className="px-6 py-2 bg-slate-100 hover:bg-orange-600 hover:text-white rounded-xl font-bold transition-all active:scale-95"
+                        >
+                          View Details
+                        </button>
+                        <a
+                          href={row.postUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-95"
+                          title="Open on Reddit"
+                        >
+                          <ExternalLink size={18} />
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -20,7 +20,8 @@ import {
     ChevronDown,
     ChevronUp,
     Building2,
-    Settings
+    Settings,
+    Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -104,9 +105,15 @@ export const ContentArchitect: React.FC = () => {
         description: '',
         targetAudience: ''
     });
+    const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
+    const [selectedAccount, setSelectedAccount] = useState<string>('');
 
     const [includeImage, setIncludeImage] = useState(true);
     const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5 });
+    const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+    const [regenMode, setRegenMode] = useState<'text' | 'image' | 'both'>('text');
+    const [showDraftBanner, setShowDraftBanner] = useState(false);
+    const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
     useEffect(() => {
         fetch('/api/config')
@@ -132,8 +139,73 @@ export const ContentArchitect: React.FC = () => {
             fetchBrandProfile(user.id).then(p => {
                 if (p?.brandName) setBrandProfile(p);
             });
+            fetch(`/api/user/reddit/status?userId=${user.id}`)
+                .then(res => res.json())
+                .then(status => {
+                    setRedditStatus(status);
+                    if (status.accounts?.length > 0) {
+                        setSelectedAccount(status.accounts[0].username);
+                    }
+                });
         }
     }, [user]);
+
+    // Check for draft on mount
+    useEffect(() => {
+        const savedDraft = localStorage.getItem('redigo_post_draft');
+        if (savedDraft) {
+            try {
+                const draft = JSON.parse(savedDraft);
+                if (draft.title || draft.content) {
+                    setShowDraftBanner(true);
+                }
+            } catch (e) {
+                localStorage.removeItem('redigo_post_draft');
+            }
+        }
+    }, []);
+
+    // Auto-save effect
+    useEffect(() => {
+        if (postData.title || postData.content) {
+            localStorage.setItem('redigo_post_draft', JSON.stringify({
+                ...postData,
+                step: step
+            }));
+        }
+    }, [postData, step]);
+
+    const handleResumeDraft = () => {
+        const savedDraft = localStorage.getItem('redigo_post_draft');
+        if (savedDraft) {
+            const draft = JSON.parse(savedDraft);
+            setPostData(draft);
+            setStep(draft.step || 2);
+            setShowDraftBanner(false);
+            showToast('Draft restored! Continuing from where you left off.', 'success');
+        }
+    };
+
+    const handleDiscardDraft = () => {
+        localStorage.removeItem('redigo_post_draft');
+        setPostData({
+            subreddit: '',
+            goal: 'Engagement',
+            tone: 'helpful_peer',
+            title: '',
+            content: '',
+            imagePrompt: '',
+            imageUrl: '',
+            productMention: '',
+            productUrl: '',
+            description: '',
+            targetAudience: ''
+        });
+        setStep(1);
+        setShowDraftBanner(false);
+        setShowDiscardConfirm(false);
+        showToast('Draft discarded successfully.', 'success');
+    };
 
     const goals = ['Engagement', 'Lead Gen', 'Problem Solving', 'Product Launch', 'Storytelling'];
 
@@ -186,16 +258,26 @@ export const ContentArchitect: React.FC = () => {
         }
     };
 
-    const handleGenerateContent = async () => {
+    const handleGenerateContent = async (mode: 'text' | 'image' | 'both' = 'both') => {
         if (!postData.subreddit) return;
 
         const postCost = Number(costs.post) ?? 2;
         const imageCost = Number(costs.image) ?? 5;
-        const totalCost = includeImage ? (postCost + imageCost) : postCost;
+
+        let totalCost = 0;
+        if (mode === 'text') totalCost = postCost;
+        else if (mode === 'image') totalCost = imageCost;
+        else totalCost = includeImage ? (postCost + imageCost) : postCost;
 
         // Frontend pre-check
         if ((user?.credits || 0) < totalCost && user?.role !== 'admin') {
             showToast(`Insufficient credits. You need ${totalCost} credits for this action.`, 'error');
+            return;
+        }
+
+        if (mode === 'image') {
+            triggerImageGeneration(postData.imagePrompt);
+            showToast('Regenerating image...', 'success');
             return;
         }
 
@@ -226,7 +308,7 @@ export const ContentArchitect: React.FC = () => {
                 title: generated.title,
                 content: generated.content,
                 imagePrompt: generated.imagePrompt,
-                imageUrl: ''
+                imageUrl: mode === 'both' ? '' : prev.imageUrl
             }));
 
             // Synchronize credits
@@ -236,11 +318,11 @@ export const ContentArchitect: React.FC = () => {
 
             setStep(2);
             // Non-blocking call: trigger image generation but don't AWAIT it
-            if (includeImage) {
+            if (mode === 'both' && includeImage) {
                 triggerImageGeneration(generated.imagePrompt);
             }
 
-            showToast('Thread generated!', 'success');
+            showToast('Content updated!', 'success');
 
         } catch (err: any) {
             console.error(err);
@@ -266,10 +348,12 @@ export const ContentArchitect: React.FC = () => {
                     subreddit: postData.subreddit,
                     title: postData.title,
                     text: postData.content,
-                    kind: 'self'
+                    kind: 'self',
+                    redditUsername: selectedAccount
                 })
             });
             if (!response.ok) throw new Error('Failed to post to Reddit');
+            localStorage.removeItem('redigo_post_draft');
             showToast('Post successfully published to Reddit! 🎉', 'success');
         } catch (err: any) {
             showToast(err.message, 'error');
@@ -294,9 +378,9 @@ export const ContentArchitect: React.FC = () => {
 
             {/* Generating Overlay */}
             {isGenerating && (
-                <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center">
-                    <div className="bg-white rounded-[3rem] p-14 max-w-md w-full mx-6 shadow-2xl text-center space-y-8">
-                        <div className="relative w-24 h-24 mx-auto">
+                <div className="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-14 max-w-md w-full shadow-2xl text-center space-y-8 animate-in zoom-in-95 duration-300">
+                        <div className="relative w-20 h-20 md:w-24 md:h-24 mx-auto">
                             <div className="absolute inset-0 rounded-full bg-orange-100 animate-ping opacity-60" />
                             <div className="relative w-24 h-24 bg-orange-600 rounded-full flex items-center justify-center text-4xl shadow-2xl shadow-orange-300">
                                 {PROGRESS_STEPS[progressStep]?.icon}
@@ -322,6 +406,125 @@ export const ContentArchitect: React.FC = () => {
                 </div>
             )}
 
+            {/* Re-generate Confirmation Modal */}
+            {showRegenConfirm && (
+                <div className="fixed inset-0 z-[999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-md w-full shadow-2xl space-y-8 animate-in zoom-in-95 duration-300">
+                        <div className="flex items-center justify-between border-b border-slate-50 pb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center">
+                                    <RefreshCw size={24} />
+                                </div>
+                                <h3 className="text-xl font-black text-slate-900">Regenerate Options</h3>
+                            </div>
+                            <button onClick={() => setShowRegenConfirm(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {/* Option: Text Only */}
+                            <button
+                                onClick={() => setRegenMode('text')}
+                                className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${regenMode === 'text' ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${regenMode === 'text' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                        <PenTool size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-900">Text Only</p>
+                                        <p className="text-xs text-slate-500 font-medium leading-relaxed">Refresh headline & body</p>
+                                    </div>
+                                </div>
+                                <span className={`font-black text-xs ${regenMode === 'text' ? 'text-orange-600' : 'text-slate-400'}`}>{costs.post} PTS</span>
+                            </button>
+
+                            {/* Option: Image Only */}
+                            <button
+                                onClick={() => setRegenMode('image')}
+                                className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${regenMode === 'image' ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${regenMode === 'image' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                        <ImageIcon size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-900">Image Only</p>
+                                        <p className="text-xs text-slate-500 font-medium leading-relaxed">New AI visual context</p>
+                                    </div>
+                                </div>
+                                <span className={`font-black text-xs ${regenMode === 'image' ? 'text-orange-600' : 'text-slate-400'}`}>{costs.image} PTS</span>
+                            </button>
+
+                            {/* Option: Both */}
+                            <button
+                                onClick={() => setRegenMode('both')}
+                                className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${regenMode === 'both' ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${regenMode === 'both' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                        <Sparkles size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-slate-900">Full Refresh</p>
+                                        <p className="text-xs text-slate-500 font-medium leading-relaxed">New post + New image</p>
+                                    </div>
+                                </div>
+                                <span className={`font-black text-xs ${regenMode === 'both' ? 'text-orange-600' : 'text-slate-400'}`}>{Number(costs.post) + Number(costs.image)} PTS</span>
+                            </button>
+                        </div>
+
+                        <div className="flex gap-3 pt-4 border-t border-slate-50">
+                            <button
+                                onClick={() => setShowRegenConfirm(false)}
+                                className="flex-1 py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all uppercase text-[10px] tracking-widest"
+                            >
+                                Nevermind
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowRegenConfirm(false);
+                                    handleGenerateContent(regenMode);
+                                }}
+                                className="flex-1 py-4 bg-orange-600 text-white rounded-2xl font-black shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
+                            >
+                                <Check size={14} /> Confirm & Pay
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Discard Draft Confirmation Modal */}
+            {showDiscardConfirm && (
+                <div className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300">
+                        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+                            <Trash2 size={32} />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-black text-slate-900">Discard Current Draft?</h3>
+                            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                                If you discard this, you will need to <span className="text-orange-600 font-bold">regenerate</span> which will cost more points. This action cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex flex-col gap-3 pt-2">
+                            <button
+                                onClick={handleDiscardDraft}
+                                className="w-full py-4 bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-100 hover:bg-red-700 transition-all"
+                            >
+                                YES, DISCARD DRAFT
+                            </button>
+                            <button
+                                onClick={() => setShowDiscardConfirm(false)}
+                                className="w-full py-4 bg-slate-50 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"
+                            >
+                                Keep it
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-6xl mx-auto space-y-10 font-['Outfit'] pb-20 pt-4">
 
                 {/* Header */}
@@ -334,6 +537,35 @@ export const ContentArchitect: React.FC = () => {
                         </div>
                         <p className="text-slate-400 font-medium text-sm pl-4">Design, generate &amp; publish viral Reddit threads in seconds.</p>
                     </div>
+
+                    {/* Draft Banner */}
+                    {showDraftBanner && (
+                        <div className="flex-1 bg-gradient-to-r from-orange-50 to-white border-2 border-orange-100 rounded-[2rem] p-4 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
+                            <div className="flex items-center gap-4 pl-2">
+                                <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <PenTool size={20} />
+                                </div>
+                                <div className="text-left">
+                                    <p className="text-sm font-extrabold text-slate-900">Unfinished post found</p>
+                                    <p className="text-[11px] text-slate-500 font-medium">Continue working to save your credits.</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowDiscardConfirm(true)}
+                                    className="px-5 py-2.5 text-slate-400 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors"
+                                >
+                                    Discard
+                                </button>
+                                <button
+                                    onClick={handleResumeDraft}
+                                    className="px-6 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all flex items-center gap-2"
+                                >
+                                    Resume Draft <ArrowRight size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Step Indicator */}
                     <div className="flex items-center gap-3">
@@ -629,7 +861,13 @@ export const ContentArchitect: React.FC = () => {
                                             </div>
                                             <div>
                                                 <p className="text-sm font-bold text-slate-900">Include Base Image</p>
-                                                <p className="text-[10px] text-slate-500 font-medium">Generate a visual (+{Number(costs.image)} pts)</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-[10px] text-slate-500 font-medium">Generate visual (+{Number(costs.image)} pts)</p>
+                                                    <div className="flex gap-1" title="Applying your brand colors">
+                                                        <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
+                                                        <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         <button
@@ -640,15 +878,34 @@ export const ContentArchitect: React.FC = () => {
                                         </button>
                                     </div>
 
-                                    <button
-                                        onClick={handleGenerateContent}
-                                        disabled={!postData.subreddit || isGenerating}
-                                        className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50"
-                                    >
-                                        <Sparkles size={20} />
-                                        {isGenerating ? 'ORCHESTRATING...' : `GENERATE POST (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} POINTS)`}
-                                        <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                                    </button>
+                                    <div className="flex gap-3">
+                                        {postData.title && postData.content && (
+                                            <button
+                                                onClick={() => setStep(2)}
+                                                className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2rem] font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 group"
+                                            >
+                                                RESUME PROGRESS
+                                                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (postData.title || postData.content) {
+                                                    setShowRegenConfirm(true);
+                                                    return; // STOP HERE
+                                                }
+                                                handleGenerateContent();
+                                            }}
+                                            disabled={!postData.subreddit || isGenerating}
+                                            className={`py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50 ${postData.title && postData.content ? 'px-8' : 'w-full'}`}
+                                        >
+                                            <Sparkles size={20} />
+                                            {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
+                                            {!postData.title && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -750,7 +1007,10 @@ export const ContentArchitect: React.FC = () => {
                                         REVIEW & PUBLISH <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                                     </button>
                                     <button
-                                        onClick={handleGenerateContent}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowRegenConfirm(true);
+                                        }}
                                         disabled={isGenerating}
                                         className="p-5 bg-slate-50 text-slate-400 rounded-[2rem] hover:text-orange-600 hover:bg-orange-50 transition-all"
                                         title="Regenerate all content"
@@ -775,6 +1035,34 @@ export const ContentArchitect: React.FC = () => {
                                 </div>
 
                                 <div className="space-y-4">
+                                    <div className="p-5 bg-slate-50 rounded-2xl space-y-3">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Publishing Identity</p>
+                                        <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100">
+                                            <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200">
+                                                {(redditStatus.accounts || []).find(a => a.username === selectedAccount)?.icon ? (
+                                                    <img src={(redditStatus.accounts || []).find(a => a.username === selectedAccount)?.icon} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full bg-orange-600 flex items-center justify-center text-white font-black">R</div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <select
+                                                    value={selectedAccount}
+                                                    onChange={(e) => setSelectedAccount(e.target.value)}
+                                                    className="w-full bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none"
+                                                >
+                                                    {(redditStatus.accounts || []).length > 0 ? (
+                                                        (redditStatus.accounts || []).map(acc => (
+                                                            <option key={acc.username} value={acc.username}>u/{acc.username}</option>
+                                                        ))
+                                                    ) : (
+                                                        <option value="">No accounts connected</option>
+                                                    )}
+                                                </select>
+                                                {(redditStatus.accounts || []).length === 0 && <p className="text-[10px] text-red-500 font-bold mt-1">Please link an account in settings</p>}
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="p-5 bg-slate-50 rounded-2xl space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Posting to</p>
                                         <p className="font-extrabold text-slate-900 text-lg">r/{postData.subreddit}</p>

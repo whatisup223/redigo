@@ -33,7 +33,7 @@ const BRAND_TONES = [
 export const Settings: React.FC = () => {
     const { user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
-    const [redditStatus, setRedditStatus] = useState<{ connected: boolean; username?: string; icon?: string } | null>(null);
+    const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [loading, setLoading] = useState(true);
     const [brandSaving, setBrandSaving] = useState(false);
     const [brandSaved, setBrandSaved] = useState(false);
@@ -48,18 +48,15 @@ export const Settings: React.FC = () => {
                     fetch(`/api/user/reddit/status?userId=${user.id}`),
                     fetch(`/api/user/brand-profile?userId=${user.id}`)
                 ]);
-                if (redditRes.ok) setRedditStatus(await redditRes.json());
-                else setRedditStatus({ connected: false });
-
-                if (brandRes.ok) {
-                    const data = await brandRes.json();
-                    if (data && data.brandName) {
-                        setBrandProfile(prev => ({ ...prev, ...data }));
-                    }
-                    // else keep defaults
+                if (redditRes.ok) {
+                    const status = await redditRes.json();
+                    setRedditStatus(status);
+                } else {
+                    setRedditStatus({ connected: false, accounts: [] });
                 }
-            } catch {
-                setRedditStatus({ connected: false });
+            } catch (err) {
+                console.error("Failed to fetch settings:", err);
+                setRedditStatus({ connected: false, accounts: [] });
             } finally {
                 setLoading(false);
             }
@@ -186,45 +183,87 @@ export const Settings: React.FC = () => {
                         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
                             <LinkIcon className="text-blue-600" size={20} /> Connected Accounts
                         </h2>
-                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm">
+                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
                             {loading ? (
                                 <div className="flex items-center justify-center py-4">
                                     <RefreshCw className="animate-spin text-slate-400" size={20} />
                                 </div>
-                            ) : redditStatus?.connected ? (
-                                <div className="flex items-center justify-between p-5 bg-orange-50 border border-orange-100 rounded-[1.5rem]">
-                                    <div className="flex items-center gap-4">
-                                        {redditStatus.icon
-                                            ? <img src={redditStatus.icon} alt="Reddit" className="w-10 h-10 rounded-xl border-2 border-white shadow-sm" />
-                                            : <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white font-black">R</div>
-                                        }
-                                        <div>
-                                            <p className="font-bold text-slate-900">Reddit Account</p>
-                                            <p className="text-xs text-slate-500 font-medium">Connected as <span className="text-orange-600 font-bold">u/{redditStatus.username}</span></p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                            <CheckCircle2 size={12} /> Linked
-                                        </span>
-                                        <button onClick={handleConnectReddit} className="text-slate-400 hover:text-orange-600 text-xs font-bold transition-colors underline">Change</button>
-                                    </div>
-                                </div>
                             ) : (
-                                <div className="flex items-center justify-between p-5 bg-slate-50 border border-slate-100 rounded-[1.5rem] group hover:border-orange-200 transition-colors">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-slate-200 rounded-xl flex items-center justify-center text-slate-500 group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
-                                            <Globe size={20} />
+                                <>
+                                    {/* Plan Limits Indicator */}
+                                    <div className="flex items-center justify-between px-6 py-4 bg-slate-50 rounded-2xl border border-slate-100 mb-2">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                                                <LinkIcon size={14} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Account Slots</p>
+                                                <p className="text-sm font-bold text-slate-900">
+                                                    {(redditStatus.accounts || []).length} / {user.plan === 'Agency' ? '∞' : (user.plan === 'Professional' || user.plan === 'Pro' || user.plan === 'Starter') ? (user.plan === 'Starter' ? '1' : '3') : '1'} <span className="text-slate-400 font-medium ml-1">accounts connected</span>
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-slate-900">Reddit Account</p>
-                                            <p className="text-xs text-slate-500 font-medium">Connect to start finding opportunities</p>
-                                        </div>
+                                        {(redditStatus.accounts || []).length >= ((user.plan === 'Professional' || user.plan === 'Pro') ? 3 : user.plan === 'Agency' ? 999 : 1) ? (
+                                            <Link to="/pricing" className="text-[10px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">UPGRADE FOR MORE</Link>
+                                        ) : (
+                                            <button
+                                                onClick={handleConnectReddit}
+                                                className="text-[10px] font-black text-white bg-slate-900 px-4 py-1.5 rounded-lg hover:bg-orange-600 transition-all flex items-center gap-2"
+                                            >
+                                                <RefreshCw size={10} /> LINK NEW ACCOUNT
+                                            </button>
+                                        )}
                                     </div>
-                                    <button onClick={handleConnectReddit} className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-orange-600 transition-all shadow-lg shadow-slate-200">
-                                        CONNECT REDDIT
-                                    </button>
-                                </div>
+
+                                    {/* Account List */}
+                                    {(redditStatus.accounts || []).length > 0 ? (
+                                        <div className="space-y-3">
+                                            {(redditStatus.accounts || []).map((acc: any) => (
+                                                <div key={acc.username} className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[1.5rem] hover:border-orange-200 transition-all group">
+                                                    <div className="flex items-center gap-4">
+                                                        {acc.icon
+                                                            ? <img src={acc.icon} alt={acc.username} className="w-10 h-10 rounded-xl border-2 border-white shadow-sm" />
+                                                            : <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white font-black">R</div>
+                                                        }
+                                                        <div>
+                                                            <p className="font-bold text-slate-900 group-hover:text-orange-600 transition-colors">u/{acc.username}</p>
+                                                            <p className="text-[10px] text-slate-400 font-medium">Linked on {new Date(acc.connectedAt).toLocaleDateString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                                            <CheckCircle2 size={12} /> Active
+                                                        </span>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (window.confirm(`Disconnect u/${acc.username}?`)) {
+                                                                    const res = await fetch('/api/user/reddit/disconnect', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ userId: user.id, username: acc.username })
+                                                                    });
+                                                                    if (res.ok) window.location.reload();
+                                                                }
+                                                            }}
+                                                            className="text-slate-300 hover:text-red-500 text-xs font-bold transition-colors py-2 px-2"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
+                                            <Globe className="mx-auto text-slate-300 mb-3" size={40} />
+                                            <p className="font-bold text-slate-900">No Reddit accounts linked</p>
+                                            <p className="text-xs text-slate-400 mb-6">Connect your first account to start using AI outreach.</p>
+                                            <button onClick={handleConnectReddit} className="px-8 py-3 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-orange-600 transition-all shadow-xl shadow-slate-200">
+                                                LINK REDDIT ACCOUNT
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </section>

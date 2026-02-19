@@ -1068,8 +1068,8 @@ export const Admin: React.FC = () => {
                     {/* User Edit Modal */}
                     {
                         isEditModalOpen && (
-                            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                                <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}></div>
+                            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)}></div>
                                 <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
                                     <div className="p-8 border-b border-slate-100 flex items-center justify-between">
                                         <h2 className="text-2xl font-black text-slate-900">Edit User Details</h2>
@@ -1150,7 +1150,7 @@ export const Admin: React.FC = () => {
 
                     {
                         isPlanModalOpen && (
-                            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
                                 <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                                     <div className="p-8 pb-4 border-b border-slate-100 flex items-center justify-between">
                                         <h2 className="text-2xl font-black text-slate-900">{planForm.id ? 'Edit Plan' : 'Create New Plan'}</h2>
