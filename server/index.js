@@ -330,8 +330,8 @@ let stripeSettings = savedData.stripe || {
 let redditSettings = savedData.reddit || {
   clientId: '',
   clientSecret: '',
-  redirectUri: 'http://localhost:5173/auth/reddit/callback',
-  userAgent: 'web:redigo:v1.0.0 (by /u/yourusername)'
+  redirectUri: '', // Dynamically handled in /url endpoint
+  userAgent: 'RedigoApp/1.0'
 };
 
 // Store user Reddit tokens (In-memory for now, should be in DB)
@@ -475,6 +475,10 @@ app.post('/api/user/subscribe', async (req, res) => {
   // Create Stripe Session
   try {
     const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+    const host = req.get('host');
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const baseUrl = `${protocol}://${host}`;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -492,8 +496,8 @@ app.post('/api/user/subscribe', async (req, res) => {
         plan: plan.name, // Pass ID or Name
         credits: plan.credits
       },
-      success_url: `http://localhost:5173/settings?success=true&plan=${plan.name}`,
-      cancel_url: `http://localhost:5173/pricing?canceled=true`,
+      success_url: `${baseUrl}/settings?success=true&plan=${plan.name}`,
+      cancel_url: `${baseUrl}/pricing?canceled=true`,
     });
 
     return res.json({ checkoutUrl: session.url });
@@ -1106,8 +1110,8 @@ app.post('/api/generate', async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${keyToUse}`,
-          'HTTP-Referer': 'http://localhost:5173', // Optional for OpenRouter
-          'X-Title': 'Redigo' // Optional for OpenRouter
+          'HTTP-Referer': `https://redditgo.online`, // Specific for this app production or dynamic
+          'X-Title': 'RedditGo Content Architect'
         },
         body: JSON.stringify({
           model: aiSettings.model,

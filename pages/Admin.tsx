@@ -124,8 +124,8 @@ export const Admin: React.FC = () => {
     const [redditSettings, setRedditSettings] = useState<RedditSettings>({
         clientId: '',
         clientSecret: '',
-        redirectUri: 'http://localhost:5173/auth/reddit/callback',
-        userAgent: 'web:redigo:v1.0.0 (by /u/yourusername)'
+        redirectUri: '',
+        userAgent: 'RedigoApp/1.0'
     });
     const [stats, setStats] = useState({
         totalUsers: 0,
