@@ -22,7 +22,7 @@ export const TermsOfService: React.FC = () => {
 
                 <div className="prose prose-lg prose-slate max-w-none">
                     <p>
-                        These Terms of Service cover your use of RedditGrowth ("Service") and provide information about the RedditGrowth Service, outlined below. By creating an account or using our Service, you agree to these terms.
+                        These Terms of Service cover your use of RedditGo ("Service") and provide information about the RedditGo Service, outlined below. By creating an account or using our Service, you agree to these terms.
                     </p>
 
                     <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">1. Use of Service</h3>
@@ -30,9 +30,9 @@ export const TermsOfService: React.FC = () => {
                         You must follow any policies made available to you within the Service. Don't misuse our Service. For example, don't interfere with our Service or try to access it using a method other than the interface and the instructions that we provide. You may use our Service only as permitted by law, including applicable export and re-export control laws and regulations.
                     </p>
 
-                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">2. Your RedditGrowth Account</h3>
+                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">2. Your RedditGo Account</h3>
                     <p>
-                        You may need a RedditGrowth Account in order to use some of our Services. You may create your own RedditGrowth Account, or your RedditGrowth Account may be assigned to you by an administrator, such as your employer or educational institution. If you are using a RedditGrowth Account assigned to you by an administrator, different terms may apply and your administrator may be able to access or disable your account.
+                        You may need a RedditGo Account in order to use some of our Services. You may create your own RedditGo Account, or your RedditGo Account may be assigned to you by an administrator, such as your employer or educational institution. If you are using a RedditGo Account assigned to you by an administrator, different terms may apply and your administrator may be able to access or disable your account.
                     </p>
 
                     <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">3. Content in our Services</h3>
@@ -40,12 +40,12 @@ export const TermsOfService: React.FC = () => {
                         Our Service allows you to upload, submit, store, send or receive content. You retain ownership of any intellectual property rights that you hold in that content. In short, what belongs to you stays yours.
                     </p>
                     <p className="mt-4">
-                        When you upload, submit, store, send or receive content to or through our Services, you give RedditGrowth (and those we work with) a worldwide license to use, host, store, reproduce, modify, create derivative works (such as those resulting from translations, adaptations or other changes we make so that your content works better with our Services), communicate, publish, publicly perform, publicly display and distribute such content.
+                        When you upload, submit, store, send or receive content to or through our Services, you give RedditGo (and those we work with) a worldwide license to use, host, store, reproduce, modify, create derivative works (such as those resulting from translations, adaptations or other changes we make so that your content works better with our Services), communicate, publish, publicly perform, publicly display and distribute such content.
                     </p>
 
                     <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">4. Privacy and Copyright Protection</h3>
                     <p>
-                        RedditGrowth's privacy policies explain how we treat your personal data and protect your privacy when you use our Services. By using our Services, you agree that RedditGrowth can use such data in accordance with our privacy policies.
+                        RedditGo's privacy policies explain how we treat your personal data and protect your privacy when you use our Services. By using our Services, you agree that RedditGo can use such data in accordance with our privacy policies.
                     </p>
 
                     <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">5. Modifying and Terminating our Services</h3>
@@ -53,7 +53,7 @@ export const TermsOfService: React.FC = () => {
                         We are constantly changing and improving our Services. We may add or remove functionalities or features, and we may suspend or stop a Service altogether.
                     </p>
                     <p className="mt-4">
-                        You can stop using our Services at any time, although we'll be sorry to see you go. RedditGrowth may also stop providing Services to you, or add or create new limits to our Services at any time.
+                        You can stop using our Services at any time, although we'll be sorry to see you go. RedditGo may also stop providing Services to you, or add or create new limits to our Services at any time.
                     </p>
                 </div>
             </div>

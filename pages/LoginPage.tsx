@@ -99,7 +99,7 @@ export const LoginPage: React.FC = () => {
                     </div>
 
                     <div className="relative z-10 pt-8 text-slate-400 text-xs font-medium">
-                        © 2026 RedditGrowth AI.
+                        © 2026 RedditGo AI.
                     </div>
                 </div>
 

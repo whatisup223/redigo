@@ -42,7 +42,7 @@ export const LandingPage: React.FC = () => {
             <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-200 ring-2 ring-orange-100">
               <Zap fill="currentColor" size={20} />
             </div>
-            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">RedditGrowth</span>
+            <span className="text-2xl font-extrabold text-slate-900 tracking-tight">RedditGo</span>
           </div>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-bold text-slate-500">
@@ -612,7 +612,7 @@ export const LandingPage: React.FC = () => {
       <footer className="py-12 bg-white text-slate-500">
         <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center gap-6">
           <div className="text-sm font-medium">
-            © 2026 RedditGrowth AI. All rights reserved.
+            © 2026 RedditGo AI. All rights reserved.
           </div>
           <div className="flex items-center gap-8 text-sm font-medium">
             <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>

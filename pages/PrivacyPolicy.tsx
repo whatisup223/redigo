@@ -22,7 +22,7 @@ export const PrivacyPolicy: React.FC = () => {
 
                 <div className="prose prose-lg prose-slate max-w-none">
                     <p>
-                        At RedditGrowth, we take your privacy seriously. This Privacy Policy explains how we collect, use, disclosure, and safeguard your information when you visit our website and use our application.
+                        At RedditGo, we take your privacy seriously. This Privacy Policy explains how we collect, use, disclosure, and safeguard your information when you visit our website and use our application.
                     </p>
 
                     <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">1. Collection of Your Information</h3>

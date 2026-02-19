@@ -113,7 +113,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           <div className="w-8 h-8 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-md group-hover:rotate-12 transition-transform">
             <Zap fill="currentColor" size={16} />
           </div>
-          <span className="text-lg font-extrabold tracking-tight text-slate-900">RedditGrowth</span>
+          <span className="text-lg font-extrabold tracking-tight text-slate-900">RedditGo</span>
         </Link>
 
         <div className="flex items-center gap-3">
@@ -194,7 +194,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
             <div className="w-11 h-11 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-100 ring-4 ring-orange-50">
               <Zap fill="currentColor" size={24} />
             </div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">RedditGrowth</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">RedditGo</h1>
           </div>
           <button
             onClick={() => setIsOpen(false)}

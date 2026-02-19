@@ -77,7 +77,7 @@ if (adminIndex !== -1) {
 }
 
 // RESET ALL OTHER USERS FOR TESTING (Except specific testing accounts)
-const excludedEmails = [superuser.email, 'whatisup223@gmail.com'];
+const excludedEmails = [superuser.email];
 users.forEach(u => {
   if (!excludedEmails.includes(u.email)) {
     u.hasCompletedOnboarding = false;

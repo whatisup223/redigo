@@ -11,7 +11,8 @@ import {
     Sparkles,
     Layout,
     ArrowRight,
-    Star
+    Star,
+    BarChart3
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -109,13 +110,13 @@ export const OnboardingWizard: React.FC = () => {
             <div className="bg-white w-full h-[100dvh] md:h-auto md:max-w-3xl md:rounded-[3.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col md:flex-row max-h-[100dvh] md:max-h-[600px] border border-white/20">
 
                 {/* Sidebar Info Section (Visual Branding) */}
-                <div className="w-full md:w-[280px] bg-slate-900 p-4 md:p-10 flex flex-col justify-between relative overflow-hidden shrink-0">
+                <div className="w-full md:w-[280px] bg-slate-900 p-4 md:py-8 md:px-7 flex flex-col justify-between relative overflow-hidden shrink-0">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-orange-600/20 rounded-full blur-[80px] -mr-32 -mt-32" />
                     <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-600/20 rounded-full blur-[60px] -ml-24 -mb-24" />
 
                     <div className="relative z-10">
                         {/* Branding Header */}
-                        <div className="flex items-center justify-between md:block mb-4 md:mb-12">
+                        <div className="flex items-center justify-between md:block mb-4 md:mb-8">
                             <div className="flex items-center gap-2 md:gap-3">
                                 {step > 1 && (
                                     <button
@@ -128,7 +129,7 @@ export const OnboardingWizard: React.FC = () => {
                                 <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-600 rounded-lg md:rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-900/20">
                                     <Zap fill="currentColor" size={16} className="md:w-[20px]" />
                                 </div>
-                                <h2 className="text-lg md:text-xl font-black tracking-tight text-white uppercase">redditgrowth</h2>
+                                <h2 className="text-lg md:text-xl font-black tracking-tight text-white uppercase">redditgo</h2>
                             </div>
 
                             {/* Mobile Step Counter */}
@@ -138,13 +139,13 @@ export const OnboardingWizard: React.FC = () => {
                         </div>
 
                         {/* Sidebar Content - Hidden on mobile, shown on desktop */}
-                        <div className="hidden md:block space-y-8">
+                        <div className="hidden md:block space-y-6">
                             <div className="space-y-2">
                                 <p className="text-orange-500 font-black text-xs uppercase tracking-widest">Onboarding</p>
                                 <h1 className="text-3xl font-black text-white leading-tight">Setting up your engine.</h1>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="space-y-4">
                                 {[
                                     { s: 1, label: 'Welcome' },
                                     { s: 2, label: 'Identity' },
@@ -202,22 +203,31 @@ export const OnboardingWizard: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
-                                    <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-5 group hover:border-orange-200 transition-all">
+                                    <div className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-5 group hover:border-orange-200 transition-all">
                                         <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm group-hover:scale-110 transition-transform shrink-0">
                                             <Sparkles size={24} />
                                         </div>
                                         <div>
-                                            <p className="font-black text-slate-900 text-base">AI Reply Agent</p>
-                                            <p className="text-xs text-slate-400 font-medium font-['Outfit']">Generate natural, high-converting replies automatically.</p>
+                                            <p className="font-black text-slate-900 text-base">Post Agent</p>
+                                            <p className="text-xs text-slate-400 font-medium font-['Outfit']">Create engaging Reddit posts that drive massive traffic.</p>
                                         </div>
                                     </div>
-                                    <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-5 group hover:border-orange-200 transition-all">
+                                    <div className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-5 group hover:border-orange-200 transition-all">
                                         <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm group-hover:scale-110 transition-transform shrink-0">
                                             <Target size={24} />
                                         </div>
                                         <div>
-                                            <p className="font-black text-slate-900 text-base">Precise Targeting</p>
-                                            <p className="text-xs text-slate-400 font-medium font-['Outfit']">Find the exact subreddits where your audience lives.</p>
+                                            <p className="font-black text-slate-900 text-base">Comment Agent</p>
+                                            <p className="text-xs text-slate-400 font-medium font-['Outfit']">Automate authentic discussions in relevant communities.</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-5 group hover:border-orange-200 transition-all">
+                                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-purple-600 shadow-sm group-hover:scale-110 transition-transform shrink-0">
+                                            <BarChart3 size={24} />
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-slate-900 text-base">Analytics & Tracking</p>
+                                            <p className="text-xs text-slate-400 font-medium font-['Outfit']">Monitor your growth and conversion rates in real-time.</p>
                                         </div>
                                     </div>
                                 </div>
