@@ -35,9 +35,83 @@ const savedData = loadSettings();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Webhook Handler (Must be before express.json)
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
+  const sig = request.headers['stripe-signature'];
+  const stripe = getStripe();
+
+  let event;
+
+  try {
+    if (stripeSettings.webhookSecret && stripe) {
+      // Live Stripe Verification
+      event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
+    } else {
+      // Local/Dev without secret (if needed) or just fail
+      console.log('Webhook received without verification (Dev Mode or Missing Secret)');
+      // In prod, this should fail if secret is missing. But for now we try to parse if possible.
+      // However, request.body is Buffer here.
+      try {
+        event = JSON.parse(request.body.toString());
+      } catch (err) {
+        console.error('Webhook payload parse error', err);
+        return response.status(400).send(`Webhook Error: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    console.error('Webhook signature verification failed.', err.message);
+    return response.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const { userEmail, plan, credits } = session.metadata || {};
+
+    console.log(`[Webhook] Payment successful for ${userEmail}. Plan: ${plan}`);
+
+    if (userEmail && plan) {
+      const userIndex = users.findIndex(u => u.email === userEmail);
+      if (userIndex !== -1) {
+        // 1. Determine Credits to Add
+        // Prefer credits from metadata (if we passed them), else fetch from plan
+        const creditsToAdd = credits ? parseInt(credits) : getPlanCredits(plan);
+        const currentCredits = users[userIndex].credits || 0;
+
+        // 2. Calculate Subscription Period (1 Month explicitly)
+        const now = new Date();
+        const oneMonthLater = new Date(now);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+        // 3. Update User
+        users[userIndex].plan = plan;
+        users[userIndex].status = 'Active';
+        users[userIndex].credits = currentCredits + creditsToAdd; // Accumulate
+        users[userIndex].subscriptionStart = now.toISOString();
+        users[userIndex].subscriptionEnd = oneMonthLater.toISOString();
+
+        saveSettings({ users });
+        console.log(`[Database] User ${userEmail} upgraded to ${plan}. Added ${creditsToAdd} credits. New Total: ${users[userIndex].credits}. Expires: ${oneMonthLater.toISOString()}`);
+      } else {
+        console.warn(`[Database] User ${userEmail} not found!`);
+      }
+    }
+  }
+
+  response.send();
+});
+
 // Middleware
 app.use(cors());
-app.use(express.json());
+
+// Use JSON parser for all other routes
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 // Request Logging
 app.use((req, res, next) => {
@@ -671,31 +745,48 @@ app.get('/api/auth/reddit/url', (req, res) => {
     return res.status(500).json({ error: 'Reddit Client ID not configured by Admin' });
   }
 
+  const host = req.get('host');
+  const protocol = host.includes('localhost') ? 'http' : 'https';
+  // Use configured URI if available, otherwise construct dynamic one
+  const redirectUri = redditSettings.redirectUri && redditSettings.redirectUri.trim() !== ''
+    ? redditSettings.redirectUri
+    : `${protocol}://${host}/auth/reddit/callback`;
+
   const state = Math.random().toString(36).substring(7);
   const scope = 'identity read submit';
-  const url = `https://www.reddit.com/api/v1/authorize?client_id=${redditSettings.clientId}&response_type=code&state=${state}&redirect_uri=${encodeURIComponent(redditSettings.redirectUri)}&duration=permanent&scope=${scope}`;
+  const url = `https://www.reddit.com/api/v1/authorize?client_id=${redditSettings.clientId}&response_type=code&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&duration=permanent&scope=${scope}`;
 
-  res.json({ url });
+  // Return the redirectUri used so frontend can store it if needed (optional)
+  res.json({ url, redirectUri });
 });
 
 app.post('/api/auth/reddit/callback', async (req, res) => {
   const { code, userId } = req.body;
   if (!code) return res.status(400).json({ error: 'Code is required' });
 
+  // Dynamic Redirect URI Logic (Must match exactly what was used in /url)
+  const host = req.get('host');
+  const protocol = host.includes('localhost') ? 'http' : 'https';
+  const redirectUri = redditSettings.redirectUri && redditSettings.redirectUri.trim() !== ''
+    ? redditSettings.redirectUri
+    : `${protocol}://${host}/auth/reddit/callback`;
+
   try {
     const auth = Buffer.from(`${redditSettings.clientId}:${redditSettings.clientSecret}`).toString('base64');
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'authorization_code');
+    params.append('code', code);
+    params.append('redirect_uri', redirectUri);
+
     const response = await fetch('https://www.reddit.com/api/v1/access_token', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': redditSettings.userAgent
+        'User-Agent': redditSettings.userAgent || 'RedigoApp/1.0'
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redditSettings.redirectUri
-      })
+      body: params
     });
 
     const data = await response.json();
