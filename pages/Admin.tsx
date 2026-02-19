@@ -28,7 +28,8 @@ import {
     Archive,
     LifeBuoy,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    Check
 } from 'lucide-react';
 
 // Mock Data Types
@@ -49,6 +50,11 @@ interface AISettings {
     systemPrompt: string;
     apiKey: string;
     baseUrl?: string;
+    creditCosts?: {
+        comment: number;
+        post: number;
+        image: number;
+    };
 }
 
 interface StripeSettings {
@@ -56,6 +62,18 @@ interface StripeSettings {
     secretKey: string;
     webhookSecret: string;
     isSandbox: boolean;
+}
+
+interface Plan {
+    id: string;
+    name: string;
+    monthlyPrice: number;
+    yearlyPrice: number;
+    credits: number;
+    features: string[];
+    isPopular: boolean;
+    highlightText?: string;
+    isCustom?: boolean;
 }
 
 interface RedditSettings {
@@ -79,7 +97,7 @@ export const Admin: React.FC = () => {
     };
 
     const activeTab = getActiveTab();
-    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit'>('ai');
+    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans'>('ai');
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -90,7 +108,12 @@ export const Admin: React.FC = () => {
         maxOutputTokens: 1024,
         systemPrompt: '',
         apiKey: '',
-        baseUrl: 'https://openrouter.ai/api/v1'
+        baseUrl: 'https://openrouter.ai/api/v1',
+        creditCosts: {
+            comment: 1,
+            post: 2,
+            image: 5
+        }
     });
     const [stripeSettings, setStripeSettings] = useState<StripeSettings>({
         publishableKey: '',
@@ -118,9 +141,14 @@ export const Admin: React.FC = () => {
         }
     });
 
+    const [plans, setPlans] = useState<Plan[]>([]);
+
     // User Management Modal State
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+    const [planForm, setPlanForm] = useState<Partial<Plan>>({ features: [''] });
+
     const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '' });
 
     // Fetch Data Function (Real Backend)
@@ -129,12 +157,13 @@ export const Admin: React.FC = () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
-            const [statsRes, usersRes, aiRes, stripeRes, redditRes] = await Promise.all([
+            const [statsRes, usersRes, aiRes, stripeRes, redditRes, plansRes] = await Promise.all([
                 fetch('/api/admin/stats', { headers }),
                 fetch('/api/admin/users', { headers }),
                 fetch('/api/admin/ai-settings', { headers }),
                 fetch('/api/admin/stripe-settings', { headers }),
-                fetch('/api/admin/reddit-settings', { headers })
+                fetch('/api/admin/reddit-settings', { headers }),
+                fetch('/api/plans', { headers })
             ]);
 
             if (statsRes.ok) setStats(await statsRes.json());
@@ -142,6 +171,7 @@ export const Admin: React.FC = () => {
             if (aiRes.ok) setAiSettings(await aiRes.json());
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
             if (redditRes.ok) setRedditSettings(await redditRes.json());
+            if (plansRes.ok) setPlans(await plansRes.json());
         } catch (error) {
             console.error("Failed to fetch admin data", error);
         } finally {
@@ -231,6 +261,57 @@ export const Admin: React.FC = () => {
         } catch (e) {
             console.error(e);
             alert('Error saving Stripe settings.');
+        }
+    };
+
+    const handleSavePlan = async () => {
+        const token = localStorage.getItem('token');
+        const isEditing = plans.some(p => p.id === planForm.id);
+        const method = isEditing ? 'PUT' : 'POST';
+        const url = isEditing ? `/api/plans/${planForm.id}` : '/api/plans';
+
+        // Clean up features
+        const cleanedFeatures = (planForm.features || []).filter(f => f.trim() !== '');
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ ...planForm, features: cleanedFeatures })
+            });
+            if (res.ok) {
+                alert('Plan saved successfully!');
+                setIsPlanModalOpen(false);
+                fetchData();
+            } else {
+                const data = await res.json();
+                alert(`Failed to save plan: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving plan.');
+        }
+    };
+
+    const handleDeletePlan = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this plan?')) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/plans/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                fetchData();
+            } else {
+                const data = await res.json();
+                alert(`Failed to delete plan: ${data.error}`);
+            }
+        } catch (e) {
+            alert('Failed to delete plan');
         }
     };
 
@@ -488,6 +569,13 @@ export const Admin: React.FC = () => {
                                     <Globe size={18} />
                                     Reddit API
                                 </button>
+                                <button
+                                    onClick={() => setSettingsTab('plans')}
+                                    className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'plans' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    <Zap size={18} />
+                                    Plans
+                                </button>
                             </div>
 
                             {/* Content Area */}
@@ -533,7 +621,7 @@ export const Admin: React.FC = () => {
                                                                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
                                                                 value={aiSettings.model}
                                                                 onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
-                                                                placeholder="e.g. meta-llama/llama-3-70b-instruct"
+                                                                placeholder="e.g. anthropic/claude-3-sonnet"
                                                             />
                                                         ) : (
                                                             <select
@@ -545,14 +633,12 @@ export const Admin: React.FC = () => {
                                                                     <>
                                                                         <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
                                                                         <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                                                        <option value="gemini-1.0-pro">Gemini 1.0 Pro</option>
                                                                     </>
                                                                 )}
                                                                 {aiSettings.provider === 'openai' && (
                                                                     <>
                                                                         <option value="gpt-4o">GPT-4o</option>
-                                                                        <option value="gpt-4">GPT-4 Turbo</option>
-                                                                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                                                        <option value="gpt-4o-mini">GPT-4o Mini</option>
                                                                     </>
                                                                 )}
                                                             </select>
@@ -565,7 +651,6 @@ export const Admin: React.FC = () => {
                                                         <span className="text-sm font-bold text-slate-700 mb-2 block">Base URL</span>
                                                         <input
                                                             type="text"
-                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm leading-relaxed"
                                                             value={aiSettings.baseUrl}
                                                             onChange={(e) => setAiSettings({ ...aiSettings, baseUrl: e.target.value })}
                                                             placeholder="https://openrouter.ai/api/v1"
@@ -607,6 +692,72 @@ export const Admin: React.FC = () => {
                                                         />
                                                     </div>
                                                 </label>
+
+                                                <div className="pt-4 border-t border-slate-100">
+                                                    <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                                                        <CreditCard size={16} className="text-indigo-600" />
+                                                        Dynamic Credit Costs
+                                                    </h3>
+                                                    <div className="grid grid-cols-3 gap-4">
+                                                        <label className="block">
+                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Comment</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                value={aiSettings.creditCosts?.comment ?? 1}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value) || 0;
+                                                                    setAiSettings({
+                                                                        ...aiSettings,
+                                                                        creditCosts: {
+                                                                            post: 2, image: 5,
+                                                                            ...aiSettings.creditCosts,
+                                                                            comment: val
+                                                                        }
+                                                                    });
+                                                                }}
+                                                            />
+                                                        </label>
+                                                        <label className="block">
+                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Post</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                value={aiSettings.creditCosts?.post ?? 2}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value) || 0;
+                                                                    setAiSettings({
+                                                                        ...aiSettings,
+                                                                        creditCosts: {
+                                                                            comment: 1, image: 5,
+                                                                            ...aiSettings.creditCosts,
+                                                                            post: val
+                                                                        }
+                                                                    });
+                                                                }}
+                                                            />
+                                                        </label>
+                                                        <label className="block">
+                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Image</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                value={aiSettings.creditCosts?.image ?? 5}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value) || 0;
+                                                                    setAiSettings({
+                                                                        ...aiSettings,
+                                                                        creditCosts: {
+                                                                            comment: 1, post: 2,
+                                                                            ...aiSettings.creditCosts,
+                                                                            image: val
+                                                                        }
+                                                                    });
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <button
                                                 onClick={handleSaveSettings} // Changed from handleSaveAiSettings to handleSaveSettings as per original
@@ -628,168 +779,269 @@ export const Admin: React.FC = () => {
                                             </label>
                                         </div>
                                     </div>
-                                )}
+                                )
+                                }
 
-                                {settingsTab === 'payments' && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-                                                <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100">
-                                                    <CreditCard size={24} />
-                                                </div>
-                                                <div>
-                                                    <h2 className="text-xl font-bold text-slate-900">Stripe Payment Gateway</h2>
-                                                    <p className="text-slate-400 text-sm">Configure API keys and billing settings.</p>
-                                                </div>
-                                            </div>
-
+                                {
+                                    settingsTab === 'payments' && (
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                             <div className="space-y-6">
-                                                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                                                    <div>
-                                                        <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
-                                                        <p className="text-slate-500 text-xs">Enable for testing payments.</p>
+                                                <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+                                                    <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100">
+                                                        <CreditCard size={24} />
                                                     </div>
-                                                    <button
-                                                        onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
-                                                        className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
-                                                    >
-                                                        <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                                                    </button>
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-slate-900">Stripe Payment Gateway</h2>
+                                                        <p className="text-slate-400 text-sm">Configure API keys and billing settings.</p>
+                                                    </div>
                                                 </div>
 
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key</span>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
-                                                        value={stripeSettings.publishableKey}
-                                                        onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
-                                                        placeholder="pk_test_..."
-                                                    />
-                                                </label>
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
-                                                    <input
-                                                        type="password"
-                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
-                                                        value={stripeSettings.secretKey}
-                                                        onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
-                                                        placeholder="sk_test_..."
-                                                    />
-                                                </label>
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Secret</span>
-                                                    <input
-                                                        type="password"
-                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
-                                                        value={stripeSettings.webhookSecret}
-                                                        onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
-                                                        placeholder="whsec_..."
-                                                    />
-                                                </label>
-                                            </div>
-                                            <button
-                                                onClick={handleSaveStripeSettings}
-                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-emerald-600 hover:shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                            >
-                                                <Save size={20} />
-                                                Save Payment Config
-                                            </button>
-                                        </div>
-                                        {/* Helper content or stats could go here */}
-                                        <div className="bg-emerald-50/50 p-8 rounded-[2rem] border border-emerald-100 flex items-center justify-center">
-                                            <div className="text-center space-y-4">
-                                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-emerald-600">
-                                                    <CreditCard size={32} />
-                                                </div>
-                                                <h3 className="font-bold text-slate-900">Payment Security</h3>
-                                                <p className="text-slate-500 text-sm max-w-xs mx-auto">
-                                                    Keys are stored securely. Ensure you are using restricted API keys for production environments.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {settingsTab === 'reddit' && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-                                                <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-100">
-                                                    <Globe size={24} />
-                                                </div>
-                                                <div>
-                                                    <h2 className="text-xl font-bold text-slate-900">Reddit API Configuration</h2>
-                                                    <p className="text-slate-400 text-sm">Set up your application credentials.</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-6">
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                        value={redditSettings.clientId}
-                                                        onChange={(e) => setRedditSettings({ ...redditSettings, clientId: e.target.value })}
-                                                        placeholder="e.g. -XyZ123abc..."
-                                                    />
-                                                </label>
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Client Secret</span>
-                                                    <input
-                                                        type="password"
-                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                        value={redditSettings.clientSecret}
-                                                        onChange={(e) => setRedditSettings({ ...redditSettings, clientSecret: e.target.value })}
-                                                    />
-                                                </label>
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Redirect URI</span>
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-mono text-sm text-slate-500 cursor-not-allowed"
-                                                            value={redditSettings.redirectUri}
-                                                            readOnly
-                                                        />
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                                                        <div>
+                                                            <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
+                                                            <p className="text-slate-500 text-xs">Enable for testing payments.</p>
+                                                        </div>
                                                         <button
-                                                            onClick={() => navigator.clipboard.writeText(redditSettings.redirectUri)}
-                                                            className="bg-white border border-slate-200 p-4 rounded-2xl hover:text-orange-600 hover:border-orange-200 transition-colors"
-                                                            title="Copy"
+                                                            onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
+                                                            className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
                                                         >
-                                                            <Copy size={20} />
+                                                            <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                                         </button>
                                                     </div>
-                                                </label>
-                                                <label className="block">
-                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">User Agent</span>
-                                                    <input
-                                                        type="text"
-                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                        value={redditSettings.userAgent}
-                                                        onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
-                                                    />
-                                                </label>
+
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={stripeSettings.publishableKey}
+                                                            onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
+                                                            placeholder="pk_test_..."
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={stripeSettings.secretKey}
+                                                            onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
+                                                            placeholder="sk_test_..."
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Secret</span>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={stripeSettings.webhookSecret}
+                                                            onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
+                                                            placeholder="whsec_..."
+                                                        />
+                                                    </label>
+                                                </div>
+                                                <button
+                                                    onClick={handleSaveStripeSettings}
+                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-emerald-600 hover:shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                >
+                                                    <Save size={20} />
+                                                    Save Payment Config
+                                                </button>
+                                            </div>
+                                            {/* Helper content or stats could go here */}
+                                            <div className="bg-emerald-50/50 p-8 rounded-[2rem] border border-emerald-100 flex items-center justify-center">
+                                                <div className="text-center space-y-4">
+                                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-emerald-600">
+                                                        <CreditCard size={32} />
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-900">Payment Security</h3>
+                                                    <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                                                        Keys are stored securely. Ensure you are using restricted API keys for production environments.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+
+                                {
+                                    settingsTab === 'reddit' && (
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+                                                    <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-100">
+                                                        <Globe size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-slate-900">Reddit API Configuration</h2>
+                                                        <p className="text-slate-400 text-sm">Set up your application credentials.</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-6">
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={redditSettings.clientId}
+                                                            onChange={(e) => setRedditSettings({ ...redditSettings, clientId: e.target.value })}
+                                                            placeholder="e.g. -XyZ123abc..."
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Client Secret</span>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={redditSettings.clientSecret}
+                                                            onChange={(e) => setRedditSettings({ ...redditSettings, clientSecret: e.target.value })}
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Redirect URI</span>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-mono text-sm text-slate-500 cursor-not-allowed"
+                                                                value={redditSettings.redirectUri}
+                                                                readOnly
+                                                            />
+                                                            <button
+                                                                onClick={() => navigator.clipboard.writeText(redditSettings.redirectUri)}
+                                                                className="bg-white border border-slate-200 p-4 rounded-2xl hover:text-orange-600 hover:border-orange-200 transition-colors"
+                                                                title="Copy"
+                                                            >
+                                                                <Copy size={20} />
+                                                            </button>
+                                                        </div>
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">User Agent</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={redditSettings.userAgent}
+                                                            onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
+                                                        />
+                                                    </label>
+                                                </div>
+                                                <button
+                                                    onClick={handleSaveRedditSettings}
+                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 hover:shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                >
+                                                    <Save size={20} />
+                                                    Save Reddit Config
+                                                </button>
+                                            </div>
+                                            <div className="bg-orange-50/50 p-8 rounded-[2rem] border border-orange-100 flex items-center justify-center">
+                                                <div className="text-center space-y-4">
+                                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-orange-600">
+                                                        <Globe size={32} />
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-900">API Policy</h3>
+                                                    <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                                                        Ensure your User Agent is unique to avoid rate limiting.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                }
+
+                                {settingsTab === 'plans' && (
+                                    <div>
+                                        <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-6">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-slate-200">
+                                                    <Zap size={24} />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-xl font-bold text-slate-900">Subscription Plans</h2>
+                                                    <p className="text-slate-400 text-sm">Create and manage pricing tiers.</p>
+                                                </div>
                                             </div>
                                             <button
-                                                onClick={handleSaveRedditSettings}
-                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 hover:shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                onClick={() => {
+                                                    setPlanForm({
+                                                        id: '',
+                                                        name: '',
+                                                        monthlyPrice: 0,
+                                                        yearlyPrice: 0,
+                                                        credits: 0,
+                                                        features: [''],
+                                                        isPopular: false,
+                                                        highlightText: '',
+                                                        isCustom: true
+                                                    });
+                                                    setIsPlanModalOpen(true);
+                                                }}
+                                                className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2 text-sm"
                                             >
-                                                <Save size={20} />
-                                                Save Reddit Config
+                                                Create Plan
                                             </button>
                                         </div>
-                                        <div className="bg-orange-50/50 p-8 rounded-[2rem] border border-orange-100 flex items-center justify-center">
-                                            <div className="text-center space-y-4">
-                                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-orange-600">
-                                                    <Globe size={32} />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {plans.map(plan => (
+                                                <div key={plan.id} className="bg-slate-50 border border-slate-200 p-6 rounded-[2rem] relative group hover:shadow-xl hover:border-slate-300 transition-all">
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
+                                                                {plan.isPopular && (
+                                                                    <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">Popular</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-slate-500 font-mono text-xs uppercase tracking-wider">{plan.id}</div>
+                                                        </div>
+                                                        <div className="flex bg-white rounded-xl border border-slate-100 shadow-sm p-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPlanForm(plan);
+                                                                    setIsPlanModalOpen(true);
+                                                                }}
+                                                                className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors"
+                                                            >
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeletePlan(plan.id)}
+                                                                className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                                                            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Monthly</div>
+                                                            <div className="text-xl font-black text-slate-900">${plan.monthlyPrice}</div>
+                                                        </div>
+                                                        <div className="bg-white p-3 rounded-xl border border-slate-100">
+                                                            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Credits</div>
+                                                            <div className="text-xl font-black text-slate-900">{plan.credits}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Features</div>
+                                                        {plan.features.slice(0, 3).map((f, i) => (
+                                                            <div key={i} className="flex items-center gap-2 text-sm text-slate-600">
+                                                                <CheckCircle2 size={14} className="text-green-500" />
+                                                                <span className="truncate">{f}</span>
+                                                            </div>
+                                                        ))}
+                                                        {plan.features.length > 3 && (
+                                                            <div className="text-xs text-slate-400 font-bold pl-6">
+                                                                +{plan.features.length - 3} more...
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <h3 className="font-bold text-slate-900">API Policy</h3>
-                                                <p className="text-slate-500 text-sm max-w-xs mx-auto">
-                                                    Ensure your User Agent is unique to avoid rate limiting.
-                                                </p>
-                                            </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -812,88 +1064,202 @@ export const Admin: React.FC = () => {
                             {/* ... more mock logs */}
                         </div>
                     )}
+
+                    {/* User Edit Modal */}
+                    {
+                        isEditModalOpen && (
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}></div>
+                                <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+                                    <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                                        <h2 className="text-2xl font-black text-slate-900">Edit User Details</h2>
+                                        <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={24} /></button>
+                                    </div>
+                                    <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Full Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                                    value={editForm.name}
+                                                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Email Address</label>
+                                                <input
+                                                    type="email"
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                                    value={editForm.email}
+                                                    onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">User Role</label>
+                                                <select
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                                    value={editForm.role}
+                                                    onChange={e => setEditForm({ ...editForm, role: e.target.value })}
+                                                >
+                                                    <option value="user">User</option>
+                                                    <option value="admin">Admin</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Account Plan</label>
+                                                <select
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                                    value={editForm.plan}
+                                                    onChange={e => setEditForm({ ...editForm, plan: e.target.value })}
+                                                >
+                                                    <option value="Free">Free</option>
+                                                    {plans.map(p => (
+                                                        <option key={p.id} value={p.name}>{p.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">New Password (leave blank to keep current)</label>
+                                            <input
+                                                type="password"
+                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-mono text-slate-700"
+                                                value={editForm.password}
+                                                placeholder="••••••••"
+                                                onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="pt-4">
+                                            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 transition-all active:scale-95">
+                                                Save User Changes
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )
+                    }
+
+                    {
+                        isPlanModalOpen && (
+                            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                                <div className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                                    <div className="p-8 pb-4 border-b border-slate-100 flex items-center justify-between">
+                                        <h2 className="text-2xl font-black text-slate-900">{planForm.id ? 'Edit Plan' : 'Create New Plan'}</h2>
+                                        <button onClick={() => setIsPlanModalOpen(false)} className="bg-slate-50 p-2 rounded-xl text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors">
+                                            <X size={24} />
+                                        </button>
+                                    </div>
+                                    <div className="p-8 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <label className="space-y-2">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Plan ID</span>
+                                                <input
+                                                    type="text"
+                                                    placeholder="e.g. pro-monthly"
+                                                    value={planForm.id || ''}
+                                                    onChange={(e) => setPlanForm({ ...planForm, id: e.target.value })}
+                                                    disabled={!!planForm.isCustom && planForm.id !== ''}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-50"
+                                                />
+                                            </label>
+                                            <label className="space-y-2">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Plan Name</span>
+                                                <input
+                                                    type="text"
+                                                    placeholder="e.g. Pro Plan"
+                                                    value={planForm.name || ''}
+                                                    onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                />
+                                            </label>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <label className="space-y-2">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Monthly ($)</span>
+                                                <input
+                                                    type="number"
+                                                    value={planForm.monthlyPrice || 0}
+                                                    onChange={(e) => setPlanForm({ ...planForm, monthlyPrice: parseFloat(e.target.value) || 0 })}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                />
+                                            </label>
+                                            <label className="space-y-2">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Yearly ($)</span>
+                                                <input
+                                                    type="number"
+                                                    value={planForm.yearlyPrice || 0}
+                                                    onChange={(e) => setPlanForm({ ...planForm, yearlyPrice: parseFloat(e.target.value) || 0 })}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                />
+                                            </label>
+                                            <label className="space-y-2">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Credits</span>
+                                                <input
+                                                    type="number"
+                                                    value={planForm.credits || 0}
+                                                    onChange={(e) => setPlanForm({ ...planForm, credits: parseInt(e.target.value) || 0 })}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                />
+                                            </label>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Features (One per line)</span>
+                                            <textarea
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20 h-32"
+                                                placeholder="Feature 1&#10;Feature 2&#10;Feature 3"
+                                                value={planForm.features?.join('\n') || ''}
+                                                onChange={(e) => setPlanForm({ ...planForm, features: e.target.value.split('\n') })}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center gap-4">
+                                            <label className="flex items-center gap-3 cursor-pointer group">
+                                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${planForm.isPopular ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-300 text-transparent group-hover:border-orange-400'}`}>
+                                                    <Check size={16} strokeWidth={4} />
+                                                    <input
+                                                        type="checkbox"
+                                                        className="hidden"
+                                                        checked={planForm.isPopular || false}
+                                                        onChange={(e) => setPlanForm({ ...planForm, isPopular: e.target.checked })}
+                                                    />
+                                                </div>
+                                                <span className="font-bold text-slate-700 text-sm">Mark as Popular</span>
+                                            </label>
+                                            {planForm.isPopular && (
+                                                <div className="flex-1">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Highlight Text (e.g. Best Value)"
+                                                        value={planForm.highlightText || ''}
+                                                        onChange={(e) => setPlanForm({ ...planForm, highlightText: e.target.value })}
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <button onClick={handleSavePlan} className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                            <Save size={20} />
+                                            Save Plan
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    }
                 </>
             )}
-            {/* User Edit Modal */}
-            {isEditModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}></div>
-                    <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-                            <h2 className="text-2xl font-black text-slate-900">Edit User Details</h2>
-                            <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={24} /></button>
-                        </div>
-                        <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Full Name</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
-                                        value={editForm.name}
-                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Email Address</label>
-                                    <input
-                                        type="email"
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
-                                        value={editForm.email}
-                                        onChange={e => setEditForm({ ...editForm, email: e.target.value })}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">User Role</label>
-                                    <select
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
-                                        value={editForm.role}
-                                        onChange={e => setEditForm({ ...editForm, role: e.target.value })}
-                                    >
-                                        <option value="user">User</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Account Plan</label>
-                                    <select
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
-                                        value={editForm.plan}
-                                        onChange={e => setEditForm({ ...editForm, plan: e.target.value })}
-                                    >
-                                        <option value="Free">Free</option>
-                                        <option value="Pro">Pro</option>
-                                        <option value="Business">Business</option>
-                                        <option value="Agency">Agency</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">New Password (leave blank to keep current)</label>
-                                <input
-                                    type="password"
-                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-mono text-slate-700"
-                                    value={editForm.password}
-                                    placeholder="••••••••"
-                                    onChange={e => setEditForm({ ...editForm, password: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="pt-4">
-                                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 transition-all active:scale-95">
-                                    Save User Changes
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
+        </div >
     );
 };

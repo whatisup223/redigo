@@ -4,90 +4,72 @@ import { Check, Shield, Crown, Zap, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const PricingPage: React.FC = () => {
-    const { user } = useAuth();
+    interface Plan {
+        id: string;
+        name: string;
+        monthlyPrice: number;
+        yearlyPrice: number;
+        credits: number;
+        features: string[];
+        isPopular: boolean;
+        highlightText?: string;
+        isCustom?: boolean;
+    }
+
+    const { user, updateUser } = useAuth();
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [isLoading, setIsLoading] = useState<string | null>(null);
+    const [plans, setPlans] = useState<Plan[]>([]);
+    const [loadingPlans, setLoadingPlans] = useState(true);
 
-    const handleSubscribe = async (planName: string) => {
-        setIsLoading(planName);
+    React.useEffect(() => {
+        const fetchPlans = async () => {
+            try {
+                const res = await fetch('/api/plans');
+                if (res.ok) {
+                    const data = await res.json();
+                    setPlans(data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch plans', error);
+            } finally {
+                setLoadingPlans(false);
+            }
+        };
+        fetchPlans();
+    }, []);
+
+    const handleSubscribe = async (plan: Plan) => {
+        if (!user) {
+            window.location.href = '/signup';
+            return;
+        }
+
+        setIsLoading(plan.id);
         try {
-            const response = await fetch('/api/create-checkout-session', {
+            const res = await fetch('/api/user/subscribe', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    plan: planName,
-                    cycle: billingCycle,
-                    userEmail: user?.email, // Send user email for identification
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, planId: plan.id, billingCycle })
             });
 
-            const data = await response.json();
-
-            if (response.ok && data.url) {
-                window.location.href = data.url;
+            if (res.ok) {
+                const data = await res.json();
+                alert(`Successfully subscribed to ${plan.name}!`);
+                if (updateUser && data.user) {
+                    updateUser(data.user);
+                }
             } else {
-                alert('Failed to initiate checkout: ' + (data.error || 'Unknown error'));
-                setIsLoading(null);
+                const err = await res.json();
+                alert('Subscription failed: ' + err.error);
             }
         } catch (error) {
-            console.error('Checkout error:', error);
-            alert('An error occurred. Please try again.');
+            console.error('Subscription error', error);
+            alert('An error occurred');
+        } finally {
             setIsLoading(null);
         }
     };
-
-    const plans = [
-        {
-            name: 'Free',
-            displayName: 'Starter',
-            monthlyPrice: 0,
-            yearlyPrice: 0,
-            desc: 'For individuals exploring AI replies.',
-            features: [
-                '10 AI Replies / Day',
-                'Basic Analytics',
-                '1 Connected Account',
-                'Community Support',
-                'Standard AI Persona'
-            ],
-            popular: false,
-            color: 'slate'
-        },
-        {
-            name: 'Growth',
-            displayName: 'Growth',
-            monthlyPrice: 29,
-            yearlyPrice: 290,
-            desc: 'Perfect for indie hackers and solo founders.',
-            features: [
-                'Unlimited AI Replies',
-                'Advanced Analytics',
-                '3 Connected Accounts',
-                'Priority Support',
-                'Custom AI Persona'
-            ],
-            popular: true,
-            color: 'orange'
-        },
-        {
-            name: 'Agency',
-            displayName: 'Agency',
-            monthlyPrice: 79,
-            yearlyPrice: 790,
-            desc: 'For serious growth and small teams.',
-            features: [
-                'Everything in Growth',
-                '10 Connected Accounts',
-                'Team Collaboration',
-                'API Access',
-                'Dedicated Account Manager'
-            ],
-            popular: false,
-            color: 'blue'
-        }
-    ];
 
 
     return (
@@ -121,19 +103,23 @@ export const PricingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
                 {plans.map((plan) => {
-                    const isCurrentPlan = user?.plan === plan.name || (plan.name === 'Free' && user?.plan === 'Free');
+                    const isCurrentPlan = user?.plan === plan.name || (plan.name === 'Starter' && user?.plan === 'Free');
 
                     return (
-                        <div key={plan.name} className={`relative bg-white rounded-[2.5rem] p-8 border ${plan.popular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 flex flex-col`}>
-                            {plan.popular && (
+                        <div key={plan.id} className={`relative bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 flex flex-col`}>
+                            {plan.isPopular && (
                                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-orange-600 to-red-600 text-white px-4 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wide shadow-lg shadow-orange-200">
                                     Most Popular
                                 </div>
                             )}
 
                             <div className="mb-8">
-                                <h3 className={`text-2xl font-bold ${plan.popular ? 'text-orange-600' : 'text-slate-900'}`}>{plan.displayName}</h3>
-                                <p className="text-slate-500 text-sm mt-2 font-medium">{plan.desc}</p>
+                                <h3 className={`text-2xl font-bold ${plan.isPopular ? 'text-orange-600' : 'text-slate-900'}`}>{plan.name}</h3>
+                                <p className="text-slate-500 text-sm mt-2 font-medium">
+                                    {plan.name === 'Starter' ? 'For individuals exploring AI replies.' :
+                                        plan.name === 'Pro' ? 'Perfect for indie hackers and solo founders.' :
+                                            plan.name === 'Business' ? 'For serious growth and small teams.' : 'Custom plan for enterprise needs.'}
+                                </p>
                             </div>
 
                             <div className="mb-8 flex items-baseline gap-1">
@@ -147,9 +133,15 @@ export const PricingPage: React.FC = () => {
                             </div>
 
                             <ul className="space-y-4 mb-8 flex-1">
+                                <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                                        <Zap size={12} strokeWidth={4} />
+                                    </div>
+                                    {plan.credits} Credits / Month
+                                </li>
                                 {plan.features.map((feature, i) => (
                                     <li key={i} className="flex items-center gap-3 text-slate-700 font-medium text-sm">
-                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.popular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                             <Check size={12} strokeWidth={4} />
                                         </div>
                                         {feature}
@@ -158,25 +150,25 @@ export const PricingPage: React.FC = () => {
                             </ul>
 
                             <button
-                                onClick={() => !isCurrentPlan && handleSubscribe(plan.name)}
+                                onClick={() => !isCurrentPlan && handleSubscribe(plan)}
                                 disabled={!!isLoading || isCurrentPlan}
                                 className={`w-full py-4 rounded-xl font-bold text-center transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 ${isCurrentPlan
                                     ? 'bg-slate-100 text-slate-400 cursor-default shadow-none border border-slate-200'
-                                    : plan.popular
+                                    : plan.isPopular
                                         ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-orange-200'
                                         : 'bg-white text-slate-900 border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                                     }`}
                             >
-                                {isLoading === plan.name ? (
+                                {isLoading === plan.id ? (
                                     <Loader2 className="animate-spin" size={20} />
                                 ) : isCurrentPlan ? (
                                     <>Current Plan</>
                                 ) : (
-                                    <>Choose {plan.displayName} <ArrowRight size={18} /></>
+                                    <>Choose {plan.name} <ArrowRight size={18} /></>
                                 )}
                             </button>
 
-                            {plan.name === 'Free' && (
+                            {plan.monthlyPrice === 0 && (
                                 <p className="text-center text-xs text-slate-400 font-medium mt-4">
                                     Free forever. No credit card required.
                                 </p>

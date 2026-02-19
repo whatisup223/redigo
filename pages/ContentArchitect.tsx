@@ -79,15 +79,13 @@ const toneActiveMap: Record<string, string> = {
 };
 
 export const ContentArchitect: React.FC = () => {
-    const { user } = useAuth();
+    const { user, updateUser } = useAuth();
     const [step, setStep] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
     const [progressStep, setProgressStep] = useState(0);
     const [imageLoaded, setImageLoaded] = useState(false);
-    const [usedCredits, setUsedCredits] = useState(0);
-    const FREE_PLAN_LIMIT = 3;
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [brandProfile, setBrandProfile] = useState<BrandProfile>({});
     const [showBrandOverride, setShowBrandOverride] = useState(false);
@@ -106,6 +104,27 @@ export const ContentArchitect: React.FC = () => {
         description: '',
         targetAudience: ''
     });
+
+    const [includeImage, setIncludeImage] = useState(true);
+    const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5 });
+
+    useEffect(() => {
+        fetch('/api/config')
+            .then(res => res.json())
+            .then(data => {
+                console.log('Fetched Config:', data);
+                if (data.creditCosts) {
+                    const mergedCosts = {
+                        comment: Number(data.creditCosts.comment) || 1,
+                        post: Number(data.creditCosts.post) || 2,
+                        image: Number(data.creditCosts.image) || 5
+                    };
+                    console.log('Applied Costs:', mergedCosts);
+                    setCosts(mergedCosts);
+                }
+            })
+            .catch(err => console.error('Config fetch failed:', err));
+    }, []);
 
     // Load brand profile on mount
     useEffect(() => {
@@ -141,7 +160,7 @@ export const ContentArchitect: React.FC = () => {
     }, [isGenerating]);
 
     const triggerImageGeneration = async (prompt: string) => {
-        if (!prompt) return;
+        if (!prompt || !user?.id) return;
         setIsGeneratingImage(true);
         setImageLoaded(false);
         // Reset image URL so the skeleton shows up immediately
@@ -150,11 +169,16 @@ export const ContentArchitect: React.FC = () => {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt })
+                body: JSON.stringify({ prompt, userId: user.id })
             });
             if (!response.ok) throw new Error('Failed to generate image');
             const data = await response.json();
             setPostData(prev => ({ ...prev, imageUrl: data.url }));
+
+            // Sync credits for image too
+            if (data.credits !== undefined) {
+                updateUser({ credits: data.credits });
+            }
         } catch {
             // Image generation is optional
         } finally {
@@ -164,6 +188,17 @@ export const ContentArchitect: React.FC = () => {
 
     const handleGenerateContent = async () => {
         if (!postData.subreddit) return;
+
+        const postCost = Number(costs.post) ?? 2;
+        const imageCost = Number(costs.image) ?? 5;
+        const totalCost = includeImage ? (postCost + imageCost) : postCost;
+
+        // Frontend pre-check
+        if ((user?.credits || 0) < totalCost && user?.role !== 'admin') {
+            showToast(`Insufficient credits. You need ${totalCost} credits for this action.`, 'error');
+            return;
+        }
+
         setIsGenerating(true);
         setProgressStep(0);
         try {
@@ -194,17 +229,26 @@ export const ContentArchitect: React.FC = () => {
                 imageUrl: ''
             }));
 
+            // Synchronize credits
+            if (generated.credits !== undefined) {
+                updateUser({ credits: generated.credits });
+            }
+
             setStep(2);
             // Non-blocking call: trigger image generation but don't AWAIT it
-            // This allows the modal to close and users to move to Step 2 instantly
-            triggerImageGeneration(generated.imagePrompt);
+            if (includeImage) {
+                triggerImageGeneration(generated.imagePrompt);
+            }
 
-            showToast('Thread generated! Image is being crafted in background.', 'success');
-            setUsedCredits(prev => prev + 1);
+            showToast('Thread generated!', 'success');
 
         } catch (err: any) {
             console.error(err);
-            showToast('AI generation failed. Please check your settings.', 'error');
+            if (err.message === 'OUT_OF_CREDITS') {
+                showToast('Credits exhausted. Please upgrade your plan.', 'error');
+            } else {
+                showToast('AI generation failed. Please check your settings.', 'error');
+            }
         } finally {
             setIsGenerating(false);
         }
@@ -312,8 +356,7 @@ export const ContentArchitect: React.FC = () => {
 
                 <CreditsBanner
                     plan={user?.plan || 'Free'}
-                    usedCredits={usedCredits}
-                    limit={FREE_PLAN_LIMIT}
+                    credits={user?.credits || 0}
                 />
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -577,14 +620,36 @@ export const ContentArchitect: React.FC = () => {
                                     </select>
                                 </div>
 
-                                <button
-                                    onClick={handleGenerateContent}
-                                    disabled={isGenerating || !postData.subreddit}
-                                    className="w-full py-5 bg-orange-600 text-white rounded-[2rem] font-black hover:bg-orange-500 transition-all shadow-2xl shadow-orange-200 flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
-                                >
-                                    <Zap size={20} fill="currentColor" />
-                                    GENERATE BLUEPRINT
-                                </button>
+                                {/* Action Buttons */}
+                                <div className="flex flex-col gap-4 mt-8">
+                                    <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm">
+                                                <ImageIcon size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">Include Base Image</p>
+                                                <p className="text-[10px] text-slate-500 font-medium">Generate a visual (+{Number(costs.image)} pts)</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setIncludeImage(!includeImage)}
+                                            className={`w-12 h-7 rounded-full transition-all relative ${includeImage ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        onClick={handleGenerateContent}
+                                        disabled={!postData.subreddit || isGenerating}
+                                        className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50"
+                                    >
+                                        <Sparkles size={20} />
+                                        {isGenerating ? 'ORCHESTRATING...' : `GENERATE POST (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} POINTS)`}
+                                        <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                    </button>
+                                </div>
                             </div>
                         )}
 

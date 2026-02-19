@@ -8,6 +8,7 @@ interface User {
     plan: string;
     status: string;
     hasCompletedOnboarding: boolean;
+    credits: number;
 }
 
 interface AuthContextType {
@@ -16,7 +17,8 @@ interface AuthContextType {
     login: (token: string, userData: User) => void;
     signup: (token: string, userData: User) => void;
     logout: () => void;
-    completeOnboarding: () => void;
+    updateUser: (userData: Partial<User>) => void;
+    completeOnboarding: (credits?: number) => void;
     isAuthenticated: boolean;
 }
 
@@ -58,9 +60,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(null);
     };
 
-    const completeOnboarding = () => {
+    const updateUser = (userData: Partial<User>) => {
         if (user) {
-            const updatedUser = { ...user, hasCompletedOnboarding: true };
+            const updatedUser = { ...user, ...userData };
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+            setUser(updatedUser);
+        }
+    };
+
+    const completeOnboarding = (credits?: number) => {
+        if (user) {
+            const updatedUser = {
+                ...user,
+                hasCompletedOnboarding: true,
+                credits: credits !== undefined ? credits : user.credits
+            };
             setUser(updatedUser);
             localStorage.setItem('user', JSON.stringify(updatedUser));
         }
@@ -69,7 +83,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const isAuthenticated = !!token;
 
     return (
-        <AuthContext.Provider value={{ user, token, login, signup, logout, completeOnboarding, isAuthenticated }}>
+        <AuthContext.Provider value={{ user, token, login, signup, logout, updateUser, completeOnboarding, isAuthenticated }}>
             {children}
         </AuthContext.Provider>
     );

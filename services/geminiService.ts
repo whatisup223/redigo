@@ -68,7 +68,7 @@ export const generateRedditReply = async (
   userId?: string | number,
   overrideProfile?: Partial<BrandProfile>,
   language: string = 'English'
-): Promise<GeneratedReply> => {
+): Promise<GeneratedReply & { credits?: number }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
     const brandProfile = mergeProfiles(savedProfile, overrideProfile);
@@ -78,6 +78,8 @@ export const generateRedditReply = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        userId,
+        type: 'comment',
         prompt: `Generate a value-add Reddit reply for this post.
         Post Title: ${post.title}
         Post Body: ${post.selftext.substring(0, 1000)}
@@ -103,11 +105,13 @@ export const generateRedditReply = async (
       })
     });
 
+    if (response.status === 402) throw new Error('OUT_OF_CREDITS');
     if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
 
     const data = await response.json();
     const cleanJson = data.text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(cleanJson) as GeneratedReply;
+    const result = JSON.parse(cleanJson) as GeneratedReply;
+    return { ...result, credits: data.credits };
   } catch (error) {
     console.error("Error generating reply via backend:", error);
     throw error;
@@ -124,7 +128,7 @@ export const generateRedditPost = async (
   userId?: string | number,
   overrideProfile?: Partial<BrandProfile>,
   language: string = 'English'
-): Promise<{ title: string; content: string; imagePrompt: string }> => {
+): Promise<{ title: string; content: string; imagePrompt: string; credits?: number }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
     const brandProfile = mergeProfiles(savedProfile, overrideProfile);
@@ -139,6 +143,8 @@ export const generateRedditPost = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        userId,
+        type: 'post',
         prompt: `Create a viral-potential Reddit post for r/${subreddit}.
         Goal: ${goal}
         Tone: ${tone}
@@ -168,10 +174,13 @@ export const generateRedditPost = async (
       })
     });
 
+    if (response.status === 402) throw new Error('OUT_OF_CREDITS');
     if (!response.ok) throw new Error('Generation failed');
+
     const data = await response.json();
     const cleanJson = data.text.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(cleanJson);
+    const result = JSON.parse(cleanJson);
+    return { ...result, credits: data.credits };
   } catch (error) {
     console.error("Error generating post:", error);
     throw error;

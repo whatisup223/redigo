@@ -150,8 +150,7 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [redditConnected, setRedditConnected] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const [usedCredits, setUsedCredits] = useState(0);
-  const FREE_PLAN_LIMIT = 3;
+
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
@@ -312,8 +311,7 @@ export const Dashboard: React.FC = () => {
 
       <CreditsBanner
         plan={user?.plan || 'Free'}
-        usedCredits={usedCredits}
-        limit={FREE_PLAN_LIMIT}
+        credits={user?.credits || 0}
       />
 
       {/* ── Stat Cards ── */}

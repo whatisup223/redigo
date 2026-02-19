@@ -76,18 +76,24 @@ export const OnboardingWizard: React.FC = () => {
     const handleFinish = async () => {
         setIsLoading(true);
         try {
-            // Optimistic update to prevent "unresponsive" feel
-            completeOnboarding();
-            localStorage.removeItem('onboarding_step');
-
-            // Actual API call in background
-            await fetch('/api/user/complete-onboarding', {
+            // Actual API call first to get credits
+            const res = await fetch('/api/user/complete-onboarding', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user?.id })
             });
+
+            if (res.ok) {
+                const data = await res.json();
+                completeOnboarding(data.credits);
+                localStorage.removeItem('onboarding_step');
+            } else {
+                // Fallback if API fails
+                completeOnboarding();
+            }
         } catch (e) {
             console.error("API failed, but state updated locally:", e);
+            completeOnboarding();
         } finally {
             setIsLoading(false);
         }
@@ -468,11 +474,22 @@ export const OnboardingWizard: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                                <div className="bg-orange-50/50 border border-orange-100/50 p-4 rounded-2xl w-full max-w-sm flex items-center gap-3">
-                                    <Star size={16} fill="currentColor" className="text-orange-600" />
-                                    <p className="text-[10px] text-slate-500 font-bold leading-none">
-                                        10 FREE CREDITS ADDED TO YOUR ACCOUNT
-                                    </p>
+                                <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 rounded-3xl text-white shadow-xl shadow-orange-200 transform hover:scale-[1.02] transition-transform border border-orange-400 relative overflow-hidden w-full max-w-sm cursor-default">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-8 -mt-8 animate-pulse-slow" />
+                                    <div className="relative z-10 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm shadow-inner border border-white/10">
+                                                <Zap size={24} fill="#fbbf24" className="text-yellow-300 animate-pulse" />
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="font-black text-2xl leading-none tracking-tight">100 Credits</p>
+                                                <p className="text-orange-100 text-[10px] font-black uppercase tracking-widest mt-1.5 opacity-90">Setup Bonus Unlocked</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white text-orange-600 px-3 py-1.5 rounded-full text-[10px] font-black shadow-lg tracking-wider uppercase">
+                                            Added
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

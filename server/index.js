@@ -53,6 +53,39 @@ app.use((err, req, res, next) => {
 
 // Mock Database
 let users = savedData.users || [];
+let plans = savedData.plans || [
+  {
+    id: 'starter',
+    name: 'Starter',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    credits: 20,
+    features: ['20 AI Actions/mo', 'Basic Reddit Analytics', '1 Connected Account', 'Community Support'],
+    isPopular: false,
+    isCustom: true
+  },
+  {
+    id: 'pro',
+    name: 'Professional',
+    monthlyPrice: 29,
+    yearlyPrice: 290,
+    credits: 150,
+    features: ['150 AI Actions/mo', 'Advanced Post Scheduling', '3 Connected Accounts', 'Priority Support', 'Image Generation'],
+    isPopular: true,
+    highlightText: 'Most Popular',
+    isCustom: true
+  },
+  {
+    id: 'agency',
+    name: 'Agency',
+    monthlyPrice: 99,
+    yearlyPrice: 990,
+    credits: 600,
+    features: ['600 AI Actions/mo', 'Unlimited Accounts', 'Team Collaboration', 'Dedicated Manager', 'API Access', 'White-label Reports'],
+    isPopular: false,
+    isCustom: true
+  }
+];
 
 // Superuser enforcement - info@marketation.online is the ONLY admin for now
 // Superuser enforcement - info@marketation.online is the ONLY admin for now
@@ -75,14 +108,6 @@ if (adminIndex !== -1) {
 } else {
   users = [superuser, ...users];
 }
-
-// RESET ALL OTHER USERS FOR TESTING (Except specific testing accounts)
-const excludedEmails = [superuser.email];
-users.forEach(u => {
-  if (!excludedEmails.includes(u.email)) {
-    u.hasCompletedOnboarding = false;
-  }
-});
 saveSettings({ users });
 console.log(`--- ADMIN ACCOUNT READY: ${superuser.email} ---`);
 
@@ -118,6 +143,7 @@ app.post('/api/auth/signup', (req, res) => {
     role: 'user',
     plan: 'Free',
     status: 'Active',
+    credits: 0, // Start with 0 credits until onboarding is complete
     hasCompletedOnboarding: false
   };
 
@@ -144,9 +170,17 @@ app.post('/api/user/complete-onboarding', (req, res) => {
   const { userId } = req.body;
   const index = users.findIndex(u => u.id == userId);
   if (index !== -1) {
+    // Grant bonus credits if first time completing onboarding
+    if (!users[index].hasCompletedOnboarding) {
+      users[index].credits = (users[index].credits || 0) + 100;
+    }
     users[index].hasCompletedOnboarding = true;
     saveSettings({ users });
-    res.json({ success: true, hasCompletedOnboarding: true });
+    res.json({
+      success: true,
+      hasCompletedOnboarding: true,
+      credits: users[index].credits
+    });
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -155,10 +189,22 @@ app.post('/api/user/complete-onboarding', (req, res) => {
 app.post('/api/user/brand-profile', (req, res) => {
   const { userId, ...brandData } = req.body;
   const index = users.findIndex(u => u.id == userId);
+
   if (index !== -1) {
-    users[index].brandProfile = brandData;
+    const user = users[index];
+
+    // Check if this is the first time completing onboarding to award bonus
+    let bonusAwarded = false;
+    if (!user.hasCompletedOnboarding || (user.credits === 0 && (!user.brandProfile || Object.keys(user.brandProfile).length === 0))) {
+      user.credits = (user.credits || 0) + 100;
+      bonusAwarded = true;
+    }
+
+    user.brandProfile = brandData;
+    user.hasCompletedOnboarding = true; // Mark as complete
+
     saveSettings({ users });
-    res.json({ success: true });
+    res.json({ success: true, credits: user.credits, bonusAwarded });
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -171,7 +217,20 @@ let aiSettings = savedData.ai || {
   maxOutputTokens: 1024,
   systemPrompt: 'You are a helpful Reddit assistant. Generate engaging and valuable replies.',
   apiKey: process.env.GEMINI_API_KEY || '',
-  baseUrl: 'https://openrouter.ai/api/v1'
+  baseUrl: 'https://openrouter.ai/api/v1',
+  creditCosts: {
+    comment: 1,
+    post: 2,
+    image: 5
+  }
+};
+
+// Ensure creditCosts always exists and is fully populated
+aiSettings.creditCosts = {
+  comment: Number(aiSettings.creditCosts?.comment) || 1,
+  post: Number(aiSettings.creditCosts?.post) || 2,
+  image: Number(aiSettings.creditCosts?.image) || 5,
+  ...aiSettings.creditCosts
 };
 
 // Stripe Settings (In-memory storage for demo)
@@ -192,6 +251,129 @@ let redditSettings = savedData.reddit || {
 
 // Store user Reddit tokens (In-memory for now, should be in DB)
 let userRedditTokens = savedData.userRedditTokens || {};
+
+// Plans API Endpoints
+// Public configuration for UI
+app.get('/api/config', (req, res) => {
+  res.json({
+    creditCosts: aiSettings.creditCosts
+  });
+});
+
+app.get('/api/plans', (req, res) => {
+  res.json(plans);
+});
+
+app.post('/api/plans', (req, res) => {
+  const { id, name, monthlyPrice, yearlyPrice, credits, features, isPopular, highlightText } = req.body;
+
+  if (!id || !name || monthlyPrice === undefined || yearlyPrice === undefined || credits === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  if (plans.find(p => p.id === id)) {
+    return res.status(400).json({ error: 'Plan ID already exists' });
+  }
+
+  const newPlan = {
+    id,
+    name,
+    monthlyPrice: parseFloat(monthlyPrice),
+    yearlyPrice: parseFloat(yearlyPrice),
+    credits: parseInt(credits),
+    features: features || [],
+    isPopular: !!isPopular,
+    highlightText: highlightText || '',
+    isCustom: true // Mark as custom created plan
+  };
+
+  plans.push(newPlan);
+  saveSettings({ plans });
+  res.status(201).json(newPlan);
+});
+
+app.put('/api/plans/:id', (req, res) => {
+  const { id } = req.params;
+  const planIndex = plans.findIndex(p => p.id === id);
+
+  if (planIndex === -1) {
+    return res.status(404).json({ error: 'Plan not found' });
+  }
+
+  const { name, monthlyPrice, yearlyPrice, credits, features, isPopular, highlightText } = req.body;
+
+  plans[planIndex] = {
+    ...plans[planIndex],
+    name: name || plans[planIndex].name,
+    monthlyPrice: monthlyPrice !== undefined ? parseFloat(monthlyPrice) : plans[planIndex].monthlyPrice,
+    yearlyPrice: yearlyPrice !== undefined ? parseFloat(yearlyPrice) : plans[planIndex].yearlyPrice,
+    credits: credits !== undefined ? parseInt(credits) : plans[planIndex].credits,
+    features: features || plans[planIndex].features,
+    isPopular: isPopular !== undefined ? !!isPopular : plans[planIndex].isPopular,
+    highlightText: highlightText || plans[planIndex].highlightText,
+    isCustom: true
+  };
+
+  saveSettings({ plans });
+  res.json(plans[planIndex]);
+});
+
+app.delete('/api/plans/:id', (req, res) => {
+  const { id } = req.params;
+  const planIndex = plans.findIndex(p => p.id === id);
+
+  if (planIndex === -1) {
+    return res.status(404).json({ error: 'Plan not found' });
+  }
+
+  // Check if any users are on this plan (optional safety check)
+  const usersOnPlan = users.filter(u => u.plan.toLowerCase() === plans[planIndex].name.toLowerCase());
+  if (usersOnPlan.length > 0) {
+    return res.status(400).json({ error: 'Cannot delete plan with active users' });
+  }
+
+  plans.splice(planIndex, 1);
+  saveSettings({ plans });
+  res.json({ success: true, message: 'Plan deleted' });
+});
+
+app.post('/api/user/subscribe', (req, res) => {
+  const { userId, planId, billingCycle } = req.body;
+
+  const user = users.find(u => u.id == userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const plan = plans.find(p => p.id === planId);
+  if (!plan) {
+    return res.status(404).json({ error: 'Plan not found' });
+  }
+
+  // Update User
+  user.plan = plan.name;
+  // Initialize credits if not present or reset to plan amount
+  // In a real system, you might want to ADD credits or handle prorating
+  // For now, we set it to the plan's limit as a "top-up"
+  user.credits = plan.credits;
+  user.subscriptionStatus = 'active';
+  user.billingCycle = billingCycle || 'monthly';
+  user.subscriptionDate = new Date().toISOString();
+
+  // Calculate renewal date
+  const now = new Date();
+  if (billingCycle === 'yearly') {
+    now.setFullYear(now.getFullYear() + 1);
+  } else {
+    now.setMonth(now.getMonth() + 1);
+  }
+  user.renewalDate = now.toISOString();
+
+  saveSettings({ users });
+
+  console.log(`[Subscription] User ${user.email} upgraded to ${plan.name}`);
+  res.json({ success: true, user });
+});
 
 // Brand Profiles per user
 let brandProfiles = savedData.brandProfiles || {};
@@ -312,6 +494,15 @@ app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
   if (newSettings.apiKey && newSettings.apiKey.includes('****')) {
     delete newSettings.apiKey;
   }
+  // Deep merge creditCosts if present
+  if (newSettings.creditCosts) {
+    newSettings.creditCosts = {
+      comment: Number(newSettings.creditCosts.comment) || (aiSettings.creditCosts?.comment || 1),
+      post: Number(newSettings.creditCosts.post) || (aiSettings.creditCosts?.post || 2),
+      image: Number(newSettings.creditCosts.image) || (aiSettings.creditCosts?.image || 5)
+    };
+  }
+
   aiSettings = { ...aiSettings, ...newSettings };
   saveSettings({ ai: aiSettings });
   res.json({ message: 'Settings updated', settings: aiSettings });
@@ -608,11 +799,25 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
 // AI Generation Proxy (Backend)
 app.post('/api/generate', async (req, res) => {
   try {
-    const { prompt, context } = req.body;
+    const { prompt, context, userId, type } = req.body; // type can be 'comment' or 'post'
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     if (!keyToUse) {
-      return res.status(500).json({ error: 'API Key not configured in Admin panel' });
+      return res.status(500).json({ error: 'AI provider is not configured. Please contact the administrator.' });
+    }
+
+    // CHECK CREDITS
+    const userIndex = users.findIndex(u => String(u.id) === String(userId));
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = users[userIndex];
+    const rawCost = (aiSettings.creditCosts && aiSettings.creditCosts[type]);
+    const cost = Number(rawCost) || (type === 'post' ? 2 : 1);
+
+    if (user.role !== 'admin' && (user.credits || 0) < cost) {
+      return res.status(402).json({ error: `Insufficient credits. This action requires ${cost} credits.` });
     }
 
     let text = '';
@@ -658,10 +863,20 @@ app.post('/api/generate', async (req, res) => {
       if (!response.ok) {
         throw new Error(data.error?.message || 'AI API Error');
       }
-      text = data.choices[0].message.content;
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        text = data.choices[0].message.content;
+      } else {
+        throw new Error('AI returned an empty or malformed response');
+      }
     }
 
-    res.json({ text });
+    // DEDUCT CREDIT (except for admin)
+    if (user.role !== 'admin') {
+      user.credits = Math.max(0, (user.credits || 0) - cost);
+      saveSettings({ users });
+    }
+
+    res.json({ text, credits: user.credits });
   } catch (error) {
     console.error('AI Generation Error:', error);
     res.status(500).json({ error: error.message });
@@ -671,11 +886,22 @@ app.post('/api/generate', async (req, res) => {
 // AI Image Generation
 app.post('/api/generate-image', async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, userId } = req.body;
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     if (!keyToUse || !keyToUse.startsWith('sk-')) {
       return res.status(400).json({ error: 'OpenAI API Key required for image generation.' });
+    }
+
+    // CHECK CREDITS
+    const userIndex = users.findIndex(u => String(u.id) === String(userId));
+    if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
+
+    const user = users[userIndex];
+    const cost = Number(aiSettings.creditCosts?.image) || 5;
+
+    if (user.role !== 'admin' && (user.credits || 0) < cost) {
+      return res.status(402).json({ error: `Insufficient credits. Image generation requires ${cost} credits.` });
     }
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -695,7 +921,13 @@ app.post('/api/generate-image', async (req, res) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'Image AI API Error');
 
-    res.json({ url: data.data[0].url });
+    // DEDUCT CREDIT
+    if (user.role !== 'admin') {
+      user.credits = Math.max(0, (user.credits || 0) - cost);
+      saveSettings({ users });
+    }
+
+    res.json({ url: data.data[0].url, credits: user.credits });
   } catch (error) {
     console.error("Image Gen Error:", error);
     res.status(500).json({ error: error.message });

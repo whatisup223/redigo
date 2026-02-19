@@ -81,8 +81,7 @@ export const Analytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'comments' | 'posts'>('comments');
-  const [usedCredits, setUsedCredits] = useState(0);
-  const FREE_PLAN_LIMIT = 3;
+
 
   // Date Filtering State
   const [dateFilter, setDateFilter] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
@@ -381,8 +380,7 @@ export const Analytics: React.FC = () => {
 
       <CreditsBanner
         plan={user?.plan || 'Free'}
-        usedCredits={usedCredits}
-        limit={FREE_PLAN_LIMIT}
+        credits={user?.credits || 0}
       />
 
       {/* Tab Switcher */}

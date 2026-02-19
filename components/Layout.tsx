@@ -123,7 +123,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
             className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/10 border border-orange-600/20 rounded-xl text-orange-600 active:scale-95 transition-all"
           >
             <Zap size={14} fill="currentColor" />
-            <span className="text-xs font-black">15</span>
+            <span className="text-xs font-black">{user?.credits || 0}</span>
           </Link>
 
           <div className="relative" ref={profileRef}>
@@ -157,9 +157,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                     <LifeBuoy size={16} /> <span className="text-xs font-bold">Help & Support</span>
                   </Link>
                 </div>
-                <div className="h-px bg-slate-50 my-1 mx-2" />
-                <button onClick={() => { logout(); setIsProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-500 rounded-xl transition-colors">
-                  <LogOut size={16} /> <span className="text-xs font-bold">Logout</span>
+                <div className="h-px bg-slate-50 my-2 mx-2" />
+                <button
+                  onClick={() => { logout(); setIsProfileOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl transition-all group/logout"
+                >
+                  <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover/logout:scale-110 transition-transform">
+                    <LogOut size={16} />
+                  </div>
+                  <span className="text-sm font-black">Sign Out Account</span>
                 </button>
               </div>
             )}
@@ -218,7 +224,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           ))}
         </div>
 
-        <div className="shrink-0 px-4 pb-6 pt-3 border-t border-slate-200/60 space-y-3">
+        <div className="shrink-0 px-4 pb-20 pt-3 border-t border-slate-200/60 space-y-3">
           {user?.plan === 'Free' && (
             <Link
               to="/pricing"
@@ -251,13 +257,17 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
             </div>
           </div>
 
-          <button
-            onClick={() => { logout(); setIsOpen(false); }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm"
-          >
-            <LogOut size={17} />
-            <span>Log Out</span>
-          </button>
+          <div className="pt-2">
+            <button
+              onClick={() => { logout(); setIsOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl transition-all group/sidebar-logout"
+            >
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover/sidebar-logout:scale-110 transition-transform">
+                <LogOut size={16} />
+              </div>
+              <span className="text-sm font-black">Sign Out</span>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -274,7 +284,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Available Credits</p>
-                <p className="text-sm font-black text-slate-900 leading-none">15 <span className="text-[10px] text-slate-400 font-bold tracking-normal">points</span></p>
+                <p className="text-sm font-black text-slate-900 leading-none">{user?.credits || 0} <span className="text-[10px] text-slate-400 font-bold tracking-normal">points</span></p>
               </div>
               <div className="ml-2 w-5 h-5 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-orange-600 group-hover:text-white transition-all">
                 <Plus size={12} />

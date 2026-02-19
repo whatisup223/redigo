@@ -13,12 +13,22 @@ import {
   Globe,
   Search,
   PenTool,
-  TrendingUp
+  TrendingUp,
+  Menu,
+  X
 } from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
+  const [plans, setPlans] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/plans')
+      .then(res => res.json())
+      .then(data => setPlans(data))
+      .catch(err => console.error('Failed to fetch plans', err));
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -33,33 +43,67 @@ export const LandingPage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen font-['Outfit'] scroll-smooth">
       {/* Navbar */}
       <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white/80 backdrop-blur-xl border-b border-slate-200/50 py-4 shadow-sm' : 'bg-transparent py-6'}`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3">
             <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-200 ring-2 ring-orange-100">
               <Zap fill="currentColor" size={20} />
             </div>
             <span className="text-2xl font-extrabold text-slate-900 tracking-tight">RedditGo</span>
-          </div>
+          </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-bold text-slate-500">
             <button onClick={() => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Home</button>
             <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Features</button>
             <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">How it Works</button>
             <button onClick={() => document.getElementById('approach')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Live Demo</button>
+            <button onClick={() => document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Reviews</button>
             <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Pricing</button>
           </div>
 
           <div className="flex items-center gap-4">
-            <Link to="/login" className="hidden md:block px-6 py-3 text-slate-600 font-bold hover:text-slate-900 transition-colors">Log In</Link>
-            <Link to="/signup" className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold border border-slate-800 hover:bg-orange-600 hover:border-orange-500 transition-all shadow-xl hover:shadow-orange-200 active:scale-95 flex items-center gap-2">
+            <Link to="/login" className="hidden sm:block px-6 py-3 text-slate-600 font-bold hover:text-slate-900 transition-colors">Log In</Link>
+            <Link to="/signup" className="hidden sm:flex px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold border border-slate-800 hover:bg-orange-600 hover:border-orange-500 transition-all shadow-xl hover:shadow-orange-200 active:scale-95 items-center gap-2">
               Get Started <ArrowRight size={16} />
             </Link>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 text-slate-900 hover:bg-slate-100 rounded-xl transition-all"
+            >
+              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Sidebar Navigation */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-slate-200 p-6 space-y-4 animate-in slide-in-from-top-4 duration-300 shadow-xl">
+            <div className="flex flex-col gap-4 text-base font-bold text-slate-600">
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Home</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Features</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">How it Works</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('approach')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Live Demo</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Reviews</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Pricing</button>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-4">
+              <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-4 text-center text-slate-900 font-black border border-slate-200 rounded-2xl hover:bg-slate-50 transition-all">
+                Log In
+              </Link>
+              <Link to="/signup" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-4 text-center bg-orange-600 text-white font-black rounded-2xl shadow-lg shadow-orange-200 active:scale-95 transition-all">
+                Get Started Free
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
@@ -251,9 +295,77 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
       </section>
+      {/* Workflow Section */}
+      <section className="py-24 bg-slate-50 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
+            <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">How the Engine works</h2>
+            <p className="text-slate-500 text-lg">A completely autonomous growth loop designed to build authority.</p>
+          </div>
 
-      {/* Strategy vs Quality Section */}
-      {/* Live Simulation / Approach Section */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
+            {/* Integrating connecting line for desktop */}
+            <div className="hidden md:block absolute top-16 left-[12%] right-[12%] h-0.5 bg-gradient-to-r from-slate-200 via-orange-200 to-slate-200 z-0"></div>
+
+            {[
+              {
+                icon: Search,
+                title: "Scans Your Niche",
+                desc: "Identifies relevant subreddits and tracks keyword mentions in real-time.",
+                textColor: 'text-orange-600',
+                cornerBg: 'bg-orange-50',
+                borderColor: 'border-orange-50',
+                hoverShadow: 'hover:shadow-orange-100/50'
+              },
+              {
+                icon: MessageSquare,
+                title: "Drops Comments",
+                desc: "Engages with value-first comments that naturally position your product.",
+                textColor: 'text-blue-600',
+                cornerBg: 'bg-blue-50',
+                borderColor: 'border-blue-50',
+                hoverShadow: 'hover:shadow-blue-100/50'
+              },
+              {
+                icon: PenTool,
+                title: "Generates Posts",
+                desc: "Researches viral hooks and crafts original posts to spark discussion.",
+                textColor: 'text-purple-600',
+                cornerBg: 'bg-purple-50',
+                borderColor: 'border-purple-50',
+                hoverShadow: 'hover:shadow-purple-100/50'
+              },
+              {
+                icon: TrendingUp,
+                title: "You Get Discovered",
+                desc: "Consistent visibility drives organic traffic and warm leads to your site.",
+                textColor: 'text-green-600',
+                cornerBg: 'bg-green-50',
+                borderColor: 'border-green-50',
+                hoverShadow: 'hover:shadow-green-100/50'
+              }
+            ].map((item, i) => (
+              <div key={i} className="relative z-10 group h-full">
+                <div className={`bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-lg hover:shadow-2xl ${item.hoverShadow} hover:-translate-y-2 transition-all duration-300 h-full flex flex-col items-center text-center relative overflow-hidden`}>
+
+                  {/* Decorative Corner */}
+                  <div className={`absolute top-0 right-0 w-24 h-24 ${item.cornerBg} rounded-bl-[80px] -mr-6 -mt-6 transition-transform group-hover:scale-110`}></div>
+
+                  <div className="relative z-10 flex flex-col items-center">
+                    <div className={`w-16 h-16 bg-white border-2 ${item.borderColor} ${item.textColor} rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
+                      <item.icon size={28} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-3">{item.title}</h3>
+                    <p className="text-slate-500 text-sm leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Approach (#approach) - Moved down */}
       <section id="approach" className="py-24 bg-slate-50 relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -350,78 +462,6 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-
-
-      {/* Workflow Section */}
-      <section className="py-24 bg-slate-50 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
-          <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
-            <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">How the Engine works</h2>
-            <p className="text-slate-500 text-lg">A completely autonomous growth loop designed to build authority.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
-            {/* Integrating connecting line for desktop */}
-            <div className="hidden md:block absolute top-16 left-[12%] right-[12%] h-0.5 bg-gradient-to-r from-slate-200 via-orange-200 to-slate-200 z-0"></div>
-
-            {[
-              {
-                icon: Search,
-                title: "Scans Your Niche",
-                desc: "Identifies relevant subreddits and tracks keyword mentions in real-time.",
-                textColor: 'text-orange-600',
-                cornerBg: 'bg-orange-50',
-                borderColor: 'border-orange-50',
-                hoverShadow: 'hover:shadow-orange-100/50'
-              },
-              {
-                icon: MessageSquare,
-                title: "Drops Comments",
-                desc: "Engages with value-first comments that naturally position your product.",
-                textColor: 'text-blue-600',
-                cornerBg: 'bg-blue-50',
-                borderColor: 'border-blue-50',
-                hoverShadow: 'hover:shadow-blue-100/50'
-              },
-              {
-                icon: PenTool,
-                title: "Generates Posts",
-                desc: "Researches viral hooks and crafts original posts to spark discussion.",
-                textColor: 'text-purple-600',
-                cornerBg: 'bg-purple-50',
-                borderColor: 'border-purple-50',
-                hoverShadow: 'hover:shadow-purple-100/50'
-              },
-              {
-                icon: TrendingUp,
-                title: "You Get Discovered",
-                desc: "Consistent visibility drives organic traffic and warm leads to your site.",
-                textColor: 'text-green-600',
-                cornerBg: 'bg-green-50',
-                borderColor: 'border-green-50',
-                hoverShadow: 'hover:shadow-green-100/50'
-              }
-            ].map((item, i) => (
-              <div key={i} className="relative z-10 group h-full">
-                <div className={`bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-lg hover:shadow-2xl ${item.hoverShadow} hover:-translate-y-2 transition-all duration-300 h-full flex flex-col items-center text-center relative overflow-hidden`}>
-
-                  {/* Decorative Corner */}
-                  <div className={`absolute top-0 right-0 w-24 h-24 ${item.cornerBg} rounded-bl-[80px] -mr-6 -mt-6 transition-transform group-hover:scale-110`}></div>
-
-                  <div className="relative z-10 flex flex-col items-center">
-                    <div className={`w-16 h-16 bg-white border-2 ${item.borderColor} ${item.textColor} rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
-                      <item.icon size={28} />
-                    </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-3">{item.title}</h3>
-                    <p className="text-slate-500 text-sm leading-relaxed">{item.desc}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Testimonials */}
       <section id="testimonials" className="py-24 relative overflow-hidden bg-slate-50/50">
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
@@ -484,97 +524,82 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-24 bg-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.05),transparent)]"></div>
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
-          <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
-            <h2 className="text-4xl font-extrabold text-slate-900">Simple, transparent pricing.</h2>
-            <p className="text-slate-500 text-lg">Start for free, scale when you're ready.</p>
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 bg-gradient-to-b from-slate-50 to-white relative overflow-hidden">
+        <div className="absolute top-0 w-full h-px bg-slate-200"></div>
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16 space-y-4">
+            <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest inline-flex items-center gap-2">
+              <Star size={12} fill="currentColor" /> Simple Pricing
+            </span>
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">
+              Pay as you <span className="text-orange-600">grow.</span>
+            </h2>
+            <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+              Start for free, upgrade when you see results. No hidden fees.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto items-start">
-            {/* Free Plan */}
-            <div className="bg-white border border-slate-200 p-8 rounded-[2.5rem] flex flex-col shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-full">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-start">
+            {plans.map((plan: any) => {
+              const theme = plan.isPopular ? 'orange' : (plan.name === 'Agency' ? 'slate' : 'slate');
+              const isDark = plan.name === 'Agency'; // Example logic, or keep all light
 
-              <div className="relative z-10 flex-col h-full flex">
-                <div className="mb-6">
-                  <span className="text-slate-500 font-bold uppercase tracking-widest text-xs">Starter</span>
-                  <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-4xl font-extrabold text-slate-900">$0</span>
-                    <span className="text-slate-400 font-medium">/mo</span>
-                  </div>
-                  <p className="text-slate-400 text-sm mt-2">Perfect for trying out the platform.</p>
-                </div>
-                <ul className="space-y-4 mb-8 flex-1">
-                  {['3 Tracked Keywords', '10 AI Replies/mo', 'Basic Analytics', 'Community Support'].map((f, i) => (
-                    <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                      <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle2 size={12} className="text-slate-500" />
+              return (
+                <div key={plan.id} className={`bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-200 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 relative overflow-hidden flex flex-col h-full`}>
+                  {plan.isPopular && (
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-orange-50 rounded-bl-[120px] -mr-8 -mt-8 pointer-events-none"></div>
+                  )}
+                  {plan.isPopular && (
+                    <div className="absolute top-6 right-8 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                      Most Popular
+                    </div>
+                  )}
+
+                  <div className="relative z-10 flex-col h-full flex pt-2">
+                    <div className="mb-6">
+                      <span className={`font-bold uppercase tracking-widest text-xs ${plan.isPopular ? 'text-orange-600' : 'text-slate-500'}`}>{plan.name}</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-5xl font-extrabold text-slate-900">${plan.monthlyPrice}</span>
+                        <span className="text-slate-400 font-medium">/mo</span>
                       </div>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/signup" className="w-full py-4 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-2xl font-bold transition-colors text-center block">Start Free</Link>
-              </div>
-            </div>
+                      <p className="text-slate-400 text-sm mt-2">
+                        {plan.name === 'Starter' ? 'Perfect for trying out the platform.' :
+                          plan.name === 'Growth' ? 'Everything you need to scale fast.' :
+                            'For power users and teams.'}
+                      </p>
+                    </div>
 
-            {/* Pro Plan */}
-            <div className="bg-orange-600 p-8 rounded-[2.5rem] flex flex-col transform md:-translate-y-6 shadow-2xl shadow-orange-200/50 relative overflow-hidden border border-orange-500 group h-full">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-bl-[120px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-              <div className="absolute top-6 right-8 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-white uppercase tracking-wider shadow-sm">Most Popular</div>
+                    <ul className="space-y-4 mb-8 flex-1">
+                      <li className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100' : 'bg-slate-100'}`}>
+                          <Zap size={12} className={plan.isPopular ? 'text-orange-600' : 'text-slate-500'} fill={plan.isPopular ? "currentColor" : "none"} />
+                        </div>
+                        {plan.credits} Credits / Month
+                      </li>
+                      {plan.features.map((f: string, i: number) => (
+                        <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-600">
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100' : 'bg-slate-100'}`}>
+                            <CheckCircle2 size={12} className={plan.isPopular ? 'text-orange-600' : 'text-slate-500'} />
+                          </div>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
 
-              <div className="relative z-10 flex-col h-full flex pt-2">
-                <div className="mb-6">
-                  <span className="text-orange-100 font-bold uppercase tracking-widest text-xs">Growth</span>
-                  <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-5xl font-extrabold text-white">$29</span>
-                    <span className="text-orange-200 font-medium">/mo</span>
+                    <Link
+                      to="/signup"
+                      className={`w-full py-4 rounded-2xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-center block ${plan.isPopular
+                        ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200'
+                        : 'bg-slate-900 text-white hover:bg-slate-800'
+                        }`}
+                    >
+                      {plan.monthlyPrice === 0 ? 'Start Free' : 'Get Started'}
+                    </Link>
                   </div>
-                  <p className="text-orange-100/80 text-sm mt-2">Everything you need to scale fast.</p>
                 </div>
-                <ul className="space-y-4 mb-8 flex-1">
-                  {['Unlimited Keywords', '500 AI Replies/mo', 'Advanced Sentiment', 'Priority Support', 'Competitor Tracking'].map((f, i) => (
-                    <li key={i} className="flex items-center gap-3 text-sm font-medium text-white">
-                      <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle2 size={12} className="text-white" />
-                      </div>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/signup" className="w-full py-4 bg-white text-orange-600 hover:bg-orange-50 rounded-2xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-center block">Get Started</Link>
-              </div>
-            </div>
-
-            {/* Business Plan */}
-            <div className="bg-white border border-slate-200 p-8 rounded-[2.5rem] flex flex-col shadow-lg hover:shadow-xl transition-all duration-300 relative overflow-hidden group h-full">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-100 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-
-              <div className="relative z-10 flex-col h-full flex">
-                <div className="mb-6">
-                  <span className="text-slate-500 font-bold uppercase tracking-widest text-xs">Agency</span>
-                  <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-4xl font-extrabold text-slate-900">$99</span>
-                    <span className="text-slate-400 font-medium">/mo</span>
-                  </div>
-                  <p className="text-slate-400 text-sm mt-2">For power users and teams.</p>
-                </div>
-                <ul className="space-y-4 mb-8 flex-1">
-                  {['Everything in Growth', 'Unlimited AI Replies', 'White-label Reports', 'Dedicated Account Mgr', 'API Access'].map((f, i) => (
-                    <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                      <div className="w-5 h-5 rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle2 size={12} className="text-white" />
-                      </div>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button className="w-full py-4 bg-slate-900 text-white hover:bg-slate-800 rounded-2xl font-bold transition-all hover:shadow-lg hover:-translate-y-0.5">Contact Sales</button>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -606,7 +631,7 @@ export const LandingPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </section >
+      </section>
 
       {/* Minimal Footer */}
       <footer className="py-12 bg-white text-slate-500">
@@ -620,6 +645,6 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
       </footer>
-    </div >
+    </div>
   );
 };

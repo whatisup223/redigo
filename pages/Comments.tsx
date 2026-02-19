@@ -92,7 +92,7 @@ const MOCK_POSTS: RedditPost[] = [
 ];
 
 export const Comments: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const replyCardRef = useRef<HTMLDivElement>(null);
   const [posts, setPosts] = useState<RedditPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<RedditPost | null>(null);
@@ -110,6 +110,16 @@ export const Comments: React.FC = () => {
   // Wizard State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
+  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5 });
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.creditCosts) setCosts(data.creditCosts);
+      })
+      .catch(console.error);
+  }, []);
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
     goal: 'help',
@@ -125,9 +135,7 @@ export const Comments: React.FC = () => {
   const [activeTone, setActiveTone] = useState<'helpful_peer' | 'thought_leader' | 'skeptic' | 'storyteller'>(wizardData.tone as any);
 
   // Mock credit system for Free plan
-  const [usedCredits, setUsedCredits] = useState(0);
-  const FREE_PLAN_LIMIT = 3;
-  const isLimitReached = user?.plan === 'Free' && usedCredits >= FREE_PLAN_LIMIT;
+  const isLimitReached = (user?.credits || 0) <= 0;
 
   const [isRedditConnected, setIsRedditConnected] = useState<boolean | null>(null);
 
@@ -146,17 +154,17 @@ export const Comments: React.FC = () => {
   }, [isGenerating]);
 
   const handleGenerate = async (post: RedditPost, customSettings?: any) => {
-    if (isLimitReached) return;
+    if ((user?.credits || 0) < costs.comment && user?.role !== 'admin') {
+      setToast({ message: `Insufficient credits. You need ${costs.comment} points.`, type: 'error' });
+      return;
+    }
 
     setSelectedPost(post);
     setIsGenerating(true);
     setGeneratedReply(null);
     setIsWizardOpen(false);
 
-    // Only deduct credits for new generations
-    if (!customSettings?.isRefinement) {
-      setUsedCredits(prev => prev + 1);
-    }
+
 
     try {
       const tone = customSettings?.tone || wizardData.tone;
@@ -178,13 +186,23 @@ export const Comments: React.FC = () => {
       setGeneratedReply(reply);
       setEditedComment(reply.comment);
       setToast({ message: 'AI Reply Generated!', type: 'success' });
+
+      // Synchronize credits from backend response
+      if (reply.credits !== undefined) {
+        updateUser({ credits: reply.credits });
+      }
+
       // Scroll to reply card after a short delay
       setTimeout(() => {
         replyCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 300);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setToast({ message: 'Generation failed. Check API configuration.', type: 'error' });
+      if (err.message === 'OUT_OF_CREDITS') {
+        setToast({ message: 'Credits exhausted. Please upgrade your plan.', type: 'error' });
+      } else {
+        setToast({ message: 'Generation failed. Check API configuration.', type: 'error' });
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -192,13 +210,28 @@ export const Comments: React.FC = () => {
 
   const handleRefine = async (instruction: string) => {
     if (!selectedPost || !generatedReply) return;
+
+    // Frontend pre-check
+    if ((user?.credits || 0) < costs.comment && user?.role !== 'admin') {
+      setToast({ message: `Insufficient credits. You need ${costs.comment} points.`, type: 'error' });
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const reply = await generateRedditReply(selectedPost, selectedPost.subreddit, instruction, `Refine this reply: "${editedComment}". Instruction: ${instruction}`, user?.id);
       setGeneratedReply(reply);
       setEditedComment(reply.comment);
-    } catch (err) {
-      setToast({ message: 'Refinement failed.', type: 'error' });
+      if (reply.credits !== undefined) {
+        updateUser({ credits: reply.credits });
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.message === 'OUT_OF_CREDITS') {
+        setToast({ message: 'Credits exhausted.', type: 'error' });
+      } else {
+        setToast({ message: 'Refinement failed.', type: 'error' });
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -572,7 +605,7 @@ export const Comments: React.FC = () => {
                       onClick={() => handleGenerate(selectedPost)}
                       className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-orange-600 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2"
                     >
-                      GENERATE REPLY <Check size={18} />
+                      GENERATE REPLY ({costs.comment} POINTS) <Check size={18} />
                     </button>
                   </div>
                 </div>
@@ -646,8 +679,7 @@ export const Comments: React.FC = () => {
         {/* Credits Status Banner */}
         <CreditsBanner
           plan={user?.plan || 'Free'}
-          usedCredits={usedCredits}
-          limit={FREE_PLAN_LIMIT}
+          credits={user?.credits || 0}
         />
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
