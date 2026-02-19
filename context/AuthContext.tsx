@@ -9,6 +9,7 @@ interface User {
     status: string;
     hasCompletedOnboarding: boolean;
     credits: number;
+    avatar?: string;
 }
 
 interface AuthContextType {

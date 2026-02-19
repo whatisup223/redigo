@@ -120,6 +120,16 @@ app.post('/api/auth/login', (req, res) => {
   const user = users.find(u => u.email === email && u.password === password);
 
   if (user) {
+    if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
+      console.log(`[Subscription] User ${user.email} subscription expired. Downgrading.`);
+      user.plan = 'Starter';
+      const freePlan = plans.find(p => p.id === 'starter');
+      user.credits = freePlan ? freePlan.credits : 50;
+      user.subscriptionStart = null;
+      user.subscriptionEnd = null;
+      saveSettings({ users });
+    }
+
     // In a real app, generate a JWT token here
     const { password, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword, token: 'mock-jwt-token-123' });
@@ -334,7 +344,7 @@ app.delete('/api/plans/:id', (req, res) => {
   res.json({ success: true, message: 'Plan deleted' });
 });
 
-app.post('/api/user/subscribe', (req, res) => {
+app.post('/api/user/subscribe', async (req, res) => {
   const { userId, planId, billingCycle } = req.body;
 
   const user = users.find(u => u.id == userId);
@@ -347,29 +357,73 @@ app.post('/api/user/subscribe', (req, res) => {
     return res.status(404).json({ error: 'Plan not found' });
   }
 
-  // Update User
-  user.plan = plan.name;
-  // Initialize credits if not present or reset to plan amount
-  // In a real system, you might want to ADD credits or handle prorating
-  // For now, we set it to the plan's limit as a "top-up"
-  user.credits = plan.credits;
-  user.subscriptionStatus = 'active';
-  user.billingCycle = billingCycle || 'monthly';
-  user.subscriptionDate = new Date().toISOString();
+  // If plan is free, activate immediately
+  if (plan.monthlyPrice === 0 && plan.yearlyPrice === 0) {
+    user.plan = plan.name;
+    user.credits = plan.credits;
+    user.status = 'Active';
+    user.subscriptionStart = new Date().toISOString();
+    user.subscriptionEnd = null; // Free plans might not expire or expire in a month?
 
-  // Calculate renewal date
-  const now = new Date();
-  if (billingCycle === 'yearly') {
-    now.setFullYear(now.getFullYear() + 1);
-  } else {
-    now.setMonth(now.getMonth() + 1);
+    saveSettings({ users });
+    return res.json({ success: true, user, message: 'Free plan activated' });
   }
-  user.renewalDate = now.toISOString();
 
-  saveSettings({ users });
+  // If paid plan, create Stripe Session
+  const stripe = getStripe();
+  if (!stripe) {
+    // Fallback for dev without Stripe keys: Instant Activate (remove in prod)
+    console.warn('[Stripe] Keys missing. Activating plan instantly for testing.');
 
-  console.log(`[Subscription] User ${user.email} upgraded to ${plan.name}`);
-  res.json({ success: true, user });
+    // -- COPY OF INSTANT ACTIVATION LOGIC --
+    user.plan = plan.name;
+    const currentCredits = user.credits || 0;
+    user.credits = currentCredits + plan.credits; // Accumulate
+    user.status = 'Active';
+
+    const now = new Date();
+    const end = new Date(now);
+    if (billingCycle === 'yearly') end.setFullYear(end.getFullYear() + 1);
+    else end.setMonth(end.getMonth() + 1);
+
+    user.subscriptionStart = now.toISOString();
+    user.subscriptionEnd = end.toISOString();
+
+    saveSettings({ users });
+    return res.json({ success: true, user, message: 'Plan activated (Test Mode)' });
+    // --------------------------------------
+  }
+
+  // Create Stripe Session
+  try {
+    const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `${plan.name} Plan (${billingCycle})` },
+          unit_amount: price * 100, // Cents
+        },
+        quantity: 1,
+      }],
+      mode: 'payment', // One-time payment for now, or 'subscription' if using Stripe Products
+      customer_email: user.email,
+      metadata: {
+        userEmail: user.email,
+        plan: plan.name, // Pass ID or Name
+        credits: plan.credits
+      },
+      success_url: `http://localhost:5173/settings?success=true&plan=${plan.name}`,
+      cancel_url: `http://localhost:5173/pricing?canceled=true`,
+    });
+
+    return res.json({ checkoutUrl: session.url });
+
+  } catch (error) {
+    console.error('[Stripe Error]', error);
+    return res.status(500).json({ error: 'Payment initialization failed' });
+  }
 });
 
 // Brand Profiles per user
@@ -466,6 +520,28 @@ app.put('/api/admin/users/:id', adminAuth, (req, res) => {
     users[index] = { ...users[index], ...updateData };
     saveSettings({ users });
     res.json(users[index]);
+  } else {
+    res.status(404).json({ error: 'User not found' });
+  }
+});
+
+// User Self-Update Endpoint
+app.put('/api/users/:id', (req, res) => {
+  const { id } = req.params;
+  const index = users.findIndex(u => u.id == id);
+
+  if (index !== -1) {
+    // Basic validation: prevent changing robust fields like role/credits/plan via this endpoint if needed
+    // For this mock, we just take the body. In prod, strict schema validation.
+    const { name, avatar } = req.body;
+
+    // Only update allowed fields
+    if (name) users[index].name = name;
+    if (avatar) users[index].avatar = avatar; // assuming we add avatar field support
+
+    saveSettings({ users });
+    const { password, ...safeUser } = users[index];
+    res.json(safeUser);
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -801,6 +877,14 @@ app.post('/api/user/reddit/disconnect', (req, res) => {
   res.json({ success: true });
 });
 
+// Helper to get credits for a plan
+const getPlanCredits = (planName) => {
+  if (!planName) return 0;
+  // Try to find by name or id
+  const p = plans.find(x => x.id.toLowerCase() === planName.toLowerCase() || x.name.toLowerCase() === planName.toLowerCase());
+  return p ? p.credits : 0;
+};
+
 // Webhook Handler (Mock)
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
   const sig = request.headers['stripe-signature'];
@@ -813,7 +897,20 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
       event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
     } else {
       // For development/sandbox without secret locally
-      event = JSON.parse(request.body);
+      let bodyData = request.body;
+      if (Buffer.isBuffer(bodyData)) {
+        bodyData = bodyData.toString('utf8');
+      }
+      try {
+        if (typeof bodyData === 'string') {
+          event = JSON.parse(bodyData);
+        } else {
+          event = bodyData;
+        }
+      } catch (e) {
+        // If parsing fails, just use body directly if simplistic
+        event = request.body;
+      }
     }
   } catch (err) {
     console.error(`[Webhook Error] ${err.message}`);
@@ -823,6 +920,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
   // Handle the event
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+    // Metadata is critical here
     const { userEmail, plan } = session.metadata || {};
 
     console.log(`[Webhook] Payment successful for ${userEmail}. Plan: ${plan}`);
@@ -830,9 +928,26 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
     if (userEmail && plan) {
       const userIndex = users.findIndex(u => u.email === userEmail);
       if (userIndex !== -1) {
+
+        // 1. Determine Credits to Add
+        // User asked: "Shouldn't the points be added...?" -> YES.
+        const creditsToAdd = getPlanCredits(plan);
+        const currentCredits = users[userIndex].credits || 0;
+
+        // 2. Calculate Subscription Period (1 Month explicitly)
+        const now = new Date();
+        const oneMonthLater = new Date(now);
+        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+        // 3. Update User
         users[userIndex].plan = plan;
         users[userIndex].status = 'Active';
-        console.log(`[Database] User ${userEmail} upgraded to ${plan}`);
+        users[userIndex].credits = currentCredits + creditsToAdd; // Accumulate
+        users[userIndex].subscriptionStart = now.toISOString();
+        users[userIndex].subscriptionEnd = oneMonthLater.toISOString();
+
+        saveSettings({ users });
+        console.log(`[Database] User ${userEmail} upgraded to ${plan}. Added ${creditsToAdd} credits. New Total: ${users[userIndex].credits}. Expires: ${oneMonthLater.toISOString()}`);
       } else {
         console.warn(`[Database] User ${userEmail} not found!`);
       }

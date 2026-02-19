@@ -55,9 +55,16 @@ export const PricingPage: React.FC = () => {
 
             if (res.ok) {
                 const data = await res.json();
-                alert(`Successfully subscribed to ${plan.name}!`);
-                if (updateUser && data.user) {
-                    updateUser(data.user);
+
+                if (data.checkoutUrl) {
+                    // Redirect to Stripe Checkout
+                    window.location.href = data.checkoutUrl;
+                } else {
+                    // Instant activation (Free plan or Dev mode fallback)
+                    alert(`Successfully subscribed to ${plan.name}!`);
+                    if (updateUser && data.user) {
+                        updateUser(data.user);
+                    }
                 }
             } else {
                 const err = await res.json();

@@ -131,9 +131,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               onClick={(e) => { e.stopPropagation(); setIsProfileOpen(!isProfileOpen); }}
               className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-600 to-orange-400 p-0.5 shadow-sm text-white flex items-center justify-center font-black text-[10px] uppercase active:scale-95 transition-all"
             >
-              <div className="w-full h-full bg-white rounded-[0.55rem] flex items-center justify-center text-orange-600">
-                {user?.name ? user.name.substring(0, 2).toUpperCase() : 'JD'}
-              </div>
+              {user?.avatar ? (
+                <img src={user.avatar} alt="Profile" className="w-full h-full object-cover rounded-[0.55rem]" />
+              ) : (
+                <div className="w-full h-full bg-white rounded-[0.55rem] flex items-center justify-center text-orange-600">
+                  {user?.name ? user.name.substring(0, 2).toUpperCase() : 'JD'}
+                </div>
+              )}
             </button>
 
             {isProfileOpen && (
@@ -242,20 +246,28 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
             </Link>
           )}
 
-          <div className="bg-white/80 border border-slate-200/60 p-3 rounded-2xl shadow-sm">
+          <Link
+            to="/settings"
+            onClick={() => setIsOpen(false)}
+            className="block bg-white/80 border border-slate-200/60 p-3 rounded-2xl shadow-sm hover:border-orange-300 hover:shadow-md transition-all group bg-gradient-to-br from-white to-slate-50/50"
+          >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-200 to-slate-100 flex items-center justify-center text-slate-600 font-bold shadow-inner uppercase text-sm shrink-0">
-                {user?.name ? user.name.substring(0, 2) : 'JD'}
-              </div>
+              {user?.avatar ? (
+                <img src={user.avatar} alt="Profile" className="w-9 h-9 rounded-xl object-cover shadow-inner shrink-0 group-hover:scale-105 transition-transform border border-white" />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-200 to-slate-100 flex items-center justify-center text-slate-600 font-bold shadow-inner uppercase text-sm shrink-0 group-hover:scale-105 transition-transform border border-white">
+                  {user?.name ? user.name.substring(0, 2) : 'JD'}
+                </div>
+              )}
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Guest User'}</p>
+                <p className="text-sm font-bold text-slate-900 truncate group-hover:text-orange-600 transition-colors">{user?.name || 'Guest User'}</p>
                 <div className="flex items-center gap-1.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${user?.plan === 'Free' ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`} />
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{user?.plan || 'Guest'} Plan</p>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider group-hover:text-slate-600 transition-colors">{user?.plan || 'Guest'} Plan</p>
                 </div>
               </div>
             </div>
-          </div>
+          </Link>
 
           <div className="pt-2">
             <button
@@ -307,9 +319,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                 className="relative group focus:outline-none"
               >
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-600 to-orange-400 p-0.5 shadow-lg shadow-orange-100 group-hover:scale-105 transition-all cursor-pointer">
-                  <div className="w-full h-full bg-white rounded-[0.85rem] flex items-center justify-center text-orange-600 font-black text-lg">
-                    {user?.name ? user.name.substring(0, 2).toUpperCase() : 'JD'}
-                  </div>
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="Profile" className="w-full h-full object-cover rounded-[0.85rem]" />
+                  ) : (
+                    <div className="w-full h-full bg-white rounded-[0.85rem] flex items-center justify-center text-orange-600 font-black text-lg">
+                      {user?.name ? user.name.substring(0, 2).toUpperCase() : 'JD'}
+                    </div>
+                  )}
                 </div>
                 <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-sm" title="Online" />
               </button>
@@ -318,9 +334,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               {isProfileOpen && (
                 <div className="absolute top-full right-0 mt-4 w-72 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-3 z-50 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-[1.8rem] mb-2">
-                    <div className="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-white font-black">
-                      {user?.name ? user.name.substring(0, 1).toUpperCase() : 'U'}
-                    </div>
+                    {user?.avatar ? (
+                      <img src={user.avatar} alt="Profile" className="w-10 h-10 rounded-xl object-cover bg-orange-600" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-white font-black">
+                        {user?.name ? user.name.substring(0, 1).toUpperCase() : 'U'}
+                      </div>
+                    )}
                     <div className="overflow-hidden">
                       <p className="text-sm font-black text-slate-900 truncate">{user?.name}</p>
                       <p className="text-[10px] font-bold text-slate-400 truncate">{user?.email}</p>

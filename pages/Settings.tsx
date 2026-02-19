@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     User, CreditCard, Shield, Globe, Link as LinkIcon,
     LogOut, RefreshCw, CheckCircle2, Tag, Palette,
-    Building2, Target, Zap, Save, Check, Pencil
+    Building2, Target, Zap, Save, Check, Pencil,
+    Upload, Trash2, Eye, X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -31,7 +33,7 @@ const BRAND_TONES = [
 ];
 
 export const Settings: React.FC = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, updateUser } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [loading, setLoading] = useState(true);
@@ -40,7 +42,124 @@ export const Settings: React.FC = () => {
     const [brandError, setBrandError] = useState('');
     const [brandProfile, setBrandProfile] = useState({ ...DEFAULT_BRAND });
 
+    // Profile State
+    const [profileName, setProfileName] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState('');
+    const [isProfileSaving, setIsProfileSaving] = useState(false);
+    const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    const [previewInvoice, setPreviewInvoice] = useState<string | null>(null);
+
+    const generateInvoiceImage = (user: any) => {
+        return new Promise<string>((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 600;
+            const ctx = canvas.getContext('2d');
+
+            // Plan Details Logic
+            let planCredits = 0;
+            let planPrice = '0.00';
+            const planName = user.plan || 'Free';
+
+            if (planName.toLowerCase() === 'professional' || planName.toLowerCase() === 'pro') {
+                planCredits = 150;
+                planPrice = '29.00';
+            } else if (planName.toLowerCase() === 'agency') {
+                planCredits = 600;
+                planPrice = '99.00';
+            } else {
+                planCredits = 100; // Starter/Free default
+                planPrice = '0.00';
+            }
+
+            if (ctx) {
+                // Background
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 800, 600);
+
+                // Header
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(0, 0, 800, 150);
+
+                ctx.font = 'bold 40px Arial';
+                ctx.fillStyle = '#ea580c';
+                ctx.fillText('Redigo', 50, 90);
+
+                ctx.font = '20px Arial';
+                ctx.fillStyle = '#64748b';
+                ctx.textAlign = 'right';
+                ctx.fillText('INVOICE', 750, 90);
+
+                // Bill To
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 18px Arial';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText('Bill To:', 50, 200);
+
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#334155';
+                ctx.fillText(user.name || 'Valued Customer', 50, 230);
+                ctx.fillText(user.email || '', 50, 255);
+
+                // Info
+                ctx.textAlign = 'right';
+                const date = new Date().toLocaleDateString();
+                ctx.fillText(`Date: ${date}`, 750, 230);
+                ctx.fillText(`Invoice #: INV-${Math.floor(1000 + Math.random() * 9000)}`, 750, 255);
+
+                // Item Row
+                ctx.fillStyle = '#f1f5f9';
+                ctx.fillRect(50, 300, 700, 40);
+                ctx.fillStyle = '#475569';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText('DESCRIPTION', 70, 325);
+                ctx.textAlign = 'right';
+                ctx.fillText('AMOUNT', 730, 325);
+
+                // Item Details
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#1e293b';
+                ctx.textAlign = 'left';
+                ctx.fillText(`${planName} Plan Subscription`, 70, 370);
+
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText(`Includes ${planCredits} Credits`, 70, 395);
+
+                ctx.textAlign = 'right';
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#1e293b';
+                ctx.fillText(`$${planPrice}`, 730, 370);
+
+                // Total Line
+                ctx.beginPath();
+                ctx.moveTo(500, 430);
+                ctx.lineTo(750, 430);
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.stroke();
+
+                ctx.font = 'bold 20px Arial';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(`Total: $${planPrice}`, 730, 470);
+
+                // Footer
+                ctx.textAlign = 'center';
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillText('Thank you for choosing Redigo.', 400, 550);
+
+                resolve(canvas.toDataURL('image/png'));
+            }
+        });
+    };
+
     useEffect(() => {
+        if (user) {
+            setProfileName(user.name || '');
+            setAvatarUrl(user.avatar || '');
+        }
         const fetchData = async () => {
             if (!user?.id) { setLoading(false); return; }
             try {
@@ -94,6 +213,52 @@ export const Settings: React.FC = () => {
             setBrandError(err.message || 'Failed to save. Please try again.');
         } finally {
             setBrandSaving(false);
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 800 * 1024) {
+                setProfileMessage({ type: 'error', text: 'Image too large. Max 800KB.' });
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setAvatarUrl(reader.result as string);
+                setProfileMessage(null); // Clear errors
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!user?.id) return;
+        setIsProfileSaving(true);
+        setProfileMessage(null);
+
+        try {
+            const response = await fetch(`/api/users/${user.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: profileName,
+                    avatar: avatarUrl
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to update profile');
+
+            const updatedUser = await response.json();
+            // Update local auth context
+            updateUser({ name: profileName, avatar: avatarUrl });
+
+            setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
+            setTimeout(() => setProfileMessage(null), 3000);
+        } catch (error) {
+            setProfileMessage({ type: 'error', text: 'Failed to update profile' });
+        } finally {
+            setIsProfileSaving(false);
         }
     };
 
@@ -158,23 +323,83 @@ export const Settings: React.FC = () => {
                         </h2>
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-6">
                             <div className="flex items-center gap-6">
-                                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 text-2xl font-black border-4 border-white shadow-lg">
-                                    {user.name.substring(0, 2).toUpperCase()}
+                                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 text-2xl font-black border-4 border-white shadow-lg shrink-0 overflow-hidden relative">
+                                    {avatarUrl ? (
+                                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                    ) : (
+                                        profileName ? profileName.substring(0, 2).toUpperCase() : user.name.substring(0, 2).toUpperCase()
+                                    )}
                                 </div>
-                                <div className="space-y-1">
-                                    <button className="text-sm font-bold text-orange-600 border border-orange-200 bg-orange-50 px-4 py-2 rounded-xl hover:bg-orange-100 transition-colors">Change Avatar</button>
-                                    <p className="text-xs text-slate-400">JPG, GIF or PNG. Max 800K</p>
+                                <div className="space-y-1 flex-1">
+                                    <h3 className="font-bold text-slate-900 text-lg">{user.email}</h3>
+                                    <p className="text-xs text-slate-400">Profile ID: #{user.id}</p>
                                 </div>
                             </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <label className="space-y-2">
                                     <span className="text-sm font-bold text-slate-700">Display Name</span>
-                                    <input type="text" defaultValue={user.name} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-700 focus:border-orange-500 transition-colors" />
+                                    <input
+                                        type="text"
+                                        value={profileName}
+                                        onChange={(e) => setProfileName(e.target.value)}
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
+                                    />
                                 </label>
                                 <label className="space-y-2">
-                                    <span className="text-sm font-bold text-slate-700">Email Address</span>
-                                    <input type="email" defaultValue={user.email} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-400 cursor-not-allowed" disabled />
+                                    <span className="text-sm font-bold text-slate-700">Profile Picture</span>
+                                    <div className="flex gap-2">
+                                        <label className="flex-1 cursor-pointer group">
+                                            <div className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-500 group-hover:bg-slate-100 group-hover:border-orange-200 group-hover:text-orange-600 transition-all flex items-center justify-center gap-2">
+                                                <Upload size={18} />
+                                                <span className="text-sm">Choose Image...</span>
+                                            </div>
+                                            <input
+                                                type="file"
+                                                accept="image/png, image/jpeg, image/gif"
+                                                onChange={handleFileChange}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                        {avatarUrl && (
+                                            <button
+                                                onClick={() => setAvatarUrl('')}
+                                                className="p-3.5 bg-red-50 border border-red-100 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                                                title="Remove Avatar"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium px-1">Max 800KB (JPG, PNG)</p>
                                 </label>
+                                <label className="space-y-2 md:col-span-2">
+                                    <span className="text-sm font-bold text-slate-700">Email Address</span>
+                                    <input
+                                        type="email"
+                                        value={user.email}
+                                        className="w-full p-4 bg-slate-100 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-500 cursor-not-allowed"
+                                        disabled
+                                    />
+                                </label>
+                            </div>
+
+                            {profileMessage && (
+                                <div className={`p-4 rounded-xl text-sm font-bold ${profileMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                    {profileMessage.type === 'success' ? <CheckCircle2 className="inline mr-2" size={16} /> : null}
+                                    {profileMessage.text}
+                                </div>
+                            )}
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={handleSaveProfile}
+                                    disabled={isProfileSaving || !profileName.trim()}
+                                    className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black hover:bg-orange-600 transition-all disabled:opacity-50 disabled:grayscale flex items-center gap-2"
+                                >
+                                    {isProfileSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                                    Save Changes
+                                </button>
                             </div>
                         </div>
                     </section>
@@ -268,17 +493,6 @@ export const Settings: React.FC = () => {
                         </div>
                     </section>
 
-                    <section className="pt-6 border-t border-slate-100">
-                        <div className="bg-red-50/30 p-8 rounded-[2rem] border border-red-100/50 flex flex-col md:flex-row items-center justify-between gap-6">
-                            <div>
-                                <p className="font-black text-red-600 text-lg">Permanently Delete Account</p>
-                                <p className="text-sm text-slate-400 font-medium">This action cannot be undone. All your data will be erased.</p>
-                            </div>
-                            <button className="px-8 py-4 bg-white border-2 border-red-100 text-red-600 rounded-2xl font-black hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm">
-                                DELETE ACCOUNT
-                            </button>
-                        </div>
-                    </section>
                 </div>
             )}
 
@@ -555,7 +769,7 @@ export const Settings: React.FC = () => {
                                 disabled={brandSaving || !brandProfile.brandName}
                                 className={`w-full py-5 rounded-[2rem] font-black transition-all flex items-center justify-center gap-3 text-lg ${brandSaved
                                     ? 'bg-green-600 text-white shadow-lg shadow-green-200'
-                                    : 'bg-orange-600 text-white hover:bg-orange-500 shadow-2xl shadow-orange-200 disabled:opacity-50 disabled:grayscale'
+                                    : 'bg-orange-600 text-white hover:bg-orange-50 shadow-2xl shadow-orange-200 disabled:opacity-50 disabled:grayscale'
                                     }`}
                             >
                                 {brandSaving
@@ -576,39 +790,178 @@ export const Settings: React.FC = () => {
             {/* ── BILLING TAB ── */}
             {activeTab === 'billing' && (
                 <div className="space-y-8">
-                    <section className="space-y-4">
+                    <section className="space-y-6">
                         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                            <CreditCard className="text-purple-600" size={20} /> Subscription & Billing
+                            <CreditCard className="text-purple-600" size={20} /> Subscription & Usage
                         </h2>
-                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden group">
+
+                        {/* Current Plan Card */}
+                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden group">
                             <div className="absolute top-0 right-0 w-80 h-80 bg-orange-600/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 group-hover:bg-orange-600/20 transition-all duration-700" />
                             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
                                 <div>
                                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg text-[10px] font-black tracking-widest uppercase mb-4 text-orange-400">
-                                        <Shield size={12} /> Secure Account
+                                        <Shield size={12} /> Current Plan
                                     </div>
-                                    <p className="text-3xl font-extrabold mb-2">{user.plan} Plan</p>
-                                    <p className="text-slate-400 text-sm max-w-sm">
+                                    <p className="text-4xl font-extrabold mb-2">{user.plan || 'Free'} Plan</p>
+                                    <p className="text-slate-400 text-sm opacity-80">
                                         {user.plan === 'Free'
-                                            ? 'Access basic signals and limited Reddit searches. Upgrade for deeper insights.'
-                                            : 'Full access to all market signals and advanced AI generation.'}
+                                            ? 'Basic access. Upgrade to unlock more power.'
+                                            : 'Your plan serves you well. Keep growing!'}
                                     </p>
                                 </div>
-                                <div>
+                                <div className="text-right">
                                     {user.plan === 'Free' ? (
-                                        <Link to="/pricing" className="px-8 py-4 bg-orange-600 text-white rounded-2xl font-black hover:bg-orange-500 hover:shadow-2xl hover:shadow-orange-600/30 transition-all block text-center">
+                                        <Link to="/pricing" className="px-8 py-3 bg-orange-600 text-white rounded-xl font-black hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-600/30 transition-all inline-block">
                                             UPGRADE NOW
                                         </Link>
                                     ) : (
-                                        <button className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-black hover:bg-slate-100 transition-all">
-                                            MANAGE BILLING
-                                        </button>
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Status</p>
+                                            <div className="flex items-center justify-end gap-2 text-green-400 font-black">
+                                                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                                                Active
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Usage & Credits */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                                        <Zap size={20} fill="currentColor" />
+                                    </div>
+                                    <div>
+                                        <p className="font-extrabold text-slate-900">Credit Balance</p>
+                                        <p className="text-xs text-slate-400 font-medium">AI generations remaining</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-3xl font-black text-slate-900">{user.credits || 0}</span>
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Credits</span>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-orange-500 rounded-full"
+                                            style={{ width: `${Math.min(100, ((user.credits || 0) / 100) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 pt-1">
+                                        Need more? <Link to="/pricing" className="text-orange-600 font-bold hover:underline">Top up credits</Link>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                                        <CreditCard size={20} />
+                                    </div>
+                                    <div>
+                                        <p className="font-extrabold text-slate-900">Recent Invoices</p>
+                                        <p className="text-xs text-slate-400 font-medium">Last 3 payments</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    {/* Placeholder Invoices - In a real app, fetch these */}
+                                    {user.plan === 'Free' ? (
+                                        <p className="text-sm text-slate-400 italic py-2">No payment history available.</p>
+                                    ) : (
+                                        [1].map((_, i) => (
+                                            <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-orange-200 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-white rounded-lg border border-slate-100 text-slate-400 group-hover:text-orange-500 transition-colors">
+                                                        <CreditCard size={14} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-900">Subscription Renewal</p>
+                                                        <p className="text-[10px] text-slate-400">{new Date().toLocaleDateString()}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="text-right">
+                                                        <p className="text-xs font-bold text-slate-900">$29.00</p>
+                                                        <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md">PAID</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={async () => {
+                                                                const dataUrl = await generateInvoiceImage(user);
+                                                                setPreviewInvoice(dataUrl);
+                                                            }}
+                                                            className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                            title="Preview Invoice"
+                                                        >
+                                                            <Eye size={16} />
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                const dataUrl = await generateInvoiceImage(user);
+                                                                const link = document.createElement('a');
+                                                                link.download = `Redigo-Invoice-${new Date().toISOString().split('T')[0]}.png`;
+                                                                link.href = dataUrl;
+                                                                link.click();
+                                                            }}
+                                                            className="p-2 text-slate-300 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all"
+                                                            title="Download Invoice"
+                                                        >
+                                                            <Upload className="rotate-180" size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
                                     )}
                                 </div>
                             </div>
                         </div>
                     </section>
                 </div>
+            )}
+
+            {/* Invoice Preview Modal */}
+            {previewInvoice && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                            <h3 className="text-lg font-bold text-slate-900">Invoice Preview</h3>
+                            <button
+                                onClick={() => setPreviewInvoice(null)}
+                                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-auto p-8 bg-slate-50 flex justify-center">
+                            <img src={previewInvoice} alt="Invoice Preview" className="shadow-xl rounded-lg max-w-full h-auto border border-slate-200" />
+                        </div>
+                        <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-white">
+                            <button
+                                onClick={() => setPreviewInvoice(null)}
+                                className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition-all"
+                            >
+                                Close
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const link = document.createElement('a');
+                                    link.download = `Redigo-Invoice-${new Date().toISOString().split('T')[0]}.png`;
+                                    link.href = previewInvoice;
+                                    link.click();
+                                }}
+                                className="px-5 py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-500 shadow-lg shadow-orange-200 transition-all flex items-center gap-2"
+                            >
+                                <Upload className="rotate-180" size={16} /> Download
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
