@@ -1,812 +1,601 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Search,
-  Flame,
-  MessageSquarePlus,
-  Clock,
+  TrendingUp,
+  MessageSquare,
+  Users,
   ArrowRight,
-  RefreshCw,
-  Send,
-  Sparkles,
-  AlertCircle,
-  ThumbsUp,
-  Crown,
-  Type,
-  Smile,
-  ShieldCheck,
-  Copy,
-  ChevronDown,
-  Target,
-  Hash,
-  Database,
-  Zap,
-  MoreVertical,
+  BarChart3,
   Globe,
-  ChevronRight,
-  Quote,
-  Wand2,
-  Check,
-  X,
-  Building2
+  Crown,
+  RefreshCw,
+  Sparkles,
+  Target,
+  Activity,
+  Clock,
+  ThumbsUp,
+  PenTool,
+  MessageSquarePlus,
+  ExternalLink,
+  TrendingDown,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { RedditPost, GeneratedReply } from '../types';
-import { generateRedditReply, fetchBrandProfile, BrandProfile } from '../services/geminiService';
+import CreditsBanner from '../components/CreditsBanner';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from 'recharts';
 import { useAuth } from '../context/AuthContext';
 
-const MOCK_POSTS: RedditPost[] = [
-  {
-    id: '1',
-    title: 'Looking for a tool to automate my Reddit outreach',
-    author: 'startup_founder_99',
-    subreddit: 'saas',
-    ups: 154,
-    num_comments: 42,
-    selftext: 'I spend 4 hours a day on Reddit trying to find leads. Is there any AI tool that can help me find relevant posts and draft replies?',
-    url: 'https://reddit.com/r/saas/1',
-    created_utc: Date.now() / 1000 - 3600
-  },
-  {
-    id: '2',
-    title: 'How do you handle growth marketing on a budget?',
-    author: 'indie_maker_x',
-    subreddit: 'marketing',
-    ups: 89,
-    num_comments: 15,
-    selftext: 'I have $0 for ads. Currently trying to use community engagement but it is slow.',
-    url: 'https://reddit.com/r/marketing/2',
-    created_utc: Date.now() / 1000 - 7200
-  },
-  {
-    id: '3',
-    title: 'Show HN: My new tool for developers to track bugs',
-    author: 'dev_alex',
-    subreddit: 'sideproject',
-    ups: 320,
-    num_comments: 56,
-    selftext: 'Built this because I was tired of Jira. What do you guys think?',
-    url: 'https://reddit.com/r/sideproject/3',
-    created_utc: Date.now() / 1000 - 10000
-  },
-  {
-    id: '4',
-    title: 'Best subreddits for early stage startups?',
-    author: 'builder_jane',
-    subreddit: 'startups',
-    ups: 45,
-    num_comments: 8,
-    selftext: 'Need places where I can get honest feedback without being banned for self-promo.',
-    url: 'https://reddit.com/r/startups/4',
-    created_utc: Date.now() / 1000 - 15000
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Returns the short weekday label (Mon, Tue …) for a given ISO date string */
+const dayLabel = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { weekday: 'short' });
+
+/** Returns "YYYY-MM-DD" for a Date object */
+const toDateKey = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Builds the last N days as date keys (oldest → newest) */
+const lastNDays = (n: number): string[] => {
+  const days: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(toDateKey(d));
   }
-];
+  return days;
+};
+
+/** Formats a trend percentage with sign */
+const fmtTrend = (pct: number): string => {
+  if (!isFinite(pct)) return 'New';
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+};
+
+/** Calculates % change between two numbers */
+const pctChange = (current: number, previous: number): number => {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+};
+
+// ── sub-components ────────────────────────────────────────────────────────────
+
+const StatCard = ({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  accent,
+  trend,
+  isLoading,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  icon: any;
+  accent: string;
+  trend?: string;
+  isLoading?: boolean;
+}) => {
+  const positive = trend && (trend.startsWith('+') || trend === 'New');
+  return (
+    <div className="bg-white rounded-[2rem] border border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-500 p-7 group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-10 -mr-8 -mt-8 ${accent}`} />
+      <div className="flex items-start justify-between mb-5 relative z-10">
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${accent} group-hover:scale-110 transition-transform duration-300`}>
+          <Icon size={22} />
+        </div>
+        {trend && (
+          <span className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${positive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+            {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {trend}
+          </span>
+        )}
+      </div>
+      <div className="relative z-10">
+        <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-[0.2em] mb-1">{label}</p>
+        {isLoading ? (
+          <div className="h-9 w-20 bg-slate-100 rounded-xl animate-pulse mt-1" />
+        ) : (
+          <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{value}</p>
+        )}
+        {sub && <p className="text-xs text-slate-400 font-medium mt-1">{sub}</p>}
+      </div>
+    </div>
+  );
+};
+
+const QuickAction = ({
+  icon: Icon,
+  title,
+  desc,
+  to,
+  accent,
+}: {
+  icon: any;
+  title: string;
+  desc: string;
+  to: string;
+  accent: string;
+}) => (
+  <Link
+    to={to}
+    className="group flex items-center gap-5 p-5 bg-white rounded-[1.75rem] border border-slate-200/60 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+  >
+    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${accent} group-hover:scale-110 transition-transform`}>
+      <Icon size={20} />
+    </div>
+    <div className="flex-1">
+      <p className="font-bold text-slate-900 text-sm">{title}</p>
+      <p className="text-slate-400 text-xs font-medium mt-0.5">{desc}</p>
+    </div>
+    <ArrowRight size={18} className="text-slate-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
+  </Link>
+);
+
+// ── main component ────────────────────────────────────────────────────────────
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [posts, setPosts] = useState<RedditPost[]>([]);
-  const [selectedPost, setSelectedPost] = useState<RedditPost | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
-  const [targetSubreddit, setTargetSubreddit] = useState('saas');
-  const [searchKeywords, setSearchKeywords] = useState('');
-  const [generatedReply, setGeneratedReply] = useState<GeneratedReply | null>(null);
-  const [editedComment, setEditedComment] = useState('');
-  const [isPosting, setIsPosting] = useState(false);
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-
-  // Wizard State
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
-  const [wizardData, setWizardData] = useState({
-    tone: 'helpful_peer',
-    goal: 'help',
-    productMention: '',
-    productLink: '',
-    description: '',
-    targetAudience: ''
-  });
-  const [showBrandOverride, setShowBrandOverride] = useState(false);
-  const [brandProfile, setBrandProfile] = useState<BrandProfile>({});
-
-  const [activeTone, setActiveTone] = useState<'helpful_peer' | 'thought_leader' | 'skeptic' | 'storyteller'>(wizardData.tone as any);
-
-  // Mock credit system for Free plan
+  const [history, setHistory] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [redditConnected, setRedditConnected] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [usedCredits, setUsedCredits] = useState(0);
   const FREE_PLAN_LIMIT = 3;
-  const isLimitReached = user?.plan === 'Free' && usedCredits >= FREE_PLAN_LIMIT;
 
-  const [isRedditConnected, setIsRedditConnected] = useState<boolean | null>(null);
-
-  const handleGenerate = async (post: RedditPost, customSettings?: any) => {
-    if (isLimitReached) return;
-
-    setSelectedPost(post);
-    setIsGenerating(true);
-    setGeneratedReply(null);
-    setIsWizardOpen(false);
-
-    // Only deduct credits for new generations
-    if (!customSettings?.isRefinement) {
-      setUsedCredits(prev => prev + 1);
-    }
-
-    try {
-      const tone = customSettings?.tone || wizardData.tone;
-      const goal = customSettings?.goal || wizardData.goal;
-      const product = customSettings?.productMention || wizardData.productMention;
-      const link = customSettings?.productLink || wizardData.productLink;
-
-      // Build override profile from wizard fields (only used when no saved profile or to override)
-      const overrideProfile: Partial<BrandProfile> = {
-        brandName: product || undefined,
-        website: link || undefined,
-        description: wizardData.description || undefined,
-        targetAudience: wizardData.targetAudience || undefined,
-      };
-
-      const context = `Tone: ${tone}, Goal: ${goal}${product ? `, Product to mention: ${product}` : ''}${link ? `, Product URL: ${link}` : ''}`;
-      const reply = await generateRedditReply(post, post.subreddit, tone, context, user?.id, overrideProfile);
-
-      setGeneratedReply(reply);
-      setEditedComment(reply.comment);
-      setToast({ message: 'AI Reply Generated!', type: 'success' });
-    } catch (err) {
-      console.error(err);
-      setToast({ message: 'Generation failed. Check API configuration.', type: 'error' });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleRefine = async (instruction: string) => {
-    if (!selectedPost || !generatedReply) return;
-    setIsGenerating(true);
-    try {
-      const reply = await generateRedditReply(selectedPost, selectedPost.subreddit, instruction, `Refine this reply: "${editedComment}". Instruction: ${instruction}`, user?.id);
-      setGeneratedReply(reply);
-      setEditedComment(reply.comment);
-    } catch (err) {
-      setToast({ message: 'Refinement failed.', type: 'error' });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handlePost = async () => {
-    if (!selectedPost || !editedComment || !user?.id) return;
-
-    setIsPosting(true);
-    try {
-      const response = await fetch('/api/reddit/reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          postId: selectedPost.id,
-          comment: editedComment,
-          postTitle: selectedPost.title,
-          postUrl: selectedPost.url,
-          postContent: selectedPost.selftext,
-          subreddit: selectedPost.subreddit,
-          productMention: wizardData.productMention
-        })
-      });
-
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to post reply');
-        } else {
-          const errorText = await response.text();
-          console.error('Non-JSON Error Response:', errorText);
-          throw new Error(`Server Error (${response.status}): The server returned an unexpected response format.`);
-        }
-      }
-
-      setToast({ message: 'Successfully deployed to Reddit!', type: 'success' });
-      setSelectedPost(null);
-      setGeneratedReply(null);
-    } catch (err: any) {
-      console.error(err);
-      setToast({ message: err.message, type: 'error' });
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  const handleRedditAuth = async () => {
-    try {
-      const response = await fetch('/api/auth/reddit/url');
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (err) {
-      setToast({ message: 'Failed to start Reddit authentication', type: 'error' });
-    }
-  };
-
-  const fetchPosts = async () => {
+  const fetchData = useCallback(async () => {
     if (!user?.id) return;
-
-    setIsFetching(true);
+    setIsLoading(true);
     try {
-      const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch posts');
+      const [histRes, profileRes, redditRes] = await Promise.allSettled([
+        fetch(`/api/user/replies/sync?userId=${user.id}`),
+        fetch(`/api/user/reddit/profile?userId=${user.id}`),
+        fetch(`/api/user/reddit/status?userId=${user.id}`),
+      ]);
+
+      if (histRes.status === 'fulfilled' && histRes.value.ok) {
+        const d = await histRes.value.json();
+        setHistory(Array.isArray(d) ? d : []);
       }
-      const data = await response.json();
-      setPosts(data);
-      if (data.length > 0) setSelectedPost(data[0]);
-      setToast({ message: `Found ${data.length} fresh opportunities!`, type: 'success' });
-    } catch (err: any) {
-      console.warn('[Reddit] API call failed, falling back to mock data:', err.message);
-      setPosts(MOCK_POSTS);
-      if (MOCK_POSTS.length > 0) setSelectedPost(MOCK_POSTS[0]);
-      setToast({ message: 'Using simulated data (Link Reddit for live feed)', type: 'error' });
+      if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
+        const d = await profileRes.value.json();
+        if (!d.error) setProfile(d);
+      }
+      if (redditRes.status === 'fulfilled' && redditRes.value.ok) {
+        const d = await redditRes.value.json();
+        setRedditConnected(d.connected);
+      }
+      setLastRefreshed(new Date());
+    } catch (e) {
+      console.error(e);
     } finally {
-      setIsFetching(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user?.id) {
-      fetchPosts();
-      // Load brand profile for wizard
-      fetchBrandProfile(user.id).then(p => {
-        if (p?.brandName) setBrandProfile(p);
-      });
-    }
-
-    // Check for callback status
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('success') === 'reddit_connected') {
-      setToast({ message: 'Reddit account linked successfully!', type: 'success' });
-      window.history.replaceState({}, document.title, "/dashboard");
-    } else if (params.get('error') === 'reddit_auth_failed') {
-      setToast({ message: 'Reddit account linking failed.', type: 'error' });
-      window.history.replaceState({}, document.title, "/dashboard");
+      setIsLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+    fetchData();
+  }, [fetchData]);
+
+  // ── derived stats ────────────────────────────────────────────────────────
+
+  const now = new Date();
+  const thisWeekStart = new Date(now);
+  thisWeekStart.setDate(now.getDate() - 6);
+  thisWeekStart.setHours(0, 0, 0, 0);
+
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const lastWeekEnd = new Date(thisWeekStart);
+  lastWeekEnd.setMilliseconds(-1);
+
+  const thisWeek = history.filter(r => new Date(r.deployedAt) >= thisWeekStart);
+  const lastWeek = history.filter(r => {
+    const d = new Date(r.deployedAt);
+    return d >= lastWeekStart && d <= lastWeekEnd;
+  });
+
+  const totalComments = history.length;
+  const totalUpvotes = history.reduce((a, b) => a + (b.ups || 0), 0);
+  const activeSubreddits = new Set(history.map(r => r.subreddit)).size;
+
+  // Reddit karma as "reach" if connected, otherwise upvotes-based estimate
+  const totalReach = profile?.totalKarma ?? (totalUpvotes > 0 ? totalUpvotes * 18 : 0);
+
+  // Week-over-week trends
+  const commentsTrend = fmtTrend(pctChange(thisWeek.length, lastWeek.length));
+  const upvotesTrend = fmtTrend(
+    pctChange(
+      thisWeek.reduce((a, b) => a + (b.ups || 0), 0),
+      lastWeek.reduce((a, b) => a + (b.ups || 0), 0),
+    ),
+  );
+  const subsTrend = fmtTrend(
+    pctChange(
+      new Set(thisWeek.map(r => r.subreddit)).size,
+      new Set(lastWeek.map(r => r.subreddit)).size,
+    ),
+  );
+
+  // ── chart data: last 7 days from real history ────────────────────────────
+
+  const days7 = lastNDays(7);
+
+  // Group history by date key
+  const byDate: Record<string, { comments: number; upvotes: number }> = {};
+  history.forEach(r => {
+    const key = toDateKey(new Date(r.deployedAt));
+    if (!byDate[key]) byDate[key] = { comments: 0, upvotes: 0 };
+    byDate[key].comments += 1;
+    byDate[key].upvotes += r.ups || 0;
+  });
+
+  const chartData = days7.map(dateKey => {
+    const d = new Date(dateKey);
+    const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const entry = byDate[dateKey] || { comments: 0, upvotes: 0 };
+    return {
+      day: label,
+      date: dateKey,
+      comments: entry.comments,
+      upvotes: entry.upvotes,
+      reach: entry.upvotes * 18,
+    };
+  });
+
+  // ── recent activity ──────────────────────────────────────────────────────
+
+  const recent = [...history].slice(0, 5);
+
+  // ── greeting ─────────────────────────────────────────────────────────────
+
+  const greeting = 'Welcome back';
+
+  // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit']">
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed bottom-8 right-8 z-[60] p-5 rounded-3xl shadow-2xl text-white flex items-center gap-4 animate-in slide-in-from-right-10 duration-500 border border-white/20 ${toast.type === 'success' ? 'bg-orange-600' : 'bg-red-600'}`}>
-          <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-            {toast.type === 'success' ? <Sparkles size={22} /> : <AlertCircle size={22} />}
-          </div>
-          <div>
-            <p className="font-bold text-sm leading-tight">{toast.message}</p>
-            <p className="text-white/70 text-xs">Action completed successfully.</p>
-          </div>
-        </div>
-      )}
+    <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
 
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-slate-100">
+      {/* ── Header ── */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="space-y-1">
+          <p className="text-slate-400 font-semibold text-sm">
+            {greeting}, {user?.name?.split(' ')[0] || 'there'}
+          </p>
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Post Feed</h1>
+            <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Overview</h1>
           </div>
-          <p className="text-slate-400 font-medium text-sm">Opportunities matching your <span className="text-orange-600">marketing signals</span>.</p>
+          <p className="text-slate-400 font-medium text-sm pl-4">Your Reddit growth at a glance.</p>
         </div>
+
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white border border-slate-200/60 p-1.5 rounded-2xl shadow-sm">
-            <div className="relative group flex items-center">
-              <Target className="absolute left-3 text-slate-400" size={14} />
-              <input
-                type="text"
-                value={targetSubreddit}
-                onChange={(e) => setTargetSubreddit(e.target.value)}
-                placeholder="Subreddit..."
-                className="pl-8 pr-3 py-2 bg-transparent focus:outline-none font-bold text-xs w-28 text-slate-700"
-              />
-            </div>
-            <div className="w-[1px] h-6 bg-slate-100"></div>
-            <div className="relative group flex items-center">
-              <Hash className="absolute left-3 text-slate-400" size={14} />
-              <input
-                type="text"
-                value={searchKeywords}
-                onChange={(e) => setSearchKeywords(e.target.value)}
-                placeholder="Keywords (e.g. tool, help)..."
-                className="pl-8 pr-3 py-2 bg-transparent focus:outline-none font-bold text-xs w-48 text-slate-700"
-              />
-            </div>
-            <button
-              onClick={handleRedditAuth}
-              className="p-2 px-3 bg-orange-50 text-orange-600 border border-orange-100 rounded-xl text-[10px] font-black hover:bg-orange-100 transition-all flex items-center gap-2"
-              title="Link your Reddit account for 100% reliable data"
-            >
-              <Globe size={12} />
-              LINK ACCOUNT
-            </button>
-            <button
-              onClick={fetchPosts}
-              disabled={isFetching}
-              className="bg-slate-900 text-white p-2 px-4 rounded-xl text-[10px] font-black hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
-            >
-              {isFetching ? <RefreshCw className="animate-spin" size={12} /> : <RefreshCw size={12} />}
-              RELOAD FEED
-            </button>
+          {/* Refresh button */}
+          <button
+            onClick={fetchData}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-500 hover:text-orange-600 hover:border-orange-200 transition-all disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+            {lastRefreshed
+              ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : 'Refresh'}
+          </button>
+
+          {/* Reddit connection badge */}
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold ${redditConnected ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+            <span className={`w-2 h-2 rounded-full ${redditConnected ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
+            {redditConnected ? `Reddit: u/${profile?.name || 'Connected'}` : 'Reddit: Not linked'}
           </div>
+
+          {user?.plan === 'Free' && (
+            <Link
+              to="/pricing"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-200 hover:scale-105 transition-transform"
+            >
+              <Crown size={14} className="fill-yellow-300 text-yellow-300" />
+              Upgrade
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Reply Wizard Modal */}
-      {isWizardOpen && selectedPost && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200">
-            <div className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
-              <div className="space-y-1">
-                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                  <Wand2 className="text-orange-600" size={24} />
-                  Reply Wizard
-                </h3>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Step {wizardStep} of 2</p>
-              </div>
-              <button onClick={() => setIsWizardOpen(false)} className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 transition-colors shadow-sm border border-slate-100">
-                <X size={20} />
-              </button>
+      <CreditsBanner
+        plan={user?.plan || 'Free'}
+        usedCredits={usedCredits}
+        limit={FREE_PLAN_LIMIT}
+      />
+
+      {/* ── Stat Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard
+          label="Total Comments"
+          value={totalComments}
+          sub={`${thisWeek.length} this week`}
+          icon={MessageSquare}
+          accent="bg-orange-600"
+          trend={commentsTrend}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label="Total Upvotes"
+          value={totalUpvotes.toLocaleString()}
+          sub={`${thisWeek.reduce((a, b) => a + (b.ups || 0), 0)} this week`}
+          icon={ThumbsUp}
+          accent="bg-blue-600"
+          trend={upvotesTrend}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label={profile?.totalKarma != null ? 'Reddit Karma' : 'Est. Reach'}
+          value={
+            profile?.totalKarma != null
+              ? profile.totalKarma.toLocaleString()
+              : totalReach > 1000
+                ? `${(totalReach / 1000).toFixed(1)}k`
+                : totalReach
+          }
+          sub={profile?.totalKarma != null ? 'Total karma (live)' : 'Based on upvotes'}
+          icon={Users}
+          accent="bg-purple-600"
+          trend={profile?.totalKarma != null ? 'Live' : undefined}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label="Communities"
+          value={activeSubreddits}
+          sub={`${new Set(thisWeek.map(r => r.subreddit)).size} active this week`}
+          icon={Globe}
+          accent="bg-emerald-600"
+          trend={subsTrend}
+          isLoading={isLoading}
+        />
+      </div>
+
+      {/* ── Charts Row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        {/* Area Chart — Engagement Trend (real data) */}
+        <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm p-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900">Engagement Trend</h2>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">
+                Real upvotes &amp; comments — last 7 days
+              </p>
             </div>
-
-            <div className="p-8">
-              {wizardStep === 1 ? (
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <label className="text-sm font-black text-slate-900 px-1">Choose your tone</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { id: 'helpful_peer', label: 'Helpful Peer', desc: 'Casual & Personal', icon: Smile },
-                        { id: 'thought_leader', label: 'Thought Leader', desc: 'Structured & Deep', icon: Crown },
-                        { id: 'skeptic', label: 'The Skeptic', desc: 'Contrarian & Smart', icon: Zap },
-                        { id: 'storyteller', label: 'Storyteller', desc: 'Personal Journey', icon: Quote }
-                      ].map(t => (
-                        <button
-                          key={t.id}
-                          onClick={() => setWizardData({ ...wizardData, tone: t.id })}
-                          className={`p-4 rounded-2xl border-2 text-left transition-all ${wizardData.tone === t.id ? 'border-orange-500 bg-orange-50/30' : 'border-slate-100 hover:border-slate-200'}`}
-                        >
-                          <t.icon size={18} className={wizardData.tone === t.id ? 'text-orange-600' : 'text-slate-400'} />
-                          <p className="font-bold text-slate-900 mt-2 text-sm">{t.label}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">{t.desc}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setWizardStep(2)}
-                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
-                  >
-                    NEXT STEP <ChevronRight size={18} />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <label className="text-sm font-black text-slate-900 px-1">Response Goal</label>
-                    <div className="flex gap-2">
-                      {['help', 'question', 'feedback', 'pitch'].map(g => (
-                        <button
-                          key={g}
-                          onClick={() => setWizardData({ ...wizardData, goal: g })}
-                          className={`flex-1 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${wizardData.goal === g ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-200'}`}
-                        >
-                          {g}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Brand Override — Smart */}
-                  {brandProfile.brandName ? (
-                    <div className="rounded-2xl border-2 border-green-100 overflow-hidden">
-                      {/* Active Badge */}
-                      <div className="flex items-center justify-between px-4 py-3 bg-green-50">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 bg-green-600 rounded-xl flex items-center justify-center">
-                            <Building2 size={13} className="text-white" />
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black text-green-700 uppercase tracking-widest">Brand Profile Active</p>
-                            <p className="font-extrabold text-slate-900 text-xs">{brandProfile.brandName}</p>
-                          </div>
-                          <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-lg text-[9px] font-black">
-                            <Check size={9} /> Auto-applied
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setShowBrandOverride(v => !v)}
-                          className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors"
-                        >
-                          <ChevronDown size={12} className={`transition-transform ${showBrandOverride ? 'rotate-180' : ''}`} />
-                          {showBrandOverride ? 'Hide' : 'Override'}
-                        </button>
-                      </div>
-                      {/* Collapsible Override — all 4 fields */}
-                      {showBrandOverride && (
-                        <div className="p-4 bg-white border-t border-green-100 space-y-3">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Override for this comment only — leave blank to use Profile defaults</p>
-                          <input
-                            type="text"
-                            value={wizardData.productMention}
-                            onChange={(e) => setWizardData({ ...wizardData, productMention: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                            placeholder={`Brand Name (default: ${brandProfile.brandName})`}
-                          />
-                          <textarea
-                            rows={2}
-                            value={wizardData.description}
-                            onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none"
-                            placeholder={`What does it do? (default: ${brandProfile.description || 'From your Brand Profile'})`}
-                          />
-                          <input
-                            type="text"
-                            value={wizardData.targetAudience}
-                            onChange={(e) => setWizardData({ ...wizardData, targetAudience: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                            placeholder={`Target Audience (default: ${brandProfile.targetAudience || 'From your Brand Profile'})`}
-                          />
-                          <input
-                            type="url"
-                            value={wizardData.productLink}
-                            onChange={(e) => setWizardData({ ...wizardData, productLink: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                            placeholder={`URL (default: ${brandProfile.website || 'Not set'})`}
-                          />
-                        </div>
-                      )}
-
-                    </div>
-                  ) : (
-                    /* No Brand Profile — show Quick Override with full fields */
-                    <div className="rounded-2xl border-2 border-orange-100 overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-3 bg-orange-50">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 bg-orange-500 rounded-xl flex items-center justify-center">
-                            <Building2 size={13} className="text-white" />
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Quick Brand Override</p>
-                            <p className="text-[10px] text-slate-500 font-medium">Fill in for richer AI output</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Link to="/settings" className="text-[9px] font-black text-slate-400 hover:text-orange-600">Save permanently →</Link>
-                          <button
-                            onClick={() => setShowBrandOverride(v => !v)}
-                            className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors"
-                          >
-                            <ChevronDown size={12} className={`transition-transform ${showBrandOverride ? 'rotate-180' : ''}`} />
-                            {showBrandOverride ? 'Hide' : 'Fill in'}
-                          </button>
-                        </div>
-                      </div>
-                      {showBrandOverride && (
-                        <div className="p-4 bg-white border-t border-orange-100 space-y-3">
-                          <input
-                            type="text"
-                            value={wizardData.productMention}
-                            onChange={(e) => setWizardData({ ...wizardData, productMention: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                            placeholder="Brand / Product Name (e.g. Redigo)"
-                          />
-                          <textarea
-                            rows={2}
-                            value={wizardData.description}
-                            onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none"
-                            placeholder="What does it do? (e.g. AI-powered Reddit outreach tool for SaaS founders)"
-                          />
-                          <input
-                            type="text"
-                            value={wizardData.targetAudience}
-                            onChange={(e) => setWizardData({ ...wizardData, targetAudience: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                            placeholder="Target Audience (e.g. SaaS founders, indie hackers)"
-                          />
-                          <input
-                            type="url"
-                            value={wizardData.productLink}
-                            onChange={(e) => setWizardData({ ...wizardData, productLink: e.target.value })}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                            placeholder="Website URL (optional)"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-
-                  <div className="flex gap-3">
-                    <button onClick={() => setWizardStep(1)} className="px-6 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">BACK</button>
-                    <button
-                      onClick={() => handleGenerate(selectedPost)}
-                      className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black hover:bg-orange-600 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2"
-                    >
-                      GENERATE REPLY <Check size={18} />
-                    </button>
-                  </div>
-                </div>
-              )}
+            <div className="flex items-center gap-4 text-xs font-bold text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-orange-500 inline-block" />Upvotes
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />Comments
+              </span>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Credits Banner for Free Plan */}
-      {
-        user?.plan === 'Free' && (
-          <div className="bg-slate-900 rounded-3xl p-6 flex items-center justify-between text-white shadow-xl shadow-slate-200 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl -mr-16 -mt-16 -z-0"></div>
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center text-orange-400 border border-slate-700">
-                <Zap size={24} fill="currentColor" />
+          {isLoading ? (
+            <div className="h-[260px] flex items-center justify-center">
+              <RefreshCw className="animate-spin text-orange-400" size={28} />
+            </div>
+          ) : (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gCom" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.12)', padding: '16px' }}
+                    itemStyle={{ fontWeight: 700, fontSize: 12 }}
+                    labelStyle={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}
+                  />
+                  <Area type="monotone" dataKey="upvotes" name="Upvotes" stroke="#f97316" strokeWidth={3} fill="url(#gUp)" />
+                  <Area type="monotone" dataKey="comments" name="Comments" stroke="#3b82f6" strokeWidth={3} fill="url(#gCom)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* Bar Chart — Daily Reach (real data) */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm p-8">
+          <div className="mb-8">
+            <h2 className="text-xl font-extrabold text-slate-900">Daily Reach</h2>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">
+              Upvotes × 18 per day (real data)
+            </p>
+          </div>
+
+          {isLoading ? (
+            <div className="h-[260px] flex items-center justify-center">
+              <RefreshCw className="animate-spin text-orange-400" size={28} />
+            </div>
+          ) : (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} barSize={14}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.12)', padding: '16px' }}
+                    itemStyle={{ fontWeight: 700, fontSize: 12 }}
+                    labelStyle={{ fontWeight: 800, fontSize: 12, marginBottom: 8 }}
+                    formatter={(v: any) => [v.toLocaleString(), 'Reach']}
+                  />
+                  <Bar dataKey="reach" name="Reach" fill="#f97316" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Bottom Row: Recent Activity + Quick Actions ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        {/* Recent Activity */}
+        <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden">
+          <div className="p-7 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white">
+                <Activity size={18} />
               </div>
               <div>
-                <h3 className="font-bold text-lg">Free Plan Active</h3>
-                <p className="text-slate-400 text-sm font-medium">You have used <span className="text-white font-bold">{usedCredits}/{FREE_PLAN_LIMIT}</span> AI replies today.</p>
+                <h2 className="text-lg font-extrabold text-slate-900">Recent Activity</h2>
+                {!isLoading && history.length > 0 && (
+                  <p className="text-[10px] text-slate-400 font-medium">{history.length} total replies deployed</p>
+                )}
               </div>
             </div>
-
-            {!isLimitReached ? (
-              <div className="relative z-10">
-                <div className="h-2 w-32 bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500 transition-all duration-500" style={{ width: `${(usedCredits / FREE_PLAN_LIMIT) * 100}%` }}></div>
-                </div>
-              </div>
-            ) : (
-              <Link to="/pricing" className="relative z-10 bg-white text-slate-900 px-6 py-3 rounded-xl font-bold text-sm hover:bg-orange-50 transition-colors flex items-center gap-2">
-                <Crown size={16} className="text-orange-600" />
-                Upgrade Now
-              </Link>
-            )}
+            <Link to="/analytics" className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1">
+              View All <ArrowRight size={14} />
+            </Link>
           </div>
-        )
-      }
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
-        {/* Posts List */}
-        <div className="xl:col-span-8 space-y-5">
-          {posts.map(post => (
-            <div
-              key={post.id}
-              className={`p-6 rounded-[2rem] transition-all duration-500 border-2 relative group overflow-hidden ${selectedPost?.id === post.id
-                ? 'border-orange-500 bg-orange-50/10 shadow-2xl shadow-orange-100/40 translate-x-1'
-                : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-xl hover:shadow-slate-100'
-                }`}
-              onClick={() => setSelectedPost(post)}
-            >
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
-                {/* Score Circular Meter */}
-                <div className="hidden md:flex flex-col items-center gap-1 shrink-0">
-                  <div className="relative w-14 h-14 flex items-center justify-center">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle cx="28" cy="28" r="24" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-100" />
-                      <circle cx="28" cy="28" r="24" stroke="currentColor" strokeWidth="4" fill="transparent"
-                        strokeDasharray={2 * Math.PI * 24}
-                        strokeDashoffset={2 * Math.PI * 24 * (1 - (post as any).opportunityScore / 100)}
-                        className={`${(post as any).opportunityScore > 70 ? 'text-orange-500' : (post as any).opportunityScore > 40 ? 'text-blue-500' : 'text-slate-400'} transition-all duration-1000`}
-                      />
-                    </svg>
-                    <span className="absolute text-[11px] font-black text-slate-900">{(post as any).opportunityScore}%</span>
-                  </div>
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Opportunity</span>
-                </div>
-
-                <div className="flex-1 space-y-4">
-                  <div className="flex items-center flex-wrap gap-2">
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-orange-100/50 rounded-full border border-orange-200">
-                      <Flame size={12} className="text-orange-600" />
-                      <span className="text-[10px] font-extrabold text-orange-600 uppercase tracking-widest">r/{post.subreddit}</span>
-                    </div>
-
-                    {/* Intent Tag */}
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 rounded-full border border-blue-100">
-                      <Target size={12} className="text-blue-600" />
-                      <span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-widest">{(post as any).intent || 'General'}</span>
-                    </div>
-
-                    {/* Competitor Alert */}
-                    {(post as any).competitors?.length > 0 && (
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-red-50 rounded-full border border-red-100 animate-pulse">
-                        <AlertCircle size={12} className="text-red-600" />
-                        <span className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest">Competitor Mention</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <h3 className="text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors">{post.title}</h3>
-                  <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed font-medium">{post.selftext}</p>
-
-                  <div className="flex items-center gap-5 pt-1">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl">
-                      <ThumbsUp size={14} className="text-slate-400" />
-                      <span className="text-xs font-bold text-slate-700">{post.ups.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl">
-                      <MessageSquarePlus size={14} className="text-slate-400" />
-                      <span className="text-xs font-bold text-slate-700">{post.num_comments}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-row md:flex-col gap-3 w-full md:w-auto shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedPost(post); setWizardStep(1); setIsWizardOpen(true); }}
-                    className="flex-1 md:flex-none bg-slate-900 text-white px-6 py-3.5 rounded-[1.25rem] text-sm font-bold hover:bg-orange-600 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95"
-                  >
-                    <Wand2 size={16} />
-                    Wizard Reply
-                  </button>
-                </div>
-              </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center p-16">
+              <RefreshCw className="animate-spin text-orange-600" size={28} />
             </div>
-          ))}
+          ) : recent.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-16 gap-4 text-center">
+              <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
+                <MessageSquarePlus size={28} />
+              </div>
+              <p className="text-slate-900 font-bold text-sm">No activity yet</p>
+              <p className="text-slate-400 text-xs">
+                Go to{' '}
+                <Link to="/comment-agent" className="text-orange-600 font-bold hover:underline">Comments</Link>
+                {' '}to deploy your first AI reply.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {recent.map((row) => (
+                <div key={row.id} className="flex items-center gap-4 px-7 py-5 hover:bg-slate-50/60 transition-colors group">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
+                    <MessageSquare size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-900 text-sm truncate group-hover:text-orange-600 transition-colors">
+                      {row.postTitle}
+                    </p>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-lg">
+                        r/{row.subreddit}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                        <Clock size={10} />
+                        {new Date(row.deployedAt).toLocaleDateString('en-US', {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-500 shrink-0">
+                    <ThumbsUp size={13} className={row.ups > 0 ? 'text-green-500' : 'text-slate-300'} />
+                    <span className="text-xs font-bold">{row.ups ?? 0}</span>
+                  </div>
+                  <a href={row.postUrl} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ExternalLink size={14} className="text-slate-400 hover:text-orange-600" />
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Action Panel / AI View */}
-        <div className="xl:col-span-4">
-          <div className="sticky top-6 bg-white rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/20 overflow-hidden flex flex-col min-h-[500px]">
-            <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="font-bold text-base flex items-center gap-2">
-                <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center text-white">
-                  <Sparkles size={16} />
+        {/* Quick Actions + Reddit Karma */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Sparkles size={16} className="text-orange-600" />
+            <h2 className="text-lg font-extrabold text-slate-900">Quick Actions</h2>
+          </div>
+
+          <QuickAction
+            icon={MessageSquarePlus}
+            title="Deploy AI Comment"
+            desc="Find posts & generate replies"
+            to="/comment-agent"
+            accent="bg-orange-600"
+          />
+          <QuickAction
+            icon={PenTool}
+            title="Post Architect"
+            desc="Create full Reddit posts with AI"
+            to="/post-agent"
+            accent="bg-blue-600"
+          />
+          <QuickAction
+            icon={BarChart3}
+            title="Analytics"
+            desc="Deep-dive into performance"
+            to="/analytics"
+            accent="bg-purple-600"
+          />
+          <QuickAction
+            icon={Target}
+            title="Settings"
+            desc="Brand profile & integrations"
+            to="/settings"
+            accent="bg-emerald-600"
+          />
+
+          {/* Reddit karma card — only shown when connected */}
+          {profile && (
+            <div className="bg-slate-900 rounded-[1.75rem] p-6 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-orange-600/20 rounded-full blur-2xl -mr-6 -mt-6" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Reddit Account</p>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center font-black text-sm">
+                  {profile.name?.substring(0, 2).toUpperCase()}
                 </div>
-                Assistant
-              </h2>
-              <span className="text-[9px] font-extrabold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-100 uppercase tracking-widest">v2.0</span>
-            </div>
-
-            <div className="p-5 flex-1 flex flex-col">
-              {!selectedPost ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 border border-slate-100">
-                    <MessageSquarePlus size={32} />
-                  </div>
-                  <div className="space-y-1 px-4">
-                    <p className="text-slate-900 text-base font-bold">No selection</p>
-                    <p className="text-slate-400 text-xs font-medium">Click a post to begin crafting.</p>
-                  </div>
+                <div>
+                  <p className="font-bold text-sm">u/{profile.name}</p>
+                  <p className="text-slate-400 text-[10px]">Live data</p>
                 </div>
-              ) : (
-                <div className="flex-1 flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Post</p>
-                    <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2">{selectedPost.title}</p>
-                  </div>
-
-                  {!generatedReply && !isGenerating && (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 py-6 border-2 border-dashed border-slate-100 rounded-[2rem] bg-slate-50/30">
-                      <div className="w-16 h-16 bg-white rounded-[2rem] flex items-center justify-center text-orange-600 shadow-xl shadow-orange-100/50 border border-orange-50">
-                        <Wand2 size={32} />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-lg font-black text-slate-900">Engage Smarter</p>
-                        <p className="text-slate-400 text-xs font-semibold px-6 leading-relaxed">Customize your reply strategy with our advanced Wizard.</p>
-                      </div>
-                      <button
-                        onClick={() => { setWizardStep(1); setIsWizardOpen(true); }}
-                        className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-orange-600 transition-all shadow-xl shadow-slate-200 active:scale-95 text-xs flex items-center gap-2 group"
-                      >
-                        LAUNCH REPLY WIZARD
-                        <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                      </button>
-                    </div>
-                  )}
-
-                  {isGenerating && (
-                    <div className="flex-1 space-y-4 flex flex-col justify-center py-8">
-                      <div className="w-12 h-12 border-4 border-orange-100 border-t-orange-600 rounded-full animate-spin mx-auto"></div>
-                      <div className="text-center space-y-1">
-                        <p className="text-slate-900 font-black tracking-widest text-[10px] uppercase">Crafting Response</p>
-                        <p className="text-slate-400 font-bold text-[9px] animate-pulse">Consulting Gemini AI...</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {generatedReply && !isGenerating && (
-                    <div className="flex-1 flex flex-col space-y-6 animate-in fade-in duration-500">
-                      {/* Live Reddit Preview */}
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Thread Preview</label>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 relative">
-                          <div className="flex gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-200 shrink-0 overflow-hidden flex items-center justify-center">
-                              <Smile size={18} className="text-slate-400" />
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-slate-900">u/{user?.name || 'User'}</span>
-                                <span className="text-[10px] text-slate-400">just now</span>
-                              </div>
-                              <div className="text-xs text-slate-600 leading-relaxed italic border-l-2 border-slate-200 pl-3">
-                                {editedComment}
-                              </div>
-                              <div className="flex items-center gap-4 pt-1">
-                                <div className="flex items-center gap-1.5 text-slate-400">
-                                  <ThumbsUp size={10} />
-                                  <span className="text-[10px] font-bold">Vote</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-slate-400">
-                                  <MessageSquarePlus size={10} />
-                                  <span className="text-[10px] font-bold">Reply</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 group relative">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Edit Response</label>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(editedComment);
-                              setToast({ message: 'Copied to clipboard!', type: 'success' });
-                            }}
-                            className="p-1 px-2 hover:bg-slate-100 rounded text-[10px] font-bold text-slate-500 flex items-center gap-1 transition-colors"
-                          >
-                            <Copy size={12} /> Copy
-                          </button>
-                        </div>
-                        <textarea
-                          className="w-full min-h-[140px] p-4 bg-white border border-slate-200 rounded-2xl text-slate-700 text-sm font-medium focus:ring-2 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all custom-scrollbar leading-relaxed"
-                          value={editedComment}
-                          onChange={(e) => setEditedComment(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleGenerate(selectedPost, activeTone)}
-                          className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-slate-100 rounded-xl text-[11px] font-bold text-slate-600 hover:border-orange-200 transition-all"
-                        >
-                          <RefreshCw size={12} /> Regenerate
-                        </button>
-                        <button
-                          onClick={() => handleRefine("Make it much shorter and concise")}
-                          className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-slate-100 rounded-xl text-[11px] font-bold text-slate-600 hover:border-orange-200 transition-all"
-                        >
-                          <Type size={12} /> Make Shorter
-                        </button>
-                      </div>
-
-                      <div className="pt-2 mt-auto">
-                        <button
-                          onClick={handlePost}
-                          disabled={isPosting}
-                          className="w-full bg-slate-900 text-white py-3.5 rounded-2xl font-bold hover:bg-orange-600 transition-all flex items-center justify-center gap-2 shadow-lg active:scale-95 disabled:opacity-50 text-sm"
-                        >
-                          {isPosting ? <RefreshCw className="animate-spin" size={16} /> : <Send size={16} />}
-                          Deploy to Reddit
-                        </button>
-                      </div>
-                    </div>
-                  )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/10 rounded-xl p-3 text-center">
+                  <p className="text-lg font-black">{(profile.commentKarma ?? 0).toLocaleString()}</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Comment Karma</p>
+                </div>
+                <div className="bg-white/10 rounded-xl p-3 text-center">
+                  <p className="text-lg font-black">{(profile.linkKarma ?? 0).toLocaleString()}</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Link Karma</p>
+                </div>
+              </div>
+              {profile.totalKarma != null && (
+                <div className="mt-3 bg-orange-600/20 rounded-xl p-3 text-center border border-orange-600/30">
+                  <p className="text-xl font-black">{profile.totalKarma.toLocaleString()}</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Karma</p>
                 </div>
               )}
             </div>
-          </div>
+          )}
         </div>
       </div>
-    </div >
+    </div>
   );
 };

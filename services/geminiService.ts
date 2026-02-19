@@ -66,7 +66,8 @@ export const generateRedditReply = async (
   tone: string,
   audience: string,
   userId?: string | number,
-  overrideProfile?: Partial<BrandProfile>
+  overrideProfile?: Partial<BrandProfile>,
+  language: string = 'English'
 ): Promise<GeneratedReply> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
@@ -83,6 +84,8 @@ export const generateRedditReply = async (
         Specific Instructions/Context: ${audience}
         Desired Tone Strategy: ${tone}
         ${brandContext}
+        
+        ⚠️ LANGUAGE REQUIREMENT: You MUST write the entire reply in ${language}. This is mandatory regardless of the post language.
         
         CRITICAL RULES FOR REDDIT AUTHENTICITY:
         1. NEVER start with "I'm sorry to hear that" or "That's a great question". Jump straight to the value.
@@ -119,7 +122,8 @@ export const generateRedditPost = async (
   productMention?: string,
   productUrl?: string,
   userId?: string | number,
-  overrideProfile?: Partial<BrandProfile>
+  overrideProfile?: Partial<BrandProfile>,
+  language: string = 'English'
 ): Promise<{ title: string; content: string; imagePrompt: string }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
@@ -141,6 +145,8 @@ export const generateRedditPost = async (
         ${finalBrandName ? `Product/Brand to Mention: ${finalBrandName}` : ''}
         ${finalUrl ? `Product URL: ${finalUrl}` : ''}
         ${brandContext}
+        
+        ⚠️ LANGUAGE REQUIREMENT: You MUST write the entire post (title and content) in ${language}. This is mandatory.
         
         RULES:
         1. Write a high-engagement headline (Title).

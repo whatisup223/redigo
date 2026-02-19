@@ -22,6 +22,13 @@ import {
     CreditCard,
     Globe,
     Copy,
+    X,
+    CheckCircle2,
+    Clock,
+    Archive,
+    LifeBuoy,
+    ChevronRight,
+    AlertCircle
 } from 'lucide-react';
 
 // Mock Data Types
@@ -58,7 +65,7 @@ interface RedditSettings {
     userAgent: string;
 }
 
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 
 export const Admin: React.FC = () => {
     const location = useLocation();
@@ -101,35 +108,81 @@ export const Admin: React.FC = () => {
         totalUsers: 0,
         activeSubscriptions: 0,
         apiUsage: 0,
-        systemHealth: 'Unknown'
+        systemHealth: 'Unknown',
+        ticketStats: {
+            total: 0,
+            open: 0,
+            inProgress: 0,
+            resolved: 0,
+            closed: 0
+        }
     });
+
+    // User Management Modal State
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '' });
 
     // Fetch Data Function (Real Backend)
     const fetchData = async () => {
+        const token = localStorage.getItem('token');
+        const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
-            // Parallel requests for efficiency
             const [statsRes, usersRes, aiRes, stripeRes, redditRes] = await Promise.all([
-                fetch('/api/admin/stats'),
-                fetch('/api/admin/users'),
-                fetch('/api/admin/ai-settings'),
-                fetch('/api/admin/stripe-settings'),
-                fetch('/api/admin/reddit-settings')
+                fetch('/api/admin/stats', { headers }),
+                fetch('/api/admin/users', { headers }),
+                fetch('/api/admin/ai-settings', { headers }),
+                fetch('/api/admin/stripe-settings', { headers }),
+                fetch('/api/admin/reddit-settings', { headers })
             ]);
 
             if (statsRes.ok) setStats(await statsRes.json());
             if (usersRes.ok) setUsers(await usersRes.json());
             if (aiRes.ok) setAiSettings(await aiRes.json());
-
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
-
             if (redditRes.ok) setRedditSettings(await redditRes.json());
-
-
         } catch (error) {
             console.error("Failed to fetch admin data", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedUser) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(editForm)
+            });
+            if (res.ok) {
+                alert('User updated successfully!');
+                setIsEditModalOpen(false);
+                fetchData();
+            }
+        } catch (e) {
+            alert('Failed to update user');
+        }
+    };
+
+    const handleDeleteUser = async (id: number) => {
+        if (!confirm('Are you sure you want to delete this user?')) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/admin/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) fetchData();
+        } catch (e) {
+            alert('Failed to delete user');
         }
     };
 
@@ -138,10 +191,14 @@ export const Admin: React.FC = () => {
     }, []);
 
     const handleSaveSettings = async () => {
+        const token = localStorage.getItem('token');
         try {
             const res = await fetch('/api/admin/ai-settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(aiSettings)
             });
             if (res.ok) {
@@ -156,10 +213,14 @@ export const Admin: React.FC = () => {
     };
 
     const handleSaveStripeSettings = async () => {
+        const token = localStorage.getItem('token');
         try {
             const res = await fetch('/api/admin/stripe-settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(stripeSettings)
             });
             if (res.ok) {
@@ -174,10 +235,14 @@ export const Admin: React.FC = () => {
     };
 
     const handleSaveRedditSettings = async () => {
+        const token = localStorage.getItem('token');
         try {
             const res = await fetch('/api/admin/reddit-settings', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(redditSettings)
             });
             if (res.ok) {
@@ -262,6 +327,54 @@ export const Admin: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* Support Metrics Section */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-xl font-black text-slate-800 tracking-tight">Support Metrics</h2>
+                                    <Link to="/support" className="text-xs font-bold text-orange-600 hover:underline flex items-center gap-1">
+                                        View All Tickets <ChevronRight size={14} />
+                                    </Link>
+                                </div>
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
+                                        <div>
+                                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Awaiting Response</p>
+                                            <p className="text-3xl font-extrabold text-blue-600">{stats.ticketStats?.open || 0}</p>
+                                        </div>
+                                        <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <Clock size={24} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
+                                        <div>
+                                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Under Review</p>
+                                            <p className="text-3xl font-extrabold text-orange-600">{stats.ticketStats?.inProgress || 0}</p>
+                                        </div>
+                                        <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <AlertCircle size={24} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
+                                        <div>
+                                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Resolved Today</p>
+                                            <p className="text-3xl font-extrabold text-green-600">{stats.ticketStats?.resolved || 0}</p>
+                                        </div>
+                                        <div className="p-4 bg-green-50 text-green-600 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <CheckCircle2 size={24} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
+                                        <div>
+                                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Archived/Closed</p>
+                                            <p className="text-3xl font-extrabold text-slate-500">{stats.ticketStats?.closed || 0}</p>
+                                        </div>
+                                        <div className="p-4 bg-slate-50 text-slate-500 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <Archive size={24} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Charts Section */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm h-80 flex flex-col items-center justify-center text-slate-400">
@@ -323,8 +436,22 @@ export const Admin: React.FC = () => {
                                                 </td>
                                                 <td className="px-8 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button className="p-2 bg-white border border-slate-200 rounded-lg hover:text-orange-600 hover:border-orange-200 transition-all shadow-sm"><Edit2 size={14} /></button>
-                                                        <button className="p-2 bg-white border border-slate-200 rounded-lg hover:text-red-600 hover:border-red-200 transition-all shadow-sm"><Trash2 size={14} /></button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedUser(user);
+                                                                setEditForm({ ...user, password: '' }); // Don't pre-fill password for security
+                                                                setIsEditModalOpen(true);
+                                                            }}
+                                                            className="p-2 bg-white border border-slate-200 rounded-lg hover:text-orange-600 hover:border-orange-200 transition-all shadow-sm"
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteUser(user.id)}
+                                                            className="p-2 bg-white border border-slate-200 rounded-lg hover:text-red-600 hover:border-red-200 transition-all shadow-sm"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -686,6 +813,86 @@ export const Admin: React.FC = () => {
                         </div>
                     )}
                 </>
+            )}
+            {/* User Edit Modal */}
+            {isEditModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}></div>
+                    <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                            <h2 className="text-2xl font-black text-slate-900">Edit User Details</h2>
+                            <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={24} /></button>
+                        </div>
+                        <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Full Name</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                        value={editForm.name}
+                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Email Address</label>
+                                    <input
+                                        type="email"
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                        value={editForm.email}
+                                        onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">User Role</label>
+                                    <select
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                        value={editForm.role}
+                                        onChange={e => setEditForm({ ...editForm, role: e.target.value })}
+                                    >
+                                        <option value="user">User</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Account Plan</label>
+                                    <select
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                        value={editForm.plan}
+                                        onChange={e => setEditForm({ ...editForm, plan: e.target.value })}
+                                    >
+                                        <option value="Free">Free</option>
+                                        <option value="Pro">Pro</option>
+                                        <option value="Business">Business</option>
+                                        <option value="Agency">Agency</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">New Password (leave blank to keep current)</label>
+                                <input
+                                    type="password"
+                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-mono text-slate-700"
+                                    value={editForm.password}
+                                    placeholder="••••••••"
+                                    onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="pt-4">
+                                <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 transition-all active:scale-95">
+                                    Save User Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             )}
         </div>
     );

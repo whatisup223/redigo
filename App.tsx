@@ -16,6 +16,8 @@ import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { RedditCallback } from './pages/RedditCallback';
 import { ContentArchitect } from './pages/ContentArchitect';
+import { Comments } from './pages/Comments';
+import { Support } from './pages/Support';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -35,16 +37,19 @@ const App: React.FC = () => {
 
           {/* User Dashboard Routes - Wrapped in AppLayout */}
           <Route path="/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-          <Route path="/content-architect" element={<ProtectedRoute><AppLayout><ContentArchitect /></AppLayout></ProtectedRoute>} />
+          <Route path="/comment-agent" element={<ProtectedRoute><AppLayout><Comments /></AppLayout></ProtectedRoute>} />
+          <Route path="/post-agent" element={<ProtectedRoute><AppLayout><ContentArchitect /></AppLayout></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
           <Route path="/pricing" element={<ProtectedRoute><AppLayout><PricingPage /></AppLayout></ProtectedRoute>} />
+          <Route path="/support" element={<ProtectedRoute><AppLayout><Support /></AppLayout></ProtectedRoute>} />
 
           {/* Admin Routes - Separate from User Layout */}
-          <Route path="/admin" element={<AdminLayout><Admin /></AdminLayout>} />
-          <Route path="/admin/users" element={<AdminLayout><Admin /></AdminLayout>} />
-          <Route path="/admin/settings" element={<AdminLayout><Admin /></AdminLayout>} />
-          <Route path="/admin/logs" element={<AdminLayout><Admin /></AdminLayout>} />
+          <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/support" element={<ProtectedRoute adminOnly={true}><AdminLayout><Support /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/logs" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

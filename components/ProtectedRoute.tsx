@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { RefreshCw } from 'lucide-react';
 
-export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({ children, adminOnly = false }) => {
     const { isAuthenticated, user } = useAuth();
 
     // In a real app, you might want a "isInitialLoading" state in AuthContext
@@ -20,6 +20,10 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
+    }
+
+    if (adminOnly && user?.role?.toLowerCase() !== 'admin') {
+        return <Navigate to="/dashboard" replace />;
     }
 
     return <>{children}</>;

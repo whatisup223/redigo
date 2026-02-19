@@ -14,8 +14,9 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { TrendingUp, Users, MousePointer2, ExternalLink, Calendar, ChevronRight, LayoutList, RefreshCw, BarChart3, PieChart as PieIcon } from 'lucide-react';
+import { TrendingUp, Users, MousePointer2, ExternalLink, Calendar, ChevronRight, LayoutList, RefreshCw, BarChart3, PieChart as PieIcon, MessageSquare, PenTool, Image as ImageIcon, ChevronDown, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import CreditsBanner from '../components/CreditsBanner';
 
 const DATA = [
   { name: 'Mon', upvotes: 400, replies: 24, reach: 2400 },
@@ -25,6 +26,33 @@ const DATA = [
   { name: 'Fri', upvotes: 500, replies: 28, reach: 2181 },
   { name: 'Sat', upvotes: 700, replies: 42, reach: 2500 },
   { name: 'Sun', upvotes: 900, replies: 56, reach: 3100 },
+];
+
+const POSTS_MOCK = [
+  {
+    id: 'p1',
+    type: 'post',
+    subreddit: 'SaaS',
+    postTitle: 'How we reached $10k MRR in 3 months with Reddit',
+    deployedAt: new Date(Date.now() - 86400000).toISOString(),
+    ups: 145,
+    replies: 32,
+    productMention: 'Redigo',
+    imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60',
+    content: 'We spent months trying to figure out the right way to engage on Reddit without being spammy. Here is our blueprint...'
+  },
+  {
+    id: 'p2',
+    type: 'post',
+    subreddit: 'indiehackers',
+    postTitle: 'What is your favorite tool for Reddit marketing?',
+    deployedAt: new Date(Date.now() - 172800000).toISOString(),
+    ups: 89,
+    replies: 12,
+    productMention: 'Redigo',
+    imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60',
+    content: 'Looking for tools that help manage outreach and stay authentic. Any recommendations?'
+  }
 ];
 
 const StatCard = ({ label, value, trend, icon: Icon, color }: any) => (
@@ -48,22 +76,39 @@ const StatCard = ({ label, value, trend, icon: Icon, color }: any) => (
 export const Analytics: React.FC = () => {
   const { user } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
+  const [postsHistory, setPostsHistory] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'comments' | 'posts'>('comments');
+  const [usedCredits, setUsedCredits] = useState(0);
+  const FREE_PLAN_LIMIT = 3;
+
+  // Date Filtering State
+  const [dateFilter, setDateFilter] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [customRange, setCustomRange] = useState({ start: '', end: '' });
 
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
       try {
-        // Fetch history first as it's critical
+        // Fetch comments history
         const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}`);
         if (historyRes.ok) {
           const historyData = await historyRes.json();
           setHistory(Array.isArray(historyData) ? historyData : []);
         }
 
-        // Fetch profile separately
+        // Fetch posts history
+        const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}`);
+        if (postsRes.ok) {
+          const postsData = await postsRes.json();
+          setPostsHistory(Array.isArray(postsData) ? postsData : []);
+        }
+
+        // Fetch profile
         const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}`);
         if (profileRes.ok) {
           const profileData = await profileRes.json();
@@ -79,8 +124,29 @@ export const Analytics: React.FC = () => {
     fetchData();
   }, [user]);
 
+  // Filter History by Date Logic
+  const filteredHistory = (activeTab === 'comments' ? history : postsHistory).filter(item => {
+    const itemDate = new Date(item.deployedAt);
+    const now = new Date();
+
+    if (dateFilter === '24h') return (now.getTime() - itemDate.getTime()) <= 24 * 60 * 60 * 1000;
+    if (dateFilter === '7d') return (now.getTime() - itemDate.getTime()) <= 7 * 24 * 60 * 60 * 1000;
+    if (dateFilter === '30d') return (now.getTime() - itemDate.getTime()) <= 30 * 24 * 60 * 60 * 1000;
+    if (dateFilter === 'all') return true;
+    if (dateFilter === 'custom' && customRange.start && customRange.end) {
+      const start = new Date(customRange.start);
+      const end = new Date(customRange.end);
+      end.setHours(23, 59, 59); // Include the whole end day
+      return itemDate >= start && itemDate <= end;
+    }
+    return true;
+  });
+
+  // Process active history based on tab
+  const activeHistory = filteredHistory;
+
   // Process history for charts
-  const chartData = [...history].reverse().reduce((acc: any[], current) => {
+  const chartData = [...activeHistory].reverse().reduce((acc: any[], current) => {
     const date = new Date(current.deployedAt).toLocaleDateString('en-US', { weekday: 'short' });
     const existing = acc.find(d => d.name === date);
     if (existing) {
@@ -95,19 +161,19 @@ export const Analytics: React.FC = () => {
   // Ensure we have at least some data to show trends, even if zero
   const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0 }];
 
-  const totalUpvotes = history.reduce((a, b) => a + (b.ups || 0), 0);
-  const totalReplies = history.reduce((a, b) => a + (b.replies || 0), 0);
-  const activeSubreddits = new Set(history.map(r => r.subreddit)).size;
+  const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
+  const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
+  const activeSubreddits = new Set(activeHistory.map(r => r.subreddit)).size;
 
   // Sentiment Logic (Calculated based on upvotes/replies ratio)
   const sentimentData = [
-    { name: 'Supportive', value: history.filter(h => h.ups > 2).length, color: '#10b981' },
-    { name: 'Neutral', value: history.filter(h => h.ups <= 2 && h.ups >= 0).length, color: '#94a3b8' },
-    { name: 'Critical', value: history.filter(h => h.ups < 0).length, color: '#ef4444' },
+    { name: 'Supportive', value: activeHistory.filter(h => h.ups > 2).length, color: '#10b981' },
+    { name: 'Neutral', value: activeHistory.filter(h => h.ups <= 2 && h.ups >= 0).length, color: '#94a3b8' },
+    { name: 'Critical', value: activeHistory.filter(h => h.ups < 0).length, color: '#ef4444' },
   ];
 
   // Top Communities Logic
-  const subPerformance = history.reduce((acc: any, curr) => {
+  const subPerformance = activeHistory.reduce((acc: any, curr) => {
     acc[curr.subreddit] = (acc[curr.subreddit] || 0) + (curr.ups || 0) + (curr.replies || 0);
     return acc;
   }, {});
@@ -118,7 +184,7 @@ export const Analytics: React.FC = () => {
     .slice(0, 4);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 animate-fade-in font-['Outfit']">
+    <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
       {/* Detail Modal */}
       {selectedEntry && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
@@ -195,40 +261,174 @@ export const Analytics: React.FC = () => {
       )}
 
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
+        <div className="space-y-1">
+          <p className="text-slate-400 font-semibold text-sm">Welcome back, {user?.name?.split(' ')[0] || 'there'}</p>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-8 bg-orange-600 rounded-full"></span>
-            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Performance</h1>
+            <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Analytics</h1>
           </div>
-          <p className="text-slate-400 font-medium text-lg">Real-time data for your Reddit ecosystem.</p>
+          <p className="text-slate-400 font-medium text-sm pl-4">Real-time data for your Reddit ecosystem.</p>
         </div>
-        <button className="flex items-center gap-3 px-6 py-4 bg-white border border-slate-200/60 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all font-bold text-slate-600">
-          <Calendar size={20} />
-          <span>Past 7 Days</span>
-          <ChevronRight size={18} className="rotate-90 text-slate-300" />
+        <div className="relative">
+          <button
+            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            className="flex items-center gap-3 px-6 py-4 bg-white border border-slate-200/60 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all font-bold text-slate-600 active:scale-95"
+          >
+            <Calendar size={20} className="text-orange-600" />
+            <span className="min-w-[100px] text-left">
+              {dateFilter === '24h' ? 'Past 24 Hours' :
+                dateFilter === '7d' ? 'Past 7 Days' :
+                  dateFilter === '30d' ? 'Past 30 Days' :
+                    dateFilter === 'all' ? 'All Time' :
+                      'Custom Range'}
+            </span>
+            <ChevronDown size={18} className={`text-slate-300 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showFilterDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowFilterDropdown(false)}></div>
+              <div className="absolute top-full right-0 mt-3 w-64 bg-white rounded-3xl shadow-2xl border border-slate-100 p-3 z-20 animate-in fade-in zoom-in-95 duration-200">
+                {[
+                  { id: '24h', label: 'Past 24 Hours' },
+                  { id: '7d', label: 'Past 7 Days' },
+                  { id: '30d', label: 'Past 30 Days' },
+                  { id: 'all', label: 'All Time' }
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => {
+                      setDateFilter(option.id as any);
+                      setShowFilterDropdown(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-sm font-bold transition-colors ${dateFilter === option.id ? 'bg-orange-50 text-orange-600 font-extrabold' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
+                    {option.label}
+                    {dateFilter === option.id && <Check size={16} />}
+                  </button>
+                ))}
+                <div className="h-px bg-slate-100 my-2 mx-5"></div>
+                <button
+                  onClick={() => {
+                    setShowDatePicker(true);
+                    setShowFilterDropdown(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-sm font-bold transition-colors ${dateFilter === 'custom' ? 'bg-orange-50 text-orange-600 font-extrabold' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                  Custom Range...
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Custom Date Picker Modal */}
+      {showDatePicker && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10 space-y-8 animate-in zoom-in-95 duration-300">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                <Calendar size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900">Custom Range</h3>
+              <p className="text-sm font-bold text-slate-400">Select start and end dates</p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Start Date</label>
+                <input
+                  type="date"
+                  value={customRange.start}
+                  onChange={(e) => setCustomRange({ ...customRange, start: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 focus:outline-none focus:border-orange-500 transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">End Date</label>
+                <input
+                  type="date"
+                  value={customRange.end}
+                  onChange={(e) => setCustomRange({ ...customRange, end: e.target.value })}
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 focus:outline-none focus:border-orange-500 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setShowDatePicker(false)}
+                className="py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setDateFilter('custom');
+                  setShowDatePicker(false);
+                }}
+                disabled={!customRange.start || !customRange.end}
+                className="py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:grayscale"
+              >
+                Apply Filter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CreditsBanner
+        plan={user?.plan || 'Free'}
+        usedCredits={usedCredits}
+        limit={FREE_PLAN_LIMIT}
+      />
+
+      {/* Tab Switcher */}
+      <div className="flex p-1.5 bg-slate-100 rounded-[2rem] w-fit mx-auto lg:mx-0">
+        <button
+          onClick={() => setActiveTab('comments')}
+          className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'comments'
+            ? 'bg-white text-slate-900 shadow-xl shadow-slate-200'
+            : 'text-slate-400 hover:text-slate-600'
+            }`}
+        >
+          <MessageSquare size={18} className={activeTab === 'comments' ? 'text-orange-600' : ''} />
+          COMMENTS
+        </button>
+        <button
+          onClick={() => setActiveTab('posts')}
+          className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'posts'
+            ? 'bg-white text-slate-900 shadow-xl shadow-slate-200'
+            : 'text-slate-400 hover:text-slate-600'
+            }`}
+        >
+          <PenTool size={18} className={activeTab === 'posts' ? 'text-orange-600' : ''} />
+          POSTS
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          label="Total Upvotes"
+          label={activeTab === 'comments' ? "Total Upvotes" : "Post Karma"}
           value={totalUpvotes.toLocaleString()}
           trend="+12.5%"
-          icon={TrendingUp}
+          icon={activeTab === 'comments' ? TrendingUp : BarChart3}
           color="bg-orange-600 text-white shadow-orange-100"
         />
         <StatCard
           label="Account Authority"
-          value={profile ? profile.commentKarma.toLocaleString() : "---"}
+          value={profile ? (activeTab === 'comments' ? profile.commentKarma.toLocaleString() : (profile.linkKarma || profile.totalKarma).toLocaleString()) : "---"}
           trend="Live"
           icon={Users}
           color="bg-blue-600 text-white shadow-blue-100"
         />
         <StatCard
-          label="Engagement Impact"
+          label={activeTab === 'comments' ? "Engagement Impact" : "Viral Reach"}
           value={(totalUpvotes + totalReplies).toLocaleString()}
           trend="+15.0%"
-          icon={MousePointer2}
+          icon={activeTab === 'comments' ? MousePointer2 : TrendingUp}
           color="bg-purple-600 text-white shadow-purple-100"
         />
         <StatCard
@@ -366,8 +566,8 @@ export const Analytics: React.FC = () => {
         <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-extrabold text-slate-900">Outreach History</h2>
-            {history.length > 0 && (
-              <span className="px-2 py-0.5 bg-slate-900 text-white text-[10px] font-black rounded-lg">{history.length}</span>
+            {activeHistory.length > 0 && (
+              <span className="px-2 py-0.5 bg-slate-900 text-white text-[10px] font-black rounded-lg">{activeHistory.length}</span>
             )}
           </div>
           <div className="flex items-center gap-4">
@@ -395,19 +595,19 @@ export const Analytics: React.FC = () => {
               <RefreshCw className="animate-spin text-orange-600" size={32} />
               <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Loading History...</p>
             </div>
-          ) : history.length === 0 ? (
+          ) : activeHistory.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 gap-4">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
                 <LayoutList size={32} />
               </div>
-              <p className="text-slate-900 font-bold">No replies deployed yet</p>
+              <p className="text-slate-900 font-bold">No {activeTab} deployed yet</p>
               <p className="text-slate-400 text-sm">Start engaging on the Dashboard to see data here.</p>
             </div>
           ) : (
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50/50 text-slate-400 text-[11px] font-extrabold uppercase tracking-[0.2em]">
-                  <th className="px-10 py-5">Origin</th>
+                  <th className="px-10 py-5">{activeTab === 'posts' ? 'Preview' : 'Origin'}</th>
                   <th className="px-10 py-5">Conversation</th>
                   <th className="px-10 py-5">Impact</th>
                   <th className="px-10 py-5">Product</th>
@@ -415,19 +615,38 @@ export const Analytics: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm font-medium">
-                {history.map((row) => (
+                {activeHistory.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 transition-all group">
-                    <td className="px-10 py-6 font-bold text-orange-600">r/{row.subreddit}</td>
+                    <td className="px-10 py-6 font-bold text-orange-600">
+                      {activeTab === 'posts' && row.imageUrl ? (
+                        <div className="w-16 h-10 rounded-lg overflow-hidden border border-slate-200 shadow-sm group-hover:scale-105 transition-transform">
+                          <img src={row.imageUrl} className="w-full h-full object-cover" alt="Post" />
+                        </div>
+                      ) : (
+                        `r/${row.subreddit}`
+                      )}
+                    </td>
                     <td className="px-10 py-6">
                       <div className="flex flex-col gap-1">
                         <span className="font-bold text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-1">{row.postTitle}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{new Date(row.deployedAt).toLocaleString()}</span>
+                        <div className="flex items-center gap-2">
+                          {activeTab === 'posts' && <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded">r/{row.subreddit}</span>}
+                          <span className="text-[10px] text-slate-400 font-medium">{new Date(row.deployedAt).toLocaleString()}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="px-10 py-6">
-                      <div className="flex items-center gap-1.5 font-extrabold">
-                        <TrendingUp size={14} className="text-green-500" />
-                        {row.ups}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 font-extrabold">
+                          <TrendingUp size={14} className="text-green-500" />
+                          {row.ups}
+                        </div>
+                        {activeTab === 'posts' && (
+                          <div className="flex items-center gap-1.5 font-extrabold text-slate-400">
+                            <MessageSquare size={14} />
+                            {row.replies}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-10 py-6 text-blue-600 font-bold">

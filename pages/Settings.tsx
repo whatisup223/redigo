@@ -115,13 +115,17 @@ export const Settings: React.FC = () => {
     const hasBrand = !!brandProfile.brandName;
 
     return (
-        <div className="max-w-4xl mx-auto space-y-10 font-['Outfit'] pb-20">
+        <div className="max-w-4xl space-y-6 font-['Outfit'] pb-20 pt-4">
 
             {/* Header */}
             <div className="flex justify-between items-end border-b border-slate-100 pb-6">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Settings</h1>
-                    <p className="text-slate-400 font-medium">Manage your account, brand, and preferences.</p>
+                <div className="space-y-1">
+                    <p className="text-slate-400 font-semibold text-sm">Welcome back, {user?.name?.split(' ')[0] || 'there'}</p>
+                    <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
+                        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Settings</h1>
+                    </div>
+                    <p className="text-slate-400 font-medium text-sm pl-4">Manage your account, brand, and preferences.</p>
                 </div>
                 <button onClick={logout} className="flex items-center gap-2 px-4 py-2 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-colors">
                     <LogOut size={16} /> Logout
@@ -135,8 +139,8 @@ export const Settings: React.FC = () => {
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
-                                ? 'bg-white text-slate-900 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
                             }`}
                     >
                         {tab.icon}
@@ -466,8 +470,8 @@ export const Settings: React.FC = () => {
                                         key={t.id}
                                         onClick={() => setBrandProfile(p => ({ ...p, brandTone: t.id }))}
                                         className={`p-4 rounded-2xl border-2 text-left transition-all ${brandProfile.brandTone === t.id
-                                                ? 'border-orange-500 bg-orange-50 shadow-md shadow-orange-100'
-                                                : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
+                                            ? 'border-orange-500 bg-orange-50 shadow-md shadow-orange-100'
+                                            : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
                                             }`}
                                     >
                                         <div className="text-2xl mb-2">{t.emoji}</div>
@@ -511,8 +515,8 @@ export const Settings: React.FC = () => {
                                 onClick={handleSaveBrand}
                                 disabled={brandSaving || !brandProfile.brandName}
                                 className={`w-full py-5 rounded-[2rem] font-black transition-all flex items-center justify-center gap-3 text-lg ${brandSaved
-                                        ? 'bg-green-600 text-white shadow-lg shadow-green-200'
-                                        : 'bg-orange-600 text-white hover:bg-orange-500 shadow-2xl shadow-orange-200 disabled:opacity-50 disabled:grayscale'
+                                    ? 'bg-green-600 text-white shadow-lg shadow-green-200'
+                                    : 'bg-orange-600 text-white hover:bg-orange-500 shadow-2xl shadow-orange-200 disabled:opacity-50 disabled:grayscale'
                                     }`}
                             >
                                 {brandSaving

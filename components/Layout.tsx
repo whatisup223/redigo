@@ -1,76 +1,212 @@
 
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   BarChart3,
   Settings,
-  ShieldCheck,
   LogOut,
   Menu,
   X,
   Zap,
   Crown,
-  PenTool
+  PenTool,
+  MessageSquare,
+  CreditCard,
+  User,
+  LifeBuoy,
+  ChevronRight,
+  Plus,
+  Shield,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { OnboardingWizard } from './OnboardingWizard';
 
 interface SidebarItemProps {
   icon: any;
   label: string;
   path: string;
   active: boolean;
+  onClick?: () => void;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, active }) => (
+const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, active, onClick }) => (
   <Link
     to={path}
+    onClick={onClick}
     className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${active
       ? 'bg-orange-600 text-white shadow-lg shadow-orange-200 font-semibold translate-x-1'
       : 'text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm'
       }`}
   >
-    <Icon size={20} className={`${active ? 'text-white' : 'group-hover:text-orange-500 transition-colors'}`} />
+    <Icon
+      size={20}
+      className={`${active ? 'text-white' : 'group-hover:text-orange-500 transition-colors'}`}
+    />
     <span className="text-sm">{label}</span>
   </Link>
 );
 
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = React.useState(false);
+  const [isProfileOpen, setIsProfileOpen] = React.useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const sidebarRef = useRef<HTMLElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: PenTool, label: 'Post Architect', path: '/content-architect' },
+    { icon: PenTool, label: 'Post Agent', path: '/post-agent' },
+    { icon: MessageSquare, label: 'Comment Agent', path: '/comment-agent' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+    { icon: CreditCard, label: 'Pricing', path: '/pricing' },
+    { icon: LifeBuoy, label: 'Help & Support', path: '/support' },
     { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
+  if (isAdmin) {
+    menuItems.push({ icon: Shield, label: 'Admin Panel', path: '/admin' } as any);
+  }
+
+  // Close sidebar when route changes
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
+  // Close sidebar or profile when clicking outside
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener('click', handleClick);
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [isOpen, isProfileOpen]);
+
+  // Prevent body scroll when sidebar open on mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   return (
     <div className="min-h-screen bg-[#fcfcfd] flex font-['Outfit']">
-      {/* Mobile Sidebar Toggle */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed bottom-6 right-6 z-50 p-4 bg-orange-600 text-white rounded-full shadow-2xl hover:scale-110 transition-transform active:scale-95"
-      >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+      {!user?.hasCompletedOnboarding && <OnboardingWizard />}
 
-      {/* Sidebar */}
-      <aside className={`
-        fixed lg:sticky top-0 h-screen w-72 bg-[#f8fafc]/50 backdrop-blur-xl border-r border-slate-200/60 p-6 transition-all duration-300 z-40
-        ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}
-      `}>
-        <div className="flex items-center gap-3 mb-12 px-2">
-          <div className="w-11 h-11 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-100 ring-4 ring-orange-50">
-            <Zap fill="currentColor" size={24} />
+      {/* ── Mobile top bar ── */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
+        <Link to="/dashboard" className="flex items-center gap-2 active:scale-95 transition-all group">
+          <div className="w-8 h-8 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-md group-hover:rotate-12 transition-transform">
+            <Zap fill="currentColor" size={16} />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">RedditGrowth</h1>
+          <span className="text-lg font-extrabold tracking-tight text-slate-900">RedditGrowth</span>
+        </Link>
+
+        <div className="flex items-center gap-3">
+          {/* Mobile Credits Badge - Clickable */}
+          <Link
+            to="/pricing"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/10 border border-orange-600/20 rounded-xl text-orange-600 active:scale-95 transition-all"
+          >
+            <Zap size={14} fill="currentColor" />
+            <span className="text-xs font-black">15</span>
+          </Link>
+
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsProfileOpen(!isProfileOpen); }}
+              className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-600 to-orange-400 p-0.5 shadow-sm text-white flex items-center justify-center font-black text-[10px] uppercase active:scale-95 transition-all"
+            >
+              <div className="w-full h-full bg-white rounded-[0.55rem] flex items-center justify-center text-orange-600">
+                {user?.name ? user.name.substring(0, 2).toUpperCase() : 'JD'}
+              </div>
+            </button>
+
+            {isProfileOpen && (
+              <div className="absolute top-full right-0 mt-3 w-64 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-2 z-[60] animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                <Link
+                  to="/settings"
+                  onClick={() => setIsProfileOpen(false)}
+                  className="block px-4 py-3 border-b border-slate-50 mb-1 hover:bg-slate-50 transition-colors group/mobile-info"
+                >
+                  <p className="text-xs font-black text-slate-900 truncate group-hover/mobile-info:text-orange-600 transition-colors">{user?.name}</p>
+                  <p className="text-[10px] font-bold text-slate-400 truncate">{user?.email}</p>
+                </Link>
+                <div className="space-y-0.5">
+                  <Link to="/pricing" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 rounded-xl text-slate-600 transition-colors">
+                    <CreditCard size={16} /> <span className="text-xs font-bold">Manage Plan</span>
+                  </Link>
+                  <Link to="/settings" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 rounded-xl text-slate-600 transition-colors">
+                    <Settings size={16} /> <span className="text-xs font-bold">Settings</span>
+                  </Link>
+                  <Link to="/support" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 rounded-xl text-slate-600 transition-colors">
+                    <LifeBuoy size={16} /> <span className="text-xs font-bold">Help & Support</span>
+                  </Link>
+                </div>
+                <div className="h-px bg-slate-50 my-1 mx-2" />
+                <button onClick={() => { logout(); setIsProfileOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-500 rounded-xl transition-colors">
+                  <LogOut size={16} /> <span className="text-xs font-bold">Logout</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
+            className="p-2.5 bg-slate-100 hover:bg-orange-50 hover:text-orange-600 text-slate-600 rounded-xl transition-all active:scale-95"
+            aria-label="Open menu"
+          >
+            {isOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        ref={sidebarRef}
+        className={`fixed lg:sticky top-0 h-screen w-72 bg-[#f8fafc] backdrop-blur-xl border-r border-slate-200/60 transition-transform duration-300 z-[100] flex flex-col ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}`}
+      >
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-100 ring-4 ring-orange-50">
+              <Zap fill="currentColor" size={24} />
+            </div>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">RedditGrowth</h1>
+          </div>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="lg:hidden p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+            aria-label="Close menu"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        <nav className="space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-4">Main Menu</p>
+        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1 custom-scrollbar">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-3 px-4">Main Menu</p>
           {menuItems.map((item) => (
             <SidebarItem
               key={item.path}
@@ -80,51 +216,150 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               active={location.pathname === item.path}
             />
           ))}
-        </nav>
+        </div>
 
-        <div className="mt-auto absolute bottom-8 left-6 right-6 space-y-4">
-
+        <div className="shrink-0 px-4 pb-6 pt-3 border-t border-slate-200/60 space-y-3">
           {user?.plan === 'Free' && (
-            <Link to="/pricing" className="block bg-gradient-to-br from-orange-500 to-red-500 p-4 rounded-3xl shadow-lg shadow-orange-200 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mr-6 -mt-6 group-hover:scale-150 transition-transform duration-500"></div>
+            <Link
+              to="/pricing"
+              onClick={() => setIsOpen(false)}
+              className="block bg-gradient-to-br from-orange-500 to-red-500 p-4 rounded-3xl shadow-lg shadow-orange-200 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mr-6 -mt-6 group-hover:scale-150 transition-transform duration-500" />
               <div className="relative z-10">
-                <div className="flex items-center gap-2 mb-2">
-                  <Crown size={18} className="text-yellow-300 fill-yellow-300 animate-pulse" />
+                <div className="flex items-center gap-2 mb-1">
+                  <Crown size={16} className="text-yellow-300 fill-yellow-300 animate-pulse" />
                   <span className="font-bold text-sm tracking-wide">Upgrade to Pro</span>
                 </div>
-                <p className="text-orange-100 text-[10px] leading-relaxed mb-3 font-medium">Unlock unlimited AI replies and advanced analytics.</p>
-                <button className="w-full py-2 bg-white text-orange-600 rounded-xl text-xs font-bold hover:bg-orange-50 transition-colors shadow-sm">
-                  Get Pro Access
-                </button>
+                <p className="text-orange-100 text-[10px] leading-relaxed font-medium">Unlock unlimited AI replies and advanced analytics.</p>
               </div>
             </Link>
           )}
 
-          <div className="bg-white/80 border border-slate-200/60 p-4 rounded-3xl shadow-sm">
+          <div className="bg-white/80 border border-slate-200/60 p-3 rounded-2xl shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-200 to-slate-100 flex items-center justify-center text-slate-600 font-bold shadow-inner uppercase">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-200 to-slate-100 flex items-center justify-center text-slate-600 font-bold shadow-inner uppercase text-sm shrink-0">
                 {user?.name ? user.name.substring(0, 2) : 'JD'}
               </div>
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-bold text-slate-900 truncate">{user?.name || 'Guest User'}</p>
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${user?.plan === 'Free' ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`}></span>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{user?.plan || 'Guest'} Plan</p>
+                  <span className={`w-1.5 h-1.5 rounded-full ${user?.plan === 'Free' ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`} />
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{user?.plan || 'Guest'} Plan</p>
                 </div>
               </div>
             </div>
           </div>
-          <button onClick={logout} className="w-full flex items-center gap-3 px-5 py-3 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm">
-            <LogOut size={18} />
+
+          <button
+            onClick={() => { logout(); setIsOpen(false); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-2xl transition-all font-medium text-sm"
+          >
+            <LogOut size={17} />
             <span>Log Out</span>
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 w-full p-4 lg:p-10 overflow-y-auto custom-scrollbar">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <header className="hidden lg:flex shrink-0 h-20 items-center justify-end px-10 bg-white/40 backdrop-blur-xl border-b border-slate-200/60 z-30">
+          <div className="flex items-center gap-6">
+            {/* Credits System Indicator - Clickable */}
+            <Link
+              to="/pricing"
+              className="flex items-center gap-3 px-5 py-2.5 bg-white border border-slate-200/60 rounded-2xl shadow-sm group cursor-pointer hover:border-orange-200 hover:shadow-md transition-all active:scale-[0.98]"
+            >
+              <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Zap size={16} fill="currentColor" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Available Credits</p>
+                <p className="text-sm font-black text-slate-900 leading-none">15 <span className="text-[10px] text-slate-400 font-bold tracking-normal">points</span></p>
+              </div>
+              <div className="ml-2 w-5 h-5 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-orange-600 group-hover:text-white transition-all">
+                <Plus size={12} />
+              </div>
+            </Link>
+
+            {/* Profile Section with Dropdown */}
+            <div className="flex items-center gap-4 pl-2 relative" ref={profileRef}>
+              <Link to="/settings"
+                onClick={(e) => e.stopPropagation()}
+                className="text-right hidden xl:block group/name"
+              >
+                <p className="text-sm font-black text-slate-900 leading-none mb-1 group-hover/name:text-orange-600 transition-colors">{user?.name || 'Guest User'}</p>
+                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest leading-none">
+                  {user?.plan || 'Free'} Plan
+                </p>
+              </Link>
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsProfileOpen(!isProfileOpen); }}
+                className="relative group focus:outline-none"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-600 to-orange-400 p-0.5 shadow-lg shadow-orange-100 group-hover:scale-105 transition-all cursor-pointer">
+                  <div className="w-full h-full bg-white rounded-[0.85rem] flex items-center justify-center text-orange-600 font-black text-lg">
+                    {user?.name ? user.name.substring(0, 2).toUpperCase() : 'JD'}
+                  </div>
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full shadow-sm" title="Online" />
+              </button>
+
+              {/* Desktop Profile Dropdown */}
+              {isProfileOpen && (
+                <div className="absolute top-full right-0 mt-4 w-72 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 p-3 z-50 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-[1.8rem] mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-orange-600 flex items-center justify-center text-white font-black">
+                      {user?.name ? user.name.substring(0, 1).toUpperCase() : 'U'}
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-sm font-black text-slate-900 truncate">{user?.name}</p>
+                      <p className="text-[10px] font-bold text-slate-400 truncate">{user?.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Link to="/pricing" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 rounded-2xl text-slate-600 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <CreditCard size={18} className="group-hover:text-orange-600" />
+                        <span className="text-sm font-bold">Manage Plan</span>
+                      </div>
+                      <ChevronRight size={14} className="text-slate-300" />
+                    </Link>
+                    <Link to="/settings" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 rounded-2xl text-slate-600 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <Settings size={18} className="group-hover:text-orange-600" />
+                        <span className="text-sm font-bold">Settings</span>
+                      </div>
+                      <ChevronRight size={14} className="text-slate-300" />
+                    </Link>
+                    <Link to="/support" onClick={() => setIsProfileOpen(false)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 rounded-2xl text-slate-600 transition-all group">
+                      <div className="flex items-center gap-3">
+                        <LifeBuoy size={18} className="group-hover:text-orange-600" />
+                        <span className="text-sm font-bold">Help & Support</span>
+                      </div>
+                      <ChevronRight size={14} className="text-slate-300" />
+                    </Link>
+                  </div>
+
+                  <div className="h-px bg-slate-100 my-2 mx-4" />
+
+                  <button
+                    onClick={() => logout()}
+                    className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-red-50 text-red-500 rounded-2xl transition-all group"
+                  >
+                    <LogOut size={18} />
+                    <span className="text-sm font-black">Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto custom-scrollbar pt-24 lg:pt-8 px-6 pb-6 lg:px-12 lg:pb-12">
+          {children}
+        </main>
+      </div>
     </div>
   );
 };

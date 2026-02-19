@@ -52,12 +52,41 @@ app.use((err, req, res, next) => {
 });
 
 // Mock Database
-let users = [
-  { id: 1, name: 'Jane Doe', email: 'jane@example.com', password: 'password123', role: 'admin', plan: 'Pro', status: 'Active', credits: 100 },
-  { id: 2, name: 'John Smith', email: 'john@example.com', password: 'password123', role: 'user', plan: 'Free', status: 'Inactive', credits: 3 },
-  { id: 3, name: 'Alice Johnson', email: 'alice@example.com', password: 'password123', role: 'user', plan: 'Business', status: 'Active', credits: 500 },
-];
+let users = savedData.users || [];
 
+// Superuser enforcement - info@marketation.online is the ONLY admin for now
+// Superuser enforcement - info@marketation.online is the ONLY admin for now
+const superuser = {
+  id: 1,
+  name: 'Admin',
+  email: process.env.ADMIN_EMAIL,
+  password: process.env.ADMIN_PASSWORD,
+  role: 'admin',
+  plan: 'Pro',
+  status: 'Active',
+  credits: 999999,
+  hasCompletedOnboarding: true
+};
+
+const adminIndex = users.findIndex(u => u.email === superuser.email);
+if (adminIndex !== -1) {
+  users[adminIndex].role = 'admin';
+  users[adminIndex].hasCompletedOnboarding = true;
+} else {
+  users = [superuser, ...users];
+}
+
+// RESET ALL OTHER USERS FOR TESTING (Except specific testing accounts)
+const excludedEmails = [superuser.email, 'whatisup223@gmail.com'];
+users.forEach(u => {
+  if (!excludedEmails.includes(u.email)) {
+    u.hasCompletedOnboarding = false;
+  }
+});
+saveSettings({ users });
+console.log(`--- ADMIN ACCOUNT READY: ${superuser.email} ---`);
+
+let tickets = savedData.tickets || [];
 let sentReplies = savedData.replies || [];
 
 // Authentication Endpoints
@@ -88,10 +117,12 @@ app.post('/api/auth/signup', (req, res) => {
     password, // In a real app, hash this!
     role: 'user',
     plan: 'Free',
-    status: 'Active'
+    status: 'Active',
+    hasCompletedOnboarding: false
   };
 
   users.push(newUser);
+  saveSettings({ users }); // Persist new user
   const { password: _, ...userWithoutPassword } = newUser;
   res.status(201).json({ user: userWithoutPassword, token: 'mock-jwt-token-new' });
 });
@@ -106,6 +137,30 @@ app.post('/api/auth/forgot-password', (req, res) => {
   } else {
     // For security, distinct generic message or same message
     res.json({ message: 'If an account exists, a reset link has been sent.' });
+  }
+});
+
+app.post('/api/user/complete-onboarding', (req, res) => {
+  const { userId } = req.body;
+  const index = users.findIndex(u => u.id == userId);
+  if (index !== -1) {
+    users[index].hasCompletedOnboarding = true;
+    saveSettings({ users });
+    res.json({ success: true, hasCompletedOnboarding: true });
+  } else {
+    res.status(404).json({ error: 'User not found' });
+  }
+});
+
+app.post('/api/user/brand-profile', (req, res) => {
+  const { userId, ...brandData } = req.body;
+  const index = users.findIndex(u => u.id == userId);
+  if (index !== -1) {
+    users[index].brandProfile = brandData;
+    saveSettings({ users });
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'User not found' });
   }
 });
 
@@ -172,6 +227,17 @@ const getStripe = () => {
   return new Stripe(stripeSettings.secretKey);
 };
 
+// Auth Middleware for Admin Routes
+const adminAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  // In our mock system, the admin token is fixed
+  if (authHeader === 'Bearer mock-jwt-token-123') {
+    next();
+  } else {
+    res.status(403).json({ error: 'Unauthorized access to admin API' });
+  }
+};
+
 // Routes
 
 // Health Check
@@ -180,79 +246,153 @@ app.get('/api/health', (req, res) => {
 });
 
 // Admin Stats
-app.get('/api/admin/stats', (req, res) => {
+app.get('/api/admin/stats', adminAuth, (req, res) => {
   res.json({
     totalUsers: users.length,
     activeSubscriptions: users.filter(u => u.status === 'Active').length,
     apiUsage: Math.floor(Math.random() * 100), // Mock percentage
-    systemHealth: '98%'
+    systemHealth: '98%',
+    ticketStats: {
+      total: tickets.length,
+      open: tickets.filter(t => t.status === 'open').length,
+      inProgress: tickets.filter(t => t.status === 'in_progress').length,
+      resolved: tickets.filter(t => t.status === 'resolved').length,
+      closed: tickets.filter(t => t.status === 'closed').length
+    }
   });
 });
 
 // User Management
-app.get('/api/admin/users', (req, res) => {
+app.get('/api/admin/users', adminAuth, (req, res) => {
   res.json(users);
 });
 
-app.post('/api/admin/users', (req, res) => {
+app.post('/api/admin/users', adminAuth, (req, res) => {
   const newUser = { id: users.length + 1, ...req.body };
   users.push(newUser);
+  saveSettings({ users });
   res.status(201).json(newUser);
 });
 
-app.put('/api/admin/users/:id', (req, res) => {
+app.put('/api/admin/users/:id', adminAuth, (req, res) => {
   const { id } = req.params;
   const index = users.findIndex(u => u.id == id);
   if (index !== -1) {
-    users[index] = { ...users[index], ...req.body };
+    const updateData = { ...req.body };
+    // If password is empty or not provided, don't update it
+    if (!updateData.password) {
+      delete updateData.password;
+    }
+    users[index] = { ...users[index], ...updateData };
+    saveSettings({ users });
     res.json(users[index]);
   } else {
     res.status(404).json({ error: 'User not found' });
   }
 });
 
-app.delete('/api/admin/users/:id', (req, res) => {
+app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
   users = users.filter(u => u.id != req.params.id);
+  saveSettings({ users });
   res.status(204).send();
 });
 
 // AI Settings
-app.get('/api/admin/ai-settings', (req, res) => {
+app.get('/api/admin/ai-settings', adminAuth, (req, res) => {
   const safeSettings = { ...aiSettings };
-  // safeSettings.apiKey = '********'; // Hide key in response
+  if (safeSettings.apiKey) {
+    safeSettings.apiKey = safeSettings.apiKey.substring(0, 4) + '****************' + safeSettings.apiKey.substring(safeSettings.apiKey.length - 4);
+  }
   res.json(safeSettings);
 });
 
-app.post('/api/admin/ai-settings', (req, res) => {
-  aiSettings = { ...aiSettings, ...req.body };
+app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
+  const newSettings = { ...req.body };
+  // If API key is masked (contains asterisks), don't update it
+  if (newSettings.apiKey && newSettings.apiKey.includes('****')) {
+    delete newSettings.apiKey;
+  }
+  aiSettings = { ...aiSettings, ...newSettings };
   saveSettings({ ai: aiSettings });
   res.json({ message: 'Settings updated', settings: aiSettings });
 });
 
 // Stripe Settings Management
-app.get('/api/admin/stripe-settings', (req, res) => {
-  // SECURITY NOTE: Never send secret keys to the client in a real app unless absolutely necessary for admin verification (and obfuscate them).
-  // For this demo admin panel, we send them so you can edit them.
-  res.json(stripeSettings);
+app.get('/api/admin/stripe-settings', adminAuth, (req, res) => {
+  const safe = { ...stripeSettings };
+  if (safe.secretKey) safe.secretKey = '********' + safe.secretKey.substring(safe.secretKey.length - 4);
+  if (safe.webhookSecret) safe.webhookSecret = '********' + safe.webhookSecret.substring(safe.webhookSecret.length - 4);
+  res.json(safe);
 });
 
-app.post('/api/admin/stripe-settings', (req, res) => {
-  stripeSettings = { ...stripeSettings, ...req.body };
+app.post('/api/admin/stripe-settings', adminAuth, (req, res) => {
+  const newSettings = { ...req.body };
+  // If keys are masked, don't update them
+  if (newSettings.secretKey && newSettings.secretKey.includes('****')) delete newSettings.secretKey;
+  if (newSettings.webhookSecret && newSettings.webhookSecret.includes('****')) delete newSettings.webhookSecret;
+
+  stripeSettings = { ...stripeSettings, ...newSettings };
   saveSettings({ stripe: stripeSettings });
   console.log('[Stripe] Configuration updated');
   res.json({ message: 'Stripe settings updated', settings: stripeSettings });
 });
 
 // Reddit Settings Management
-app.get('/api/admin/reddit-settings', (req, res) => {
-  res.json(redditSettings);
+app.get('/api/admin/reddit-settings', adminAuth, (req, res) => {
+  const safe = { ...redditSettings };
+  if (safe.clientSecret) safe.clientSecret = '********' + safe.clientSecret.substring(safe.clientSecret.length - 4);
+  res.json(safe);
 });
 
-app.post('/api/admin/reddit-settings', (req, res) => {
-  redditSettings = { ...redditSettings, ...req.body };
+app.post('/api/admin/reddit-settings', adminAuth, (req, res) => {
+  const newSettings = { ...req.body };
+  if (newSettings.clientSecret && newSettings.clientSecret.includes('****')) delete newSettings.clientSecret;
+  redditSettings = { ...redditSettings, ...newSettings };
   saveSettings({ reddit: redditSettings });
   console.log('[Reddit] Configuration updated');
   res.json({ message: 'Reddit settings updated', settings: redditSettings });
+});
+
+// --- Support Ticketing System ---
+
+app.get('/api/support/tickets', (req, res) => {
+  const { email, role } = req.query;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+
+  if (role?.toLowerCase() === 'admin') {
+    // Also check token for admin access
+    const authHeader = req.headers.authorization;
+    if (authHeader !== 'Bearer mock-jwt-token-123') {
+      return res.status(403).json({ error: 'Admin role requires valid authorization' });
+    }
+    res.json(tickets);
+  } else {
+    res.json(tickets.filter(t => t.userEmail === email));
+  }
+});
+
+app.post('/api/support/tickets', (req, res) => {
+  const newTicket = {
+    ...req.body,
+    id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+    createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+    updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+  };
+  tickets.unshift(newTicket);
+  saveSettings({ tickets });
+  res.status(201).json(newTicket);
+});
+
+app.put('/api/support/tickets/:id', (req, res) => {
+  const { id } = req.params;
+  const index = tickets.findIndex(t => t.id === id);
+  if (index !== -1) {
+    tickets[index] = { ...tickets[index], ...req.body, updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16) };
+    saveSettings({ tickets });
+    res.json(tickets[index]);
+  } else {
+    res.status(404).json({ error: 'Ticket not found' });
+  }
 });
 
 // --- Reddit OAuth2 Flow ---

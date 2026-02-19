@@ -13,7 +13,8 @@ import {
     X,
     CreditCard,
     Globe,
-    Sliders
+    Sliders,
+    LifeBuoy
 } from 'lucide-react';
 
 interface SidebarItemProps {
@@ -43,6 +44,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
     const menuItems = [
         { icon: LayoutDashboard, label: 'Overview', path: '/admin' },
         { icon: Users, label: 'User Management', path: '/admin/users' },
+        { icon: LifeBuoy, label: 'Support Center', path: '/admin/support' },
         { icon: Sliders, label: 'Configuration', path: '/admin/settings' },
         { icon: AlertCircle, label: 'System Logs', path: '/admin/logs' },
     ];

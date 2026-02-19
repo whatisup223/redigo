@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 
 # Sensitive config files
+.env
+.env.local
 settings.json
 settings.storage.json
 *.storage.json
