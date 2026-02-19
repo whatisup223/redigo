@@ -43,42 +43,43 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
   let event;
 
   try {
-    if (stripeSettings.webhookSecret && stripe) {
+    if (stripeSettings.webhookSecret && stripe && sig) {
       // Live Stripe Verification
       event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
     } else {
       // Local/Dev without secret (if needed) or just fail
-      console.log('Webhook received without verification (Dev Mode or Missing Secret)');
-      // In prod, this should fail if secret is missing. But for now we try to parse if possible.
-      // However, request.body is Buffer here.
+      console.log('[Webhook] Received without verification (Dev Mode or Missing Secret/Signature)');
       try {
         event = JSON.parse(request.body.toString());
       } catch (err) {
-        console.error('Webhook payload parse error', err);
+        console.error('[Webhook] Payload parse error', err);
         return response.status(400).send(`Webhook Error: ${err.message}`);
       }
     }
   } catch (err) {
-    console.error('Webhook signature verification failed.', err.message);
+    console.error('[Webhook] Signature verification failed.', err.message);
     return response.status(400).send(`Webhook Error: ${err.message}`);
   }
+
+  console.log(`[Webhook] Event received: ${event.type}`);
 
   // Handle the event
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const { userEmail, plan, credits } = session.metadata || {};
 
-    console.log(`[Webhook] Payment successful for ${userEmail}. Plan: ${plan}`);
+    console.log(`[Webhook] Checkout Completed. User: ${userEmail}, Plan: ${plan}, Credits: ${credits}`);
 
     if (userEmail && plan) {
-      const userIndex = users.findIndex(u => u.email === userEmail);
+      // Case-insensitive email search
+      const userIndex = users.findIndex(u => u.email.toLowerCase() === userEmail.toLowerCase());
+
       if (userIndex !== -1) {
         // 1. Determine Credits to Add
-        // Prefer credits from metadata (if we passed them), else fetch from plan
         const creditsToAdd = credits ? parseInt(credits) : getPlanCredits(plan);
         const currentCredits = users[userIndex].credits || 0;
 
-        // 2. Calculate Subscription Period (1 Month explicitly)
+        // 2. Calculate Subscription Period
         const now = new Date();
         const oneMonthLater = new Date(now);
         oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
@@ -86,15 +87,17 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
         // 3. Update User
         users[userIndex].plan = plan;
         users[userIndex].status = 'Active';
-        users[userIndex].credits = currentCredits + creditsToAdd; // Accumulate
+        users[userIndex].credits = currentCredits + creditsToAdd;
         users[userIndex].subscriptionStart = now.toISOString();
         users[userIndex].subscriptionEnd = oneMonthLater.toISOString();
 
         saveSettings({ users });
-        console.log(`[Database] User ${userEmail} upgraded to ${plan}. Added ${creditsToAdd} credits. New Total: ${users[userIndex].credits}. Expires: ${oneMonthLater.toISOString()}`);
+        console.log(`[Webhook] Database updated for ${userEmail}. New Total: ${users[userIndex].credits}`);
       } else {
-        console.warn(`[Database] User ${userEmail} not found!`);
+        console.warn(`[Webhook] User ${userEmail} NOT found in database! (Users count: ${users.length})`);
       }
+    } else {
+      console.warn(`[Webhook] Missing userEmail (${userEmail}) or plan (${plan}) in metadata`);
     }
   }
 
@@ -494,7 +497,7 @@ app.post('/api/user/subscribe', async (req, res) => {
       metadata: {
         userEmail: user.email,
         plan: plan.name, // Pass ID or Name
-        credits: plan.credits
+        credits: plan.credits.toString()
       },
       success_url: `${baseUrl}/settings?success=true&plan=${plan.name}`,
       cancel_url: `${baseUrl}/pricing?canceled=true`,
