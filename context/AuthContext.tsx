@@ -12,6 +12,17 @@ interface User {
     credits: number;
     avatar?: string;
     transactions?: any[];
+    connectedAccounts?: any[];
+    usageStats?: {
+        posts: number;
+        comments: number;
+        images: number;
+        postsCredits: number;
+        commentsCredits: number;
+        imagesCredits: number;
+        totalSpent: number;
+        history: { date: string; type: string; cost: number }[];
+    };
 }
 
 interface AuthContextType {

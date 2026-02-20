@@ -99,6 +99,7 @@ export const Comments: React.FC = () => {
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isInitialCheckDone, setIsInitialCheckDone] = useState(false);
+  const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
 
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
@@ -234,7 +235,7 @@ export const Comments: React.FC = () => {
   const handleGenerate = async (post: RedditPost, customSettings?: any) => {
     const cost = costs.comment;
     if ((user?.credits || 0) < cost && user?.role !== 'admin') {
-      showToast(`Insufficient credits. You need ${cost} points.`, 'error');
+      setShowNoCreditsModal(true);
       return;
     }
 
@@ -270,7 +271,7 @@ export const Comments: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       if (err.message === 'OUT_OF_CREDITS') {
-        showToast('Credits exhausted. Please upgrade.', 'error');
+        setShowNoCreditsModal(true);
       } else {
         showToast('Generation failed.', 'error');
       }
@@ -284,7 +285,7 @@ export const Comments: React.FC = () => {
 
     // Refinement suggestion: cost 1 or free? Let's use 1 to match backend for now.
     if ((user?.credits || 0) < costs.comment && user?.role !== 'admin') {
-      showToast(`Insufficient credits. You need ${costs.comment} points.`, 'error');
+      setShowNoCreditsModal(true);
       return;
     }
 
@@ -407,14 +408,17 @@ export const Comments: React.FC = () => {
     <>
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-8 right-8 z-[100] p-5 rounded-3xl shadow-2xl text-white flex items-center gap-4 animate-in slide-in-from-right-10 duration-500 border border-white/20 ${toast.type === 'success' ? 'bg-orange-600' : 'bg-red-600'}`}>
-          <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
-            {toast.type === 'success' ? <Sparkles size={22} /> : <AlertCircle size={22} />}
+        <div className={`fixed bottom-6 right-6 md:bottom-10 md:right-10 z-[99999] p-5 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-right-10 duration-500 border border-white/20 backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-600/90 shadow-emerald-900/20' : 'bg-red-600/90 shadow-red-900/20'}`}>
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+            {toast.type === 'success' ? <Sparkles size={20} className="text-white" /> : <AlertCircle size={20} className="text-white" />}
           </div>
-          <div>
-            <p className="font-bold text-sm leading-tight">{toast.message}</p>
-            <p className="text-white/70 text-xs">Action completed.</p>
+          <div className="text-left">
+            <p className="font-extrabold text-sm text-white leading-tight font-['Outfit']">{toast.message}</p>
+            {toast.type === 'success' && <p className="text-white/80 text-[10px] font-medium mt-0.5">Operation successful</p>}
           </div>
+          <button onClick={() => setToast(null)} className="ml-2 text-white/50 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
         </div>
       )}
 
@@ -504,6 +508,52 @@ export const Comments: React.FC = () => {
         </div>
       )}
 
+      {/* No Credits Modal */}
+      {showNoCreditsModal && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-['Outfit']">
+          <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-orange-50 to-white -z-10" />
+
+            <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-orange-200">
+              <Zap size={40} className="fill-current" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-slate-900 leading-tight">Out of Fuel! ⛽</h3>
+              <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                You've used all your AI credits. <br />Top up to keep the momentum going!
+              </p>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 space-y-3">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Required</span>
+                <span className="text-sm font-black text-slate-900">{costs.comment} PTS</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Balance</span>
+                <span className="text-sm font-black text-red-500">{user?.credits || 0} PTS</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <Link
+                to="/pricing"
+                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black shadow-xl shadow-orange-200 hover:bg-orange-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+              >
+                Top Up Credits <ArrowRight size={16} />
+              </Link>
+              <button
+                onClick={() => setShowNoCreditsModal(false)}
+                className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Generating Overlay */}
       {isGenerating && (
         <div className="fixed inset-0 z-[1100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -572,19 +622,35 @@ export const Comments: React.FC = () => {
 
         {/* Draft Banner */}
         {showDraftBanner && (
-          <div className="bg-gradient-to-r from-orange-50 to-white border-2 border-orange-100 rounded-[2rem] p-5 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white text-orange-600 rounded-2xl flex items-center justify-center shadow-sm border border-orange-50">
-                <Clock size={24} />
+          <div className="bg-slate-900 rounded-[2.5rem] p-6 md:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-500 group border border-slate-800">
+            {/* Background Decor */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-600/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+            <div className="relative z-10 flex items-center gap-5 w-full md:w-auto">
+              <div className="w-14 h-14 bg-white/10 rounded-2xl backdrop-blur-md flex items-center justify-center border border-white/5 text-orange-500 group-hover:scale-110 transition-transform duration-500">
+                <Clock size={28} />
               </div>
-              <div className="text-left">
-                <p className="text-base font-black text-slate-900 leading-tight">Pick up where you left off?</p>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">We found an unsaved comment draft in your session.</p>
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-white leading-tight">Unsaved Draft Detected</h3>
+                <p className="text-slate-400 text-xs font-medium max-w-md">
+                  We saved your previous session automatically. Would you like to continue?
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setShowDiscardConfirm(true)} className="px-5 py-3 text-slate-400 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors">Discard</button>
-              <button onClick={handleResumeDraft} className="px-7 py-3 bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all flex items-center gap-2">Resume Draft <ArrowRight size={14} /></button>
+
+            <div className="relative z-10 flex items-center gap-3 w-full md:w-auto justify-end">
+              <button
+                onClick={() => setShowDiscardConfirm(true)}
+                className="px-5 py-3 text-slate-500 hover:text-white text-xs font-black uppercase tracking-widest transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleResumeDraft}
+                className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-900/40 hover:shadow-orange-600/20 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+              >
+                Resume Work <ArrowRight size={14} />
+              </button>
             </div>
           </div>
         )}

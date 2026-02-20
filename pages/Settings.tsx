@@ -10,7 +10,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-type Tab = 'profile' | 'brand' | 'billing';
+type Tab = 'profile' | 'brand' | 'billing' | 'history';
 
 const DEFAULT_BRAND = {
     brandName: 'Redigo',
@@ -329,6 +329,7 @@ export const Settings: React.FC = () => {
         { id: 'profile', label: 'Account', icon: <User size={15} /> },
         { id: 'brand', label: 'Brand Profile', icon: <Building2 size={15} /> },
         { id: 'billing', label: 'Billing', icon: <CreditCard size={15} /> },
+        { id: 'history', label: 'History', icon: <RefreshCw size={15} /> },
     ];
 
     const hasBrand = !!brandProfile.brandName;
@@ -352,12 +353,12 @@ export const Settings: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-2xl w-fit">
+            <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-2xl w-full md:w-fit overflow-x-auto no-scrollbar snap-x">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap snap-start ${activeTab === tab.id
                             ? 'bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                             }`}
@@ -887,32 +888,40 @@ export const Settings: React.FC = () => {
 
                         {/* Usage & Credits */}
                         <div className="flex flex-col gap-8">
-                            {/* Credits Counter Card */}
-                            <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4 max-w-md">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                                        <Zap size={20} fill="currentColor" />
+                            {/* Credit Balance Banner */}
+                            <div className="bg-gradient-to-br from-orange-600 to-amber-600 p-8 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden flex flex-col justify-between h-full min-h-[200px] group">
+                                <div className="relative z-10 flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
+                                            <Zap className="text-white" size={24} fill="currentColor" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-bold text-white/90">Credit Balance</h2>
+                                            <p className="text-orange-100 text-xs font-medium">Available AI generations</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-extrabold text-slate-900">Credit Balance</p>
-                                        <p className="text-xs text-slate-400 font-medium">AI generations remaining</p>
-                                    </div>
+                                    <Link to="/pricing" className="px-4 py-2 bg-white text-orange-600 text-xs font-black rounded-xl hover:bg-orange-50 transition-all shadow-lg shadow-black/10">
+                                        TOP UP +
+                                    </Link>
                                 </div>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between items-end">
-                                        <span className="text-3xl font-black text-slate-900">{user.credits || 0}</span>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Credits</span>
+
+                                <div className="relative z-10 space-y-4 mt-6">
+                                    <div>
+                                        <span className="text-5xl font-black text-white tracking-tight">{user.credits || 0}</span>
+                                        <span className="text-sm font-bold text-orange-200 uppercase tracking-widest ml-2">Credits</span>
                                     </div>
-                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+
+                                    <div className="w-full bg-black/20 rounded-full h-3 overflow-hidden backdrop-blur-sm">
                                         <div
-                                            className="h-full bg-orange-500 rounded-full"
-                                            style={{ width: `${Math.min(100, ((user.credits || 0) / 100) * 100)}%` }}
+                                            className="h-full bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-1000 ease-out"
+                                            style={{ width: `${Math.min(100, Math.max(5, ((user.credits || 0) / 100) * 100))}%` }}
                                         />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 pt-1">
-                                        Need more? <Link to="/pricing" className="text-orange-600 font-bold hover:underline">Top up credits</Link>
-                                    </p>
                                 </div>
+
+                                {/* Decorative Elements */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-[60px] -translate-y-1/2 translate-x-1/2 group-hover:bg-white/20 transition-all duration-700 pointer-events-none" />
+                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-orange-900/20 rounded-full blur-[40px] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
                             </div>
 
                             {/* Billing History Card - Now Below */}
@@ -996,6 +1005,125 @@ export const Settings: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            )}
+
+            {/* ── HISTORY TAB ── */}
+            {activeTab === 'history' && (
+                <div className="space-y-6">
+                    <section className="space-y-6">
+                        {/* Total Spent Banner */}
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 rounded-[2rem] shadow-xl text-white relative overflow-hidden flex items-center justify-between">
+                            <div className="relative z-10 flex items-center gap-4">
+                                <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
+                                    <RefreshCw className="text-orange-400" size={24} />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-white/90">Total Credits Used</h2>
+                                    <p className="text-white/60 text-sm">Lifetime consumption across all features</p>
+                                </div>
+                            </div>
+                            <div className="relative z-10 text-right">
+                                <p className="text-4xl font-black text-white tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
+                                    {user.usageStats?.totalSpent || 0}
+                                </p>
+                                <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mt-1">Credits</p>
+                            </div>
+                            {/* Decorative background blur */}
+                            <div className="absolute top-1/2 right-0 w-64 h-64 bg-orange-600/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                        </div>
+
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                                    <Tag size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Posts</p>
+                                    <p className="text-2xl font-black text-slate-900">
+                                        {user.usageStats?.posts || 0}
+                                        <span className="text-xs font-medium text-slate-400 ml-1">({user.usageStats?.postsCredits || 0} pts)</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                                <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+                                    <Palette size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Images</p>
+                                    <p className="text-2xl font-black text-slate-900">
+                                        {user.usageStats?.images || 0}
+                                        <span className="text-xs font-medium text-slate-400 ml-1">({user.usageStats?.imagesCredits || 0} pts)</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+                                <div className="w-12 h-12 bg-green-50 text-green-600 rounded-xl flex items-center justify-center">
+                                    <Zap size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Comments</p>
+                                    <p className="text-2xl font-black text-slate-900">
+                                        {user.usageStats?.comments || 0}
+                                        <span className="text-xs font-medium text-slate-400 ml-1">({user.usageStats?.commentsCredits || 0} pts)</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* History List */}
+                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
+                            <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar space-y-3">
+                                {(user.usageStats?.history && user.usageStats.history.length > 0) ? (
+                                    [...user.usageStats.history].reverse().map((item: any, i: number) => {
+                                        let icon = <Zap size={18} />;
+                                        let colorClass = 'bg-slate-100 text-slate-600';
+                                        let label = 'Action';
+
+                                        if (item.type === 'post') {
+                                            icon = <Tag size={18} />;
+                                            colorClass = 'bg-blue-100 text-blue-600';
+                                            label = 'AI Post Generation';
+                                        } else if (item.type === 'image') {
+                                            icon = <Palette size={18} />;
+                                            colorClass = 'bg-purple-100 text-purple-600';
+                                            label = 'AI Image Generation';
+                                        } else if (item.type === 'comment') {
+                                            icon = <Zap size={18} />;
+                                            colorClass = 'bg-green-100 text-green-600';
+                                            label = 'AI Comment Generation';
+                                        }
+
+                                        return (
+                                            <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-orange-200 transition-all">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`p-2.5 rounded-xl border border-slate-100 ${colorClass}`}>
+                                                        {icon}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-900">{label}</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium">{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-black text-orange-600">
+                                                        -{item.cost} Credits
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                        <RefreshCw className="mx-auto text-slate-300 mb-2" size={32} />
+                                        <p className="text-sm text-slate-400 font-medium italic">No usage history yet.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </section>

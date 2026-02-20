@@ -21,7 +21,9 @@ import {
     ChevronUp,
     Building2,
     Settings,
-    Trash2
+    Trash2,
+    X,
+    AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -118,6 +120,7 @@ export const ContentArchitect: React.FC = () => {
     const [regenMode, setRegenMode] = useState<'text' | 'image' | 'both'>('text');
     const [showDraftBanner, setShowDraftBanner] = useState(false);
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+    const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
 
     useEffect(() => {
         fetch('/api/config')
@@ -278,7 +281,7 @@ export const ContentArchitect: React.FC = () => {
 
         // Frontend pre-check
         if ((user?.credits || 0) < totalCost && user?.role !== 'admin') {
-            showToast(`Insufficient credits. You need ${totalCost} credits for this action.`, 'error');
+            setShowNoCreditsModal(true);
             return;
         }
 
@@ -339,7 +342,7 @@ export const ContentArchitect: React.FC = () => {
         } catch (err: any) {
             console.error(err);
             if (err.message === 'OUT_OF_CREDITS') {
-                showToast('Credits exhausted. Please upgrade your plan.', 'error');
+                setShowNoCreditsModal(true);
             } else {
                 showToast('AI generation failed. Please check your settings.', 'error');
             }
@@ -380,11 +383,17 @@ export const ContentArchitect: React.FC = () => {
         <>
             {/* Toast */}
             {toast && (
-                <div className={`fixed top-10 right-10 z-[100] p-5 rounded-[2rem] shadow-2xl flex items-center gap-3 border ${toast.type === 'success' ? 'bg-green-600 text-white border-green-500' : 'bg-red-600 text-white border-red-500'
-                    }`}>
-                    {toast.type === 'success' ? <Check size={20} /> : <Zap size={20} />}
-                    <span className="font-extrabold uppercase text-xs tracking-widest">{toast.message}</span>
-                    <button onClick={() => setToast(null)} className="ml-4 opacity-70 hover:opacity-100 font-bold">✕</button>
+                <div className={`fixed bottom-6 right-6 md:bottom-10 md:right-10 z-[99999] p-5 rounded-2xl shadow-2xl flex items-center gap-4 animate-in slide-in-from-right-10 duration-500 border border-white/20 backdrop-blur-md ${toast.type === 'success' ? 'bg-emerald-600/90 shadow-emerald-900/20' : 'bg-red-600/90 shadow-red-900/20'}`}>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                        {toast.type === 'success' ? <Sparkles size={20} className="text-white" /> : <AlertCircle size={20} className="text-white" />}
+                    </div>
+                    <div className="text-left">
+                        <p className="font-extrabold text-sm text-white leading-tight font-['Outfit']">{toast.message}</p>
+                        {toast.type === 'success' && <p className="text-white/80 text-[10px] font-medium mt-0.5">Operation successful</p>}
+                    </div>
+                    <button onClick={() => setToast(null)} className="ml-2 text-white/50 hover:text-white transition-colors">
+                        <X size={18} />
+                    </button>
                 </div>
             )}
 
@@ -537,6 +546,52 @@ export const ContentArchitect: React.FC = () => {
                 </div>
             )}
 
+            {/* No Credits Modal */}
+            {showNoCreditsModal && (
+                <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-['Outfit']">
+                    <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-orange-50 to-white -z-10" />
+
+                        <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-orange-200">
+                            <Zap size={40} className="fill-current" />
+                        </div>
+
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black text-slate-900 leading-tight">Out of Fuel! ⛽</h3>
+                            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                                You've used all your AI credits. <br />Top up to keep the momentum going!
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 space-y-3">
+                            <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Required</span>
+                                <span className="text-sm font-black text-slate-900">{Number(costs.post)} PTS</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Balance</span>
+                                <span className="text-sm font-black text-red-500">{user?.credits || 0} PTS</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <Link
+                                to="/pricing"
+                                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black shadow-xl shadow-orange-200 hover:bg-orange-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                            >
+                                Top Up Credits <ArrowRight size={16} />
+                            </Link>
+                            <button
+                                onClick={() => setShowNoCreditsModal(false)}
+                                className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
+                            >
+                                Maybe Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-6xl mx-auto space-y-10 font-['Outfit'] pb-20 pt-4">
 
                 {/* Header */}
@@ -550,34 +605,7 @@ export const ContentArchitect: React.FC = () => {
                         <p className="text-slate-400 font-medium text-sm pl-4">Design, generate &amp; publish viral Reddit threads in seconds.</p>
                     </div>
 
-                    {/* Draft Banner */}
-                    {showDraftBanner && (
-                        <div className="flex-1 bg-gradient-to-r from-orange-50 to-white border-2 border-orange-100 rounded-[2rem] p-4 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
-                            <div className="flex items-center gap-4 pl-2">
-                                <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                                    <PenTool size={20} />
-                                </div>
-                                <div className="text-left">
-                                    <p className="text-sm font-extrabold text-slate-900">Unfinished post found</p>
-                                    <p className="text-[11px] text-slate-500 font-medium">Continue working to save your credits.</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setShowDiscardConfirm(true)}
-                                    className="px-5 py-2.5 text-slate-400 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors"
-                                >
-                                    Discard
-                                </button>
-                                <button
-                                    onClick={handleResumeDraft}
-                                    className="px-6 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all flex items-center gap-2"
-                                >
-                                    Resume Draft <ArrowRight size={14} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* Step Indicator */}
                     <div className="flex items-center gap-3">
@@ -597,6 +625,41 @@ export const ContentArchitect: React.FC = () => {
                         ))}
                     </div>
                 </div>
+
+                {/* Draft Banner */}
+                {showDraftBanner && (
+                    <div className="bg-slate-900 rounded-[2.5rem] p-6 md:p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-500 group border border-slate-800">
+                        {/* Background Decor */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-600/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+                        <div className="relative z-10 flex items-center gap-5 w-full md:w-auto">
+                            <div className="w-14 h-14 bg-white/10 rounded-2xl backdrop-blur-md flex items-center justify-center border border-white/5 text-orange-500 group-hover:scale-110 transition-transform duration-500">
+                                <PenTool size={28} />
+                            </div>
+                            <div className="space-y-1">
+                                <h3 className="text-xl font-black text-white leading-tight">Unfinished Post Found</h3>
+                                <p className="text-slate-400 text-xs font-medium max-w-md">
+                                    We saved your previous session automatically. Would you like to continue working?
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="relative z-10 flex items-center gap-3 w-full md:w-auto justify-end">
+                            <button
+                                onClick={() => setShowDiscardConfirm(true)}
+                                className="px-5 py-3 text-slate-500 hover:text-white text-xs font-black uppercase tracking-widest transition-colors"
+                            >
+                                Discard
+                            </button>
+                            <button
+                                onClick={handleResumeDraft}
+                                className="px-8 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-900/40 hover:shadow-orange-600/20 hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                            >
+                                Resume Draft <ArrowRight size={14} />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <CreditsBanner
                     plan={user?.plan || 'Starter'}
