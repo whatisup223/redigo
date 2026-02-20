@@ -57,6 +57,7 @@ export const Settings: React.FC = () => {
     const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     const [previewInvoice, setPreviewInvoice] = useState<string | null>(null);
+    const [plans, setPlans] = useState<any[]>([]);
 
     const generateInvoiceImage = (user: any, tx?: any) => {
         return new Promise<string>((resolve) => {
@@ -220,15 +221,19 @@ export const Settings: React.FC = () => {
         const fetchData = async () => {
             if (!user?.id) { setLoading(false); return; }
             try {
-                const [redditRes, brandRes] = await Promise.all([
+                const [redditRes, brandRes, plansRes] = await Promise.all([
                     fetch(`/api/user/reddit/status?userId=${user.id}`),
-                    fetch(`/api/user/brand-profile?userId=${user.id}`)
+                    fetch(`/api/user/brand-profile?userId=${user.id}`),
+                    fetch('/api/plans')
                 ]);
                 if (redditRes.ok) {
                     const status = await redditRes.json();
                     setRedditStatus(status);
                 } else {
                     setRedditStatus({ connected: false, accounts: [] });
+                }
+                if (plansRes.ok) {
+                    setPlans(await plansRes.json());
                 }
             } catch (err) {
                 console.error("Failed to fetch settings:", err);
@@ -861,7 +866,7 @@ export const Settings: React.FC = () => {
                                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg text-[10px] font-black tracking-widest uppercase mb-4 text-orange-400">
                                         <Shield size={12} /> Current Plan
                                     </div>
-                                    <p className="text-4xl font-extrabold mb-2">{user.plan || 'Starter'} Plan</p>
+                                    <p className="text-4xl font-extrabold mb-2">{user.plan || 'Starter'} Plan ({user.billingCycle || 'monthly'})</p>
                                     <p className="text-slate-400 text-sm opacity-80">
                                         {user.plan === 'Starter'
                                             ? 'Basic access. Upgrade to unlock more power.'
@@ -938,7 +943,7 @@ export const Settings: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar space-y-3">
-                                    {(user.transactions && user.transactions.length > 0) ? (
+                                    {(user.transactions && Array.isArray(user.transactions) && user.transactions.length > 0) ? (
                                         [...user.transactions].reverse().map((tx, i) => (
                                             <div key={tx.id || i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-orange-200 transition-all">
                                                 <div className="flex items-center gap-4">
@@ -1026,11 +1031,42 @@ export const Settings: React.FC = () => {
                                     <p className="text-white/60 text-sm">Lifetime consumption across all features</p>
                                 </div>
                             </div>
-                            <div className="relative z-10 text-right">
-                                <p className="text-4xl font-black text-white tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
-                                    {user.usageStats?.totalSpent || 0}
-                                </p>
-                                <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mt-1">Credits</p>
+                            <div className="relative z-10 flex flex-col items-end gap-2">
+                                <div className="text-right">
+                                    <p className="text-4xl font-black text-white tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
+                                        {user.usageStats?.totalSpent || 0}
+                                    </p>
+                                    <p className="text-xs font-bold text-orange-400 uppercase tracking-widest mt-1">Total Credits</p>
+                                </div>
+                                {(() => {
+                                    // Determine the daily limit
+                                    if (!Array.isArray(plans)) return null;
+                                    const userPlanName = (user.plan || 'Starter').toLowerCase();
+                                    const plan = plans.find(p => (p.name || '').toLowerCase() === userPlanName || (p.id || '').toLowerCase() === userPlanName);
+                                    const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+                                    const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+                                    const currentUsage = user.dailyUsagePoints || 0;
+
+                                    return dailyLimit > 0 && (
+                                        <div className="w-56 space-y-2 flex flex-col items-end">
+                                            <div className="flex justify-between w-full text-[10px] font-black uppercase tracking-widest text-white/50">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Zap size={10} className="text-orange-400" />
+                                                    <span>Daily Limit</span>
+                                                </div>
+                                                <span className="text-white">{currentUsage} / {dailyLimit} pts</span>
+                                            </div>
+                                            <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/5 relative">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(249,115,22,0.6)]"
+                                                    style={{ width: `${Math.min(100, (currentUsage / dailyLimit) * 100)}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-[9px] text-white/40 font-bold uppercase tracking-tighter">Resets in 24h</p>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             {/* Decorative background blur */}
                             <div className="absolute top-1/2 right-0 w-64 h-64 bg-orange-600/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -1079,7 +1115,7 @@ export const Settings: React.FC = () => {
                         {/* History List */}
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
                             <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar space-y-3">
-                                {(user.usageStats?.history && user.usageStats.history.length > 0) ? (
+                                {(user.usageStats?.history && Array.isArray(user.usageStats.history) && user.usageStats.history.length > 0) ? (
                                     [...user.usageStats.history].reverse().map((item: any, i: number) => {
                                         let icon = <Zap size={18} />;
                                         let colorClass = 'bg-slate-100 text-slate-600';
@@ -1169,6 +1205,6 @@ export const Settings: React.FC = () => {
                 </div>,
                 document.body
             )}
-        </div>
+        </div >
     );
 };

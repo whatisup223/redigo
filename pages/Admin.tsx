@@ -48,6 +48,8 @@ interface User {
     statusMessage?: string;
     avatar?: string;
     credits: number;
+    dailyUsagePoints?: number;
+    customDailyLimit?: number;
     transactions?: any[];
 }
 
@@ -79,6 +81,8 @@ interface Plan {
     monthlyPrice: number;
     yearlyPrice: number;
     credits: number;
+    dailyLimitMonthly: number;
+    dailyLimitYearly: number;
     features: string[];
     isPopular: boolean;
     highlightText?: string;
@@ -181,7 +185,7 @@ export const Admin: React.FC = () => {
     const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
     const [planForm, setPlanForm] = useState<Partial<Plan>>({ features: [''] });
 
-    const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '', statusMessage: '', credits: 0, extraCreditsToAdd: 0, showAddExtra: false });
+    const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '', statusMessage: '', credits: 0, extraCreditsToAdd: 0, showAddExtra: false, customDailyLimit: 0 });
 
     // User Detail Modal State
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -280,6 +284,7 @@ export const Admin: React.FC = () => {
                 plan: editForm.plan,
                 status: editForm.status,
                 statusMessage: editForm.status === 'Active' ? '' : editForm.statusMessage,
+                customDailyLimit: editForm.customDailyLimit
             };
             if (editForm.password) payload.password = editForm.password;
             if ((editForm.extraCreditsToAdd || 0) > 0) payload.extraCreditsToAdd = editForm.extraCreditsToAdd;
@@ -705,7 +710,8 @@ export const Admin: React.FC = () => {
                                                                         credits: user.credits || 0,
                                                                         password: '',
                                                                         extraCreditsToAdd: 0,
-                                                                        showAddExtra: false
+                                                                        showAddExtra: false,
+                                                                        customDailyLimit: user.customDailyLimit || 0
                                                                     });
                                                                     setIsEditModalOpen(true);
                                                                 }}
@@ -1358,6 +1364,18 @@ export const Admin: React.FC = () => {
                                                     { label: 'Plan', value: detailUser.plan || '—', color: 'text-blue-600', bg: 'bg-blue-50', icon: <CreditCard size={14} className="text-blue-500" /> },
                                                     { label: 'Total Spent', value: `${detailUser.usageStats?.totalSpent ?? 0} pts`, color: 'text-rose-600', bg: 'bg-rose-50', icon: <BarChart2 size={14} className="text-rose-500" /> },
                                                     { label: 'Avg / Day', value: `${detailUser.avgPerDay ?? 0} pts`, color: 'text-violet-600', bg: 'bg-violet-50', icon: <Activity size={14} className="text-violet-500" /> },
+                                                    {
+                                                        label: 'Daily Limit',
+                                                        value: `${(Number(detailUser.customDailyLimit) > 0)
+                                                            ? detailUser.customDailyLimit
+                                                            : (() => {
+                                                                const plan = plans.find(p => (p.name || '').toLowerCase() === (detailUser.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (detailUser.plan || '').toLowerCase());
+                                                                return (detailUser.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly) || 0;
+                                                            })()} pts`,
+                                                        color: 'text-emerald-600',
+                                                        bg: 'bg-emerald-50',
+                                                        icon: <Zap size={14} className="text-emerald-500" />
+                                                    },
                                                 ].map(s => (
                                                     <div key={s.label} className={`${s.bg} rounded-2xl p-4 flex flex-col gap-1`}>
                                                         <div className="flex items-center gap-1.5">{s.icon}<span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{s.label}</span></div>
@@ -1510,6 +1528,22 @@ export const Admin: React.FC = () => {
 
 
                                             <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Custom Daily Limit (Points)</label>
+                                                <div className="relative">
+                                                    <Zap size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-400" />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        className="w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 transition-all font-bold text-slate-700"
+                                                        value={editForm.customDailyLimit || 0}
+                                                        onChange={e => setEditForm({ ...editForm, customDailyLimit: parseInt(e.target.value) || 0 })}
+                                                        placeholder="0 = Use plan default"
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 font-medium pl-1">Set to <strong>0</strong> to use the default daily limit defined in the user's plan.</p>
+                                            </div>
+
+                                            <div className="space-y-2">
                                                 <label className="text-xs font-black uppercase tracking-widest text-slate-400">New Password (leave blank to keep current)</label>
                                                 <input
                                                     type="password"
@@ -1597,6 +1631,27 @@ export const Admin: React.FC = () => {
                                                         placeholder="e.g. Pro Plan"
                                                         value={planForm.name || ''}
                                                         onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                    />
+                                                </label>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <label className="space-y-2">
+                                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Daily Limit (Monthly)</span>
+                                                    <input
+                                                        type="number"
+                                                        value={planForm.dailyLimitMonthly || 0}
+                                                        onChange={(e) => setPlanForm({ ...planForm, dailyLimitMonthly: parseInt(e.target.value) || 0 })}
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                    />
+                                                </label>
+                                                <label className="space-y-2">
+                                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Daily Limit (Yearly)</span>
+                                                    <input
+                                                        type="number"
+                                                        value={planForm.dailyLimitYearly || 0}
+                                                        onChange={(e) => setPlanForm({ ...planForm, dailyLimitYearly: parseInt(e.target.value) || 0 })}
                                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                                                     />
                                                 </label>

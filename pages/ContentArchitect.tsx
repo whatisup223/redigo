@@ -23,7 +23,9 @@ import {
     Settings,
     Trash2,
     X,
-    AlertCircle
+    AlertCircle,
+    Clock,
+    Crown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -82,7 +84,7 @@ const toneActiveMap: Record<string, string> = {
 };
 
 export const ContentArchitect: React.FC = () => {
-    const { user, updateUser } = useAuth();
+    const { user, updateUser, syncUser } = useAuth();
     const [step, setStep] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -110,6 +112,7 @@ export const ContentArchitect: React.FC = () => {
         primaryColor: '',
         secondaryColor: ''
     });
+    const [plans, setPlans] = useState<any[]>([]);
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [selectedAccount, setSelectedAccount] = useState<string>('');
     const [includeImage, setIncludeImage] = useState(true);
@@ -121,8 +124,10 @@ export const ContentArchitect: React.FC = () => {
     const [showDraftBanner, setShowDraftBanner] = useState(false);
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
+    const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
 
     useEffect(() => {
+        syncUser(); // Refresh credits & daily limits on mount
         fetch('/api/config')
             .then(res => res.json())
             .then(data => {
@@ -138,6 +143,11 @@ export const ContentArchitect: React.FC = () => {
                 }
             })
             .catch(err => console.error('Config fetch failed:', err));
+
+        fetch('/api/plans')
+            .then(res => res.json())
+            .then(data => setPlans(data))
+            .catch(console.error);
     }, []);
 
     // Load brand profile on mount
@@ -182,7 +192,7 @@ export const ContentArchitect: React.FC = () => {
         }
     }, [postData, step]);
 
-    const handleResumeDraft = () => {
+    const handleResumeDraft = async () => {
         const savedDraft = localStorage.getItem('redigo_post_draft');
         if (savedDraft) {
             const draft = JSON.parse(savedDraft);
@@ -190,6 +200,24 @@ export const ContentArchitect: React.FC = () => {
             setStep(draft.step || 2);
             setShowDraftBanner(false);
             showToast('Draft restored! Continuing from where you left off.', 'success');
+            syncUser(); // Sync usage state after resuming
+
+            // IMAGE RECOVERY LOGIC
+            // If the draft has an image prompt but no image URL, check the server
+            if (draft.imagePrompt && !draft.imageUrl && user?.id) {
+                try {
+                    const res = await fetch(`/api/user/latest-image?userId=${user.id}`);
+                    const latestImage = await res.json();
+
+                    // Only use it if the prompt matches (to avoid using an older image)
+                    if (latestImage && latestImage.url && latestImage.prompt === draft.imagePrompt) {
+                        setPostData(prev => ({ ...prev, imageUrl: latestImage.url }));
+                        showToast('Image recovered from server!', 'success');
+                    }
+                } catch (e) {
+                    console.error('Failed to recover image:', e);
+                }
+            }
         }
     };
 
@@ -242,27 +270,52 @@ export const ContentArchitect: React.FC = () => {
     }, [isGenerating]);
 
     const triggerImageGeneration = async (prompt: string) => {
-        if (!prompt || !user?.id) return;
-        setIsGeneratingImage(true);
-        setImageLoaded(false);
-        // Reset image URL so the skeleton shows up immediately
-        setPostData(prev => ({ ...prev, imageUrl: '' }));
+        // Proactive Daily Limit Pre-check (for individual image trigger)
+        if (user && user.role !== 'admin') {
+            const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+            const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+            const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+            if (dailyLimit > 0) {
+                const currentUsage = (user.dailyUsagePoints || 0);
+                if ((currentUsage + Number(costs.image || 5)) > dailyLimit) {
+                    setShowDailyLimitModal(true);
+                    return;
+                }
+            }
+        }
+
         try {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, userId: user.id })
             });
+
+            if (response.status === 402) {
+                setShowNoCreditsModal(true);
+                return;
+            }
+            if (response.status === 429) {
+                setShowDailyLimitModal(true);
+                return;
+            }
             if (!response.ok) throw new Error('Failed to generate image');
+
             const data = await response.json();
             setPostData(prev => ({ ...prev, imageUrl: data.url }));
 
             // Sync credits for image too
             if (data.credits !== undefined) {
-                updateUser({ credits: data.credits });
+                updateUser({
+                    credits: data.credits,
+                    dailyUsagePoints: data.dailyUsagePoints,
+                    dailyUsage: data.dailyUsage
+                });
             }
-        } catch {
-            // Image generation is optional
+        } catch (err) {
+            console.error('Image gen failed:', err);
+            // Image generation is optional, but we still log failed attempts
         } finally {
             setIsGeneratingImage(false);
         }
@@ -274,12 +327,43 @@ export const ContentArchitect: React.FC = () => {
         const postCost = Number(costs.post) ?? 2;
         const imageCost = Number(costs.image) ?? 5;
 
+        // Determine if we should generate an image based on the mode and current step
+        let isImageRequested = false;
+        if (mode === 'image') {
+            isImageRequested = true;
+            setIncludeImage(true); // Force UI to show image section
+        } else if (mode === 'both') {
+            if (step === 1) {
+                // Initial generation: respect the user's toggle
+                isImageRequested = includeImage;
+            } else {
+                // Full Refresh from modal: user explicitly chose image+text
+                isImageRequested = true;
+                setIncludeImage(true);
+            }
+        }
+
         let totalCost = 0;
         if (mode === 'text') totalCost = postCost;
         else if (mode === 'image') totalCost = imageCost;
-        else totalCost = includeImage ? (postCost + imageCost) : postCost;
+        else totalCost = isImageRequested ? (postCost + imageCost) : postCost;
 
-        // Frontend pre-check
+        // Proactive Daily Limit Pre-check
+        if (user && user.role !== 'admin') {
+            const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+            const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+            const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+            if (dailyLimit > 0) {
+                const currentUsage = (user.dailyUsagePoints || 0);
+                if ((currentUsage + totalCost) > dailyLimit) {
+                    setShowDailyLimitModal(true);
+                    return;
+                }
+            }
+        }
+
+        // Frontend balance pre-check
         if ((user?.credits || 0) < totalCost && user?.role !== 'admin') {
             setShowNoCreditsModal(true);
             return;
@@ -328,12 +412,16 @@ export const ContentArchitect: React.FC = () => {
 
             // Synchronize credits
             if (generated.credits !== undefined) {
-                updateUser({ credits: generated.credits });
+                updateUser({
+                    credits: generated.credits,
+                    dailyUsagePoints: generated.dailyUsagePoints,
+                    dailyUsage: generated.dailyUsage
+                });
             }
 
             setStep(2);
             // Non-blocking call: trigger image generation but don't AWAIT it
-            if (mode === 'both' && includeImage) {
+            if (mode === 'both' && isImageRequested) {
                 triggerImageGeneration(generated.imagePrompt);
             }
 
@@ -343,6 +431,8 @@ export const ContentArchitect: React.FC = () => {
             console.error(err);
             if (err.message === 'OUT_OF_CREDITS') {
                 setShowNoCreditsModal(true);
+            } else if (err.message === 'DAILY_LIMIT_REACHED') {
+                setShowDailyLimitModal(true);
             } else {
                 showToast('AI generation failed. Please check your settings.', 'error');
             }
@@ -974,124 +1064,126 @@ export const ContentArchitect: React.FC = () => {
                                             })}
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* Language Selector */}
-                                <div className="space-y-3">
-                                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                        🌐 Output Language
-                                    </label>
-                                    <select
-                                        value={language}
-                                        onChange={(e) => setLanguage(e.target.value)}
-                                        className="w-full p-3 bg-white border border-slate-200 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer"
-                                    >
-                                        <option value="English">🇺🇸 English</option>
-                                        <option value="Arabic">🇸🇦 Arabic (العربية)</option>
-                                        <option value="French">🇫🇷 French (Français)</option>
-                                        <option value="Spanish">🇪🇸 Spanish (Español)</option>
-                                        <option value="German">🇩🇪 German (Deutsch)</option>
-                                        <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
-                                        <option value="Italian">🇮🇹 Italian (Italiano)</option>
-                                        <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
-                                        <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
-                                        <option value="Japanese">🇯🇵 Japanese (日本語)</option>
-                                        <option value="Korean">🇰🇷 Korean (한국어)</option>
-                                        <option value="Chinese">🇨🇳 Chinese (中文)</option>
-                                    </select>
-                                </div>
+                                    {/* Language Selector */}
+                                    <div className="space-y-4 pt-10 border-t border-slate-50">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            🌐 Output Language
+                                        </label>
+                                        <select
+                                            value={language}
+                                            onChange={(e) => setLanguage(e.target.value)}
+                                            className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+                                        >
+                                            <option value="English">🇺🇸 English</option>
+                                            <option value="Arabic">🇸🇦 Arabic (العربية)</option>
+                                            <option value="French">🇫🇷 French (Français)</option>
+                                            <option value="Spanish">🇪🇸 Spanish (Español)</option>
+                                            <option value="German">🇩🇪 German (Deutsch)</option>
+                                            <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
+                                            <option value="Italian">🇮🇹 Italian (Italiano)</option>
+                                            <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
+                                            <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
+                                            <option value="Japanese">🇯🇵 Japanese (日本語)</option>
+                                            <option value="Korean">🇰🇷 Korean (한국어)</option>
+                                            <option value="Chinese">🇨🇳 Chinese (中文)</option>
+                                        </select>
+                                    </div>
 
-                                {/* Action Buttons */}
-                                <div className="flex flex-col gap-4 mt-8">
-                                    <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm">
-                                                <ImageIcon size={20} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900">Include Base Image</p>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="text-[10px] text-slate-500 font-medium">Generate visual (+{Number(costs.image)} pts)</p>
-                                                    <div className="flex gap-1" title="Applying your brand colors">
-                                                        <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
-                                                        <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
+
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-col gap-4 mt-8">
+                                        <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm">
+                                                    <ImageIcon size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-900">Include Base Image</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-[10px] text-slate-500 font-medium">Generate visual (+{Number(costs.image)} pts)</p>
+                                                        <div className="flex gap-1" title="Applying your brand colors">
+                                                            <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
+                                                            <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setIncludeImage(!includeImage)}
-                                            className={`w-12 h-7 rounded-full transition-all relative ${includeImage ? 'bg-orange-600' : 'bg-slate-300'}`}
-                                        >
-                                            <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-5' : 'translate-x-0'}`} />
-                                        </button>
-                                    </div>
-
-                                    {/* Include Brand Name Toggle */}
-                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
-                                                <Tag size={20} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900">Include Brand Name</p>
-                                                <p className="text-[10px] text-slate-500 font-medium">Explicitly mention {postData.productMention || brandProfile.brandName || 'brand'} in post</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setIncludeBrandName(!includeBrandName)}
-                                            className={`w-12 h-7 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
-                                        >
-                                            <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-5' : 'translate-x-0'}`} />
-                                        </button>
-                                    </div>
-
-                                    {/* Include Link Toggle */}
-                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
-                                                <LinkIcon size={20} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900">Include Website Link</p>
-                                                <p className="text-[10px] text-slate-500 font-medium">Embed link to {postData.productUrl || brandProfile.website || 'website'}</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setIncludeLink(!includeLink)}
-                                            className={`w-12 h-7 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
-                                        >
-                                            <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-5' : 'translate-x-0'}`} />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex gap-3">
-                                        {postData.title && postData.content && (
                                             <button
-                                                onClick={() => setStep(2)}
-                                                className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2rem] font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 group"
+                                                onClick={() => setIncludeImage(!includeImage)}
+                                                className={`w-12 h-7 rounded-full transition-all relative ${includeImage ? 'bg-orange-600' : 'bg-slate-300'}`}
                                             >
-                                                RESUME PROGRESS
-                                                <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-5' : 'translate-x-0'}`} />
                                             </button>
-                                        )}
-                                        <button
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                if (postData.title || postData.content) {
-                                                    setShowRegenConfirm(true);
-                                                    return; // STOP HERE
-                                                }
-                                                handleGenerateContent();
-                                            }}
-                                            disabled={!postData.subreddit || isGenerating}
-                                            className={`py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50 ${postData.title && postData.content ? 'px-8' : 'w-full'}`}
-                                        >
-                                            <Sparkles size={20} />
-                                            {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
-                                            {!postData.title && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
-                                        </button>
+                                        </div>
+
+                                        {/* Include Brand Name Toggle */}
+                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                                                    <Tag size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-900">Include Brand Name</p>
+                                                    <p className="text-[10px] text-slate-500 font-medium">Explicitly mention {postData.productMention || brandProfile.brandName || 'brand'} in post</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setIncludeBrandName(!includeBrandName)}
+                                                className={`w-12 h-7 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+
+                                        {/* Include Link Toggle */}
+                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                                                    <LinkIcon size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-900">Include Website Link</p>
+                                                    <p className="text-[10px] text-slate-500 font-medium">Embed link to {postData.productUrl || brandProfile.website || 'website'}</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setIncludeLink(!includeLink)}
+                                                className={`w-12 h-7 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            {postData.title && postData.content && (
+                                                <button
+                                                    onClick={() => setStep(2)}
+                                                    className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2rem] font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 group"
+                                                >
+                                                    RESUME PROGRESS
+                                                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    if (postData.title || postData.content) {
+                                                        setShowRegenConfirm(true);
+                                                        return; // STOP HERE
+                                                    }
+                                                    handleGenerateContent();
+                                                }}
+                                                disabled={!postData.subreddit || isGenerating}
+                                                className={`py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50 ${postData.title && postData.content ? 'px-8' : 'w-full'}`}
+                                            >
+                                                <Sparkles size={20} />
+                                                {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
+                                                {!postData.title && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1265,6 +1357,7 @@ export const ContentArchitect: React.FC = () => {
                                     </div>
                                 </div>
 
+
                                 <button
                                     onClick={handlePost}
                                     disabled={isPosting}
@@ -1358,6 +1451,52 @@ export const ContentArchitect: React.FC = () => {
                     </div>
                 </div>
             </div >
+            {/* Daily Limit Modal */}
+            {showDailyLimitModal && (
+                <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-['Outfit']">
+                    <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50 to-white -z-10" />
+
+                        <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-blue-200">
+                            <Clock size={40} className="fill-current" />
+                        </div>
+
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black text-slate-900 leading-tight">Daily Limit Reached! 🕒</h3>
+                            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                                You've reached your allowed quota of <span className="text-orange-600 font-bold">
+                                    {(() => {
+                                        const plan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
+                                        const planLimit = user?.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+                                        return (Number(user?.customDailyLimit) > 0) ? user?.customDailyLimit : (planLimit || 0);
+                                    })()} PTS
+                                </span> for today. Your limit resets every 24 hours.
+                            </p>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <Link
+                                to="/support"
+                                className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                            >
+                                Contact Support <MessageSquare size={16} />
+                            </Link>
+                            <Link
+                                to="/pricing"
+                                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black shadow-xl shadow-orange-100 hover:bg-orange-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                            >
+                                Upgrade Plan <Crown size={18} />
+                            </Link>
+                            <button
+                                onClick={() => setShowDailyLimitModal(false)}
+                                className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

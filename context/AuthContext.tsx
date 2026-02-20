@@ -6,10 +6,15 @@ interface User {
     email: string;
     role: string;
     plan: string;
+    billingCycle?: 'monthly' | 'yearly';
     status: string;
     statusMessage?: string;
     hasCompletedOnboarding: boolean;
     credits: number;
+    dailyUsagePoints?: number;
+    dailyUsage?: number;
+    customDailyLimit?: number;
+    lastUsageDate?: string;
     avatar?: string;
     transactions?: any[];
     connectedAccounts?: any[];

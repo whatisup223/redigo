@@ -38,15 +38,15 @@ const buildBrandContext = (profile: BrandProfile): string => {
   if (!profile || !profile.brandName) return '';
   const tone = profile.brandTone === 'custom' && profile.customTone
     ? profile.customTone
-    : profile.brandTone || 'Professional';
+    : profile.brandTone || 'conversational';
   return `
-BRAND CONTEXT (use this to personalize the content naturally):
-- Brand Name: ${profile.brandName}
-- What it does: ${profile.description || 'Not specified'}
-- Target Audience: ${profile.targetAudience || 'Not specified'}
-- Problem it solves: ${profile.problem || 'Not specified'}
+BRAND INTELLIGENCE (internalize this — do NOT parrot it back verbatim):
+- Brand: ${profile.brandName}
+- Core value proposition: ${profile.description || 'Not specified'}
+- Ideal customer: ${profile.targetAudience || 'Not specified'}
+- Pain point addressed: ${profile.problem || 'Not specified'}
 - Website: ${profile.website || 'Not specified'}
-- Brand Tone: ${tone}
+- Brand communication style: ${tone}
 `;
 };
 
@@ -57,6 +57,53 @@ const buildImageBrandContext = (profile: BrandProfile): string => {
   const primary = profile.primaryColor || '#EA580C';
   const secondary = profile.secondaryColor || '#1E293B';
   return `CRITICAL VISUAL IDENTITY: Strictly use the brand colors for ${profile.brandName}: Primary Color ${primary} (use for main objects and highlights), Secondary Color ${secondary} (use for backgrounds and accents), and White. Ensure the palette is dominated by these specific hex codes to maintain brand consistency.`;
+};
+
+// ─── Tone Strategy Builder ────────────────────────────────────────────────────
+const buildToneStrategy = (tone: string): string => {
+  const strategies: Record<string, string> = {
+    helpful_peer: `
+TONE STRATEGY — HELPFUL PEER:
+You are a knowledgeable friend who genuinely wants to help, not sell.
+- Write in first person. Use "I've found that..." or "What worked for me was..."
+- Keep paragraphs to 2-3 lines max. Reddit readers skim.
+- ONE specific, actionable tip that actually helps the OP.
+- Sound like you're typing a message to a smart friend, not writing an essay.
+- Casual punctuation is fine. Imperfect language is authentic.
+- If mentioning a product, frame it as a personal recommendation: "I've been using X for this and it's saved me hours"
+`,
+    thought_leader: `
+TONE STRATEGY — THOUGHT LEADER:
+You have real expertise and you're sharing a structured perspective.
+- Open with a counterintuitive or insightful observation about the topic.
+- Use a clear structure: short intro → 2-3 numbered insights → brief conclusion.
+- Each insight should be specific and non-obvious.
+- Avoid generic advice. Give the OP something they can implement TODAY.
+- If mentioning a product, do it as part of a broader recommendation, not the main point.
+- Sound like someone who has done the work, not just read about it.
+`,
+    storyteller: `
+TONE STRATEGY — STORYTELLER:
+Draw the reader in with a relatable human moment before delivering the value.
+- Open with: a quick personal struggle, "I remember when...", or a specific scene.
+- The story should connect directly to the OP's problem (2-3 sentences max).
+- Transition naturally into the lesson learned or solution found.
+- End with an empowering note or question that invites engagement.
+- If mentioning a product, let it emerge as "the thing that helped me solve this exact problem."
+- Make it feel like a conversation, not a narrative essay.
+`,
+    skeptic: `
+TONE STRATEGY — SKEPTIC / CHALLENGER:
+Challenge a common assumption, then offer a better perspective.
+- Open by respectfully reframing the premise of the original post.
+- Example: "Most people think X, but in practice Y is usually the issue."
+- Back it up with ONE specific reasoning or example.
+- Then pivot to your solution/recommendation as the logical alternative.
+- This tone should feel intellectually honest, not contrarian for the sake of it.
+- If mentioning a product, position it as the solution that follows your logical argument.
+`,
+  };
+  return strategies[tone] || strategies['helpful_peer'];
 };
 
 // ─── Generate Reddit Reply ───────────────────────────────────────────────────
@@ -70,37 +117,38 @@ export const generateRedditReply = async (
   language: string = 'English',
   includeBrandName: boolean = true,
   includeLink: boolean = true
-): Promise<GeneratedReply & { credits?: number }> => {
+): Promise<GeneratedReply & { credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
   try {
-    // Brand Logic:
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
-
-    // Reply logic primarily uses context from the 'overrideProfile' if sent, 
-    // or falls back to saved settings.
     const effectiveProfile = mergeProfiles(savedProfile, overrideProfile);
     const brandContext = buildBrandContext(effectiveProfile);
+    const toneStrategy = buildToneStrategy(tone);
 
-    // Build specific instructions for brand name and link
-    let brandInstructions = '';
-
-    // Brand Name & Link Logic
-    // FORCE FALLBACK: If website is empty but user wants a link, use RedditGo as default
     const effectiveWebsite = effectiveProfile.website || 'https://redditgo.online/';
-
-    // Check if we have valid data to work with
     const hasBrand = includeBrandName && !!effectiveProfile.brandName;
     const hasLink = includeLink && !!effectiveWebsite;
 
+    let brandInstructions = '';
     if (hasBrand && hasLink) {
-      brandInstructions += `\n        - BRAND & LINK STRATEGY (CRITICAL): You MUST include exactly one link to the website using the brand name as anchor text.
-        Format: [${effectiveProfile.brandName}](${effectiveWebsite})
-        Rule: This link MUST appear naturally in the text. Do NOT add it as a footer. Do NOT change the anchor text to "here" or "link". Use the exact Brand Name.`;
+      brandInstructions = `
+BRAND INTEGRATION (Subtle & Contextual):
+- Mention "${effectiveProfile.brandName}" as a tool or discovery that helped you achieve a specific result.
+- Embed the link ONCE, naturally in a sentence: [${effectiveProfile.brandName}](${effectiveWebsite}).
+- DO NOT use marketing superlatives (best, amazing, game-changer).
+- Frame it as an 'afterthought' or a 'side note': "By the way, I used [${effectiveProfile.brandName}](${effectiveWebsite}) to handle the X part of this, and it worked well."
+- The goal is to make the reader think "That's a useful tip" rather than "This is an ad".`;
     } else if (hasBrand) {
-      brandInstructions += `\n        - BRAND MENTION ONLY: Naturally mention "${effectiveProfile.brandName}" as the solution. Do NOT include any lines acting as links (e.g. no [Brand](url)).`;
+      brandInstructions = `
+BRAND INTEGRATION:
+- Mention "${effectiveProfile.brandName}" organically ONCE as a personal recommendation. No links.
+- Keep it casual: "I've been using ${effectiveProfile.brandName} for this" — not "You should buy ${effectiveProfile.brandName}".`;
     } else if (hasLink) {
-      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${effectiveWebsite}).`;
+      brandInstructions = `
+LINK INTEGRATION:
+- Include ONE natural link using generic anchor text: [this tool](${effectiveWebsite}) or [here](${effectiveWebsite}).
+- Embed it mid-sentence, not as a standalone or footer.`;
     } else {
-      brandInstructions += `\n        - CLEAN CONTENT: Do NOT mention the brand name "${effectiveProfile.brandName || ''}" and do NOT include any links. Focus purely on value/advice.`;
+      brandInstructions = `NO BRAND/LINK: Do not mention any product or include any links. Pure value only.`;
     }
 
     const response = await fetch('/api/generate', {
@@ -109,40 +157,50 @@ export const generateRedditReply = async (
       body: JSON.stringify({
         userId,
         type: 'comment',
-        prompt: `Generate a value-add Reddit reply for this post.
-        Post Title: ${post.title}
-        Post Body: ${post.selftext.substring(0, 1000)}
-        Specific Instructions/Context: ${audience}
-        Desired Tone Strategy: ${tone}
-        ${brandContext}
-        
-        ⚠️ LANGUAGE REQUIREMENT: You MUST write the entire reply in ${language}. This is mandatory regardless of the post language.
-        
-        CRITICAL RULES FOR REDDIT AUTHENTICITY:
-        1. NEVER start with "I'm sorry to hear that" or "That's a great question". Jump straight to the value.
-        2. DO NOT sound like a typical AI assistant. Use casual but intelligent language.
-        3. STYLE GUIDELINES based on Desired Tone Strategy:
-           - helpful_peer: Use "I" and "Me". Talk like a friend sharing a discovery. Keep it breezy.
-           - thought_leader: Use bullet points. Provide a structured "framework" or deep technical insight.
-           - skeptic: Start by challenging a common assumption in the post (politely), then offer your solution as the logical alternative.
-           - storyteller: Start with a brief personal anecdote or "I remember when I was struggling with..."
-        4. BRANDING INSTRUCTIONS:${brandInstructions}
-        5. NO FLUFF: Every sentence must add value or build rapport.
-        6. NO CODE BLOCKS: Do NOT include any markdown code blocks (triple backticks), technical documentation style, or long variable lists. The reply must be pure conversational text, formatted for social media reading (short paragraphs).
-        7. TONE CHECK: Even for 'helpful_peer' or technical topics, do NOT write like a documentation page or a tutorial with code snippets. Write like a human discussing the topic.
-        
-        Return STRICT JSON with keys: comment, tone, actionable_points, keywords, reddit_strategy.`,
+        prompt: `You are writing a Reddit comment as a real, thoughtful community member.
+
+POST BEING REPLIED TO:
+Title: ${post.title}
+Body: ${post.selftext.substring(0, 800)}
+Community: r/${post.subreddit}
+
+${toneStrategy}
+
+${brandContext}
+
+LANGUAGE: Write the entire reply in ${language}. Non-negotiable.
+
+${brandInstructions}
+
+AUTHENTICITY RULES (Human Machine Protocol):
+1. NO CORPORATE RADIANCE: Avoid "Absolutely!", "Great question!", or excessive enthusiasm. Real Redditors are helpful but casual/dry.
+2. IMPERFECT RHYTHM: Use sentence fragments. Vary length. Real people don't write in 4 identical paragraphs.
+3. VALUE-FIRST: 80% of the content must be pure value/advice. Only the last 20% should bridge to the solution.
+4. SLANG & LINGO: Use (tbh, tldr, etc.) appropriately if it fits the tone.
+5. NO MARKETING TERMS: Never use "leverage", "utilize", "holistic", "game-changer", "synergy", "seamless". These are AI/Marketing dead giveaways.
+6. CTA: Don't use a Call to Action. Use a "Call to Connection" — ask a follow-up question or share a relatable opinion.
+7. LENGTH: Aim for 2-4 high-value paragraphs (roughly 100-200 words). Do not be overly brief; provide enough context to be genuinely helpful.
+
+Return STRICT JSON (no markdown code blocks, no extra text outside the JSON):
+{
+  "comment": "the actual comment text here",
+  "tone": "${tone}",
+  "actionable_points": ["key takeaway 1", "key takeaway 2"],
+  "keywords": ["relevant", "keywords"],
+  "reddit_strategy": "brief note on why this approach works for this post"
+}`,
         context: { postId: post.id, subreddit: post.subreddit }
       })
     });
 
     if (response.status === 402) throw new Error('OUT_OF_CREDITS');
+    if (response.status === 429) throw new Error('DAILY_LIMIT_REACHED');
     if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
 
     const data = await response.json();
-    const cleanJson = data.text.replace(/```json\n?|\n?```/g, '').trim();
+    const cleanJson = data.text.replace(/```json\n?|`\n?```/g, '').trim();
     const result = JSON.parse(cleanJson) as GeneratedReply;
-    return { ...result, credits: data.credits };
+    return { ...result, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
   } catch (error) {
     console.error("Error generating reply via backend:", error);
     throw error;
@@ -161,51 +219,50 @@ export const generateRedditPost = async (
   language: string = 'English',
   includeBrandName: boolean = true,
   includeLink: boolean = true
-): Promise<{ title: string; content: string; imagePrompt: string; credits?: number }> => {
+): Promise<{ title: string; content: string; imagePrompt: string; credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
   try {
-    // Brand Logic:
-    // 1. Fetch Saved Profile (Source of Truth)
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
 
-    // 2. Prepare Override: 
-    // If 'productMention' or 'productUrl' are passed as arguments (from the Quick Override or manually typed), 
-    // they should be treated as overrides. If they are empty strings, they are IGNORED.
     const implicitOverride: Partial<BrandProfile> = {};
     if (productMention && productMention.trim() !== '') implicitOverride.brandName = productMention;
     if (productUrl && productUrl.trim() !== '') implicitOverride.website = productUrl;
 
-    // 3. Merge: Saved <- Explicit Override Object <- Implicit Arguments
-    // The 'overrideProfile' object comes from the advanced override panel.
     const effectiveProfile = mergeProfiles(savedProfile, { ...overrideProfile, ...implicitOverride });
-
     const brandContext = buildBrandContext(effectiveProfile);
     const imageColorContext = buildImageBrandContext(effectiveProfile);
+    const toneStrategy = buildToneStrategy(tone);
 
-    // Final logic: Use effective profile data
     const finalBrandName = effectiveProfile.brandName || '';
     const finalUrl = effectiveProfile.website || '';
-
-    // Build specific instructions for brand name and link
-    let brandInstructions = '';
-
-    // Brand Name & Link Logic
-    // FORCE FALLBACK: If website is empty but user wants a link, use RedditGo as default
     const effectiveWebsite = finalUrl || 'https://redditgo.online/';
-
     const hasBrand = includeBrandName && !!finalBrandName;
     const hasLink = includeLink && !!effectiveWebsite;
 
+    let brandInstructions = '';
     if (hasBrand && hasLink) {
-      brandInstructions += `\n        - BRAND & LINK STRATEGY (CRITICAL): You MUST include exactly one link to the website using the brand name as anchor text.
-        Format: [${finalBrandName}](${effectiveWebsite})
-        Rule: This link MUST appear naturally in the body content. Do NOT add it as a footer. Do NOT change the anchor text. Use the exact Brand Name.`;
+      brandInstructions = `
+BRAND INTEGRATION IN POST BODY:
+- The post MUST feel like it is written by a community member, NOT by the brand itself.
+- Mention "${finalBrandName}" as a natural discovery or tool you found, not as a promotion.
+- Embed the link ONCE, naturally in the post body: [${finalBrandName}](${effectiveWebsite})
+- Anchor text = exact brand name. No exceptions.
+- GOOD: "After trying a bunch of things, [${finalBrandName}](${effectiveWebsite}) was the one that actually clicked for me."
+- BAD: "Try out our tool [${finalBrandName}](${effectiveWebsite})!" — this is promotional and will be flagged.`;
     } else if (hasBrand) {
-      brandInstructions += `\n        - BRAND MENTION ONLY: Naturally mention "${finalBrandName}" as the solution. Do NOT include any lines acting as links.`;
+      brandInstructions = `BRAND MENTION: Reference "${finalBrandName}" once, casually, as something that worked for you. No links.`;
     } else if (hasLink) {
-      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${effectiveWebsite}).`;
+      brandInstructions = `LINK INTEGRATION: Include ONE organic link using natural anchor text. Avoid generic "click here".`;
     } else {
-      brandInstructions += `\n        - CLEAN CONTENT: Do NOT mention the brand name "${finalBrandName}" and do NOT include any links. Focus purely on value.`;
+      brandInstructions = `PURE VALUE POST: No brand mention, no links. Write content that stands on its own merit.`;
     }
+
+    const goalGuide: Record<string, string> = {
+      'Engagement': 'Ask a question or share a polarizing opinion that sparks discussion. The goal is replies, not agreement.',
+      'Lead Gen': 'Share a story or insight that demonstrates expertise. The CTA should feel organic, not forced.',
+      'Problem Solving': 'Present a specific problem with a structured solution. Show you have lived experience with this.',
+      'Product Launch': 'Frame this as a personal project or experiment you are sharing with the community, not an ad.',
+      'Storytelling': "Open with a compelling hook that mirrors the Reddit community's shared experience or frustration.",
+    };
 
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -213,42 +270,52 @@ export const generateRedditPost = async (
       body: JSON.stringify({
         userId,
         type: 'post',
-        prompt: `Create a viral-potential Reddit post for r/${subreddit}.
-        Goal: ${goal}
-        Tone: ${tone}
-        ${finalBrandName ? `Product/Brand to Mention (Context only): ${finalBrandName}` : ''}
-        ${finalUrl ? `Product URL (Context only): ${finalUrl}` : ''}
-        ${brandContext}
-        
-        ⚠️ LANGUAGE REQUIREMENT: You MUST write the entire post (title and content) in ${language}. This is mandatory.
-        
-        RULES:
-        1. Write a high-engagement headline (Title).
-        2. Write a detailed, value-first post body (Content). 
-        3. BRANDING INSTRUCTIONS:${brandInstructions}
-        4. Use Reddit formatting (bolding, spacing, line breaks).
-        5. STYLE based on Tone:
-           - helpful_peer: Friendly, first-person, like sharing a discovery.
-           - thought_leader: Structured, bullet points, authoritative.
-           - storyteller: Opens with a personal story or struggle.
-           - skeptic: Challenges a common belief, then presents the solution.
-        6. Return an 'imagePrompt' for a brand-consistent visual:
-           - Style: Modern SaaS infographic, glassmorphism, 3D soft tech elements.
-           - ${imageColorContext}
-           - Theme: Visualizing the core value/insight of the post.
-        
-        Return STRICT JSON with keys: title, content, imagePrompt.`,
+        prompt: `You are crafting a high-quality Reddit post as an authentic community member in r/${subreddit}.
+
+POST GOAL: ${goal}
+GOAL STRATEGY: ${goalGuide[goal] || goalGuide['Engagement']}
+
+${toneStrategy}
+
+${brandContext}
+
+LANGUAGE: Write the entire post (title AND body) in ${language}. Non-negotiable.
+
+${brandInstructions}
+
+REDDIT GROWTH CRAFT RULES:
+1. THE HOOK: The first sentence must be a relatable observation or a direct answer. NO "INTRODUCTIONS".
+2. NO MARKETING SPEAK: If it sounds like a blog post or a press release, you've failed. It must sound like someone sharing a win or a struggle.
+3. THE MENTION: Mention "${finalBrandName}" as a side-note or a tool that helped you skip a tedious step.
+4. VISUALIZATION: Describe a specific scene or result (e.g., "I finally had a free weekend" instead of "it improved my efficiency").
+5. NO AI TELLS: Avoid "delve", "leverage", "utilize", "comprehensive", "innovative".
+6. CLOSING: End with a specific question that makes people want to share their own experience.
+7. SUBSTANCE: Aim for 250-450 words of high-quality storytelling and insight. Avoid one-liners.
+
+IMAGE PROMPT:
+- Return a highly specific DALL-E prompt for a visual that supports the post message.
+- Style: Modern, minimal, premium SaaS aesthetic. Glassmorphism elements welcome.
+- ${imageColorContext}
+- The image should communicate the post core idea at a glance.
+
+Return STRICT JSON (no markdown code blocks, no extra text):
+{
+  "title": "the post title",
+  "content": "the full post body with Reddit markdown",
+  "imagePrompt": "detailed DALL-E generation prompt"
+}`,
         context: { subreddit }
       })
     });
 
     if (response.status === 402) throw new Error('OUT_OF_CREDITS');
+    if (response.status === 429) throw new Error('DAILY_LIMIT_REACHED');
     if (!response.ok) throw new Error('Generation failed');
 
     const data = await response.json();
     const cleanJson = data.text.replace(/```json\n?|\n?```/g, '').trim();
     const result = JSON.parse(cleanJson);
-    return { ...result, credits: data.credits };
+    return { ...result, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
   } catch (error) {
     console.error("Error generating post:", error);
     throw error;

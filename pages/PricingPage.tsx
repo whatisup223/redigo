@@ -10,6 +10,8 @@ export const PricingPage: React.FC = () => {
         monthlyPrice: number;
         yearlyPrice: number;
         credits: number;
+        dailyLimitMonthly: number;
+        dailyLimitYearly: number;
         features: string[];
         isPopular: boolean;
         highlightText?: string;
@@ -144,7 +146,13 @@ export const PricingPage: React.FC = () => {
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                         <Zap size={12} strokeWidth={4} />
                                     </div>
-                                    {plan.credits} Credits / Month
+                                    {billingCycle === 'yearly' ? plan.credits * 12 : plan.credits} Credits {billingCycle === 'yearly' ? 'Upfront' : '/ Month'}
+                                </li>
+                                <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                                        <Zap size={12} strokeWidth={4} />
+                                    </div>
+                                    {billingCycle === 'yearly' ? (plan.dailyLimitYearly || 0) : (plan.dailyLimitMonthly || 0)} Daily Actions
                                 </li>
                                 {plan.features.map((feature, i) => (
                                     <li key={i} className="flex items-center gap-3 text-slate-700 font-medium text-sm">
@@ -194,6 +202,6 @@ export const PricingPage: React.FC = () => {
                     <span className="text-xs font-bold uppercase tracking-wider">Enterprise-Grade Security</span>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };

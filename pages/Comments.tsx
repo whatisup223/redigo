@@ -30,7 +30,8 @@ import {
   X,
   Building2,
   Trash2,
-  Link as LinkIcon
+  Link as LinkIcon,
+  MessageSquare
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { RedditPost, GeneratedReply } from '../types';
@@ -72,7 +73,7 @@ const MOCK_POSTS: RedditPost[] = [
 ];
 
 export const Comments: React.FC = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, syncUser } = useAuth();
   const replyCardRef = useRef<HTMLDivElement>(null);
   const [posts, setPosts] = useState<RedditPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<RedditPost | null>(null);
@@ -100,6 +101,8 @@ export const Comments: React.FC = () => {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isInitialCheckDone, setIsInitialCheckDone] = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
+  const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
+  const [plans, setPlans] = useState<any[]>([]);
 
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
@@ -118,11 +121,18 @@ export const Comments: React.FC = () => {
   const [includeLink, setIncludeLink] = useState(true);
 
   useEffect(() => {
+    syncUser(); // Refresh user data (credits, daily limits) on mount
+
     fetch('/api/config')
       .then(res => res.json())
       .then(data => {
         if (data.creditCosts) setCosts(data.creditCosts);
       })
+      .catch(console.error);
+
+    fetch('/api/plans')
+      .then(res => res.json())
+      .then(data => setPlans(data))
       .catch(console.error);
   }, []);
 
@@ -191,6 +201,7 @@ export const Comments: React.FC = () => {
 
       setShowDraftBanner(false);
       showToast('Draft restored! 🚀', 'success');
+      syncUser(); // Sync usage state after resuming
     }
   };
 
@@ -234,6 +245,22 @@ export const Comments: React.FC = () => {
 
   const handleGenerate = async (post: RedditPost, customSettings?: any) => {
     const cost = costs.comment;
+
+    // Proactive Daily Limit Pre-check
+    if (user && user.role !== 'admin') {
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0) {
+        const currentUsage = (user.dailyUsagePoints || 0);
+        if ((currentUsage + cost) > dailyLimit) {
+          setShowDailyLimitModal(true);
+          return;
+        }
+      }
+    }
+
     if ((user?.credits || 0) < cost && user?.role !== 'admin') {
       setShowNoCreditsModal(true);
       return;
@@ -263,7 +290,13 @@ export const Comments: React.FC = () => {
       setEditedComment(reply.comment);
       showToast('AI Reply Generated!', 'success');
 
-      if (reply.credits !== undefined) updateUser({ credits: reply.credits });
+      if (reply.credits !== undefined) {
+        updateUser({
+          credits: reply.credits,
+          dailyUsagePoints: reply.dailyUsagePoints,
+          dailyUsage: reply.dailyUsage
+        });
+      }
 
       setTimeout(() => {
         replyCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -272,6 +305,8 @@ export const Comments: React.FC = () => {
       console.error(err);
       if (err.message === 'OUT_OF_CREDITS') {
         setShowNoCreditsModal(true);
+      } else if (err.message === 'DAILY_LIMIT_REACHED') {
+        setShowDailyLimitModal(true);
       } else {
         showToast('Generation failed.', 'error');
       }
@@ -283,8 +318,24 @@ export const Comments: React.FC = () => {
   const handleRefine = async (instruction: string) => {
     if (!selectedPost || !generatedReply) return;
 
-    // Refinement suggestion: cost 1 or free? Let's use 1 to match backend for now.
-    if ((user?.credits || 0) < costs.comment && user?.role !== 'admin') {
+    const cost = costs.comment;
+
+    // Proactive Daily Limit Pre-check (for Refine)
+    if (user && user.role !== 'admin') {
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0) {
+        const currentUsage = (user.dailyUsagePoints || 0);
+        if ((currentUsage + cost) > dailyLimit) {
+          setShowDailyLimitModal(true);
+          return;
+        }
+      }
+    }
+
+    if ((user?.credits || 0) < cost && user?.role !== 'admin') {
       setShowNoCreditsModal(true);
       return;
     }
@@ -294,10 +345,20 @@ export const Comments: React.FC = () => {
       const reply = await generateRedditReply(selectedPost, selectedPost.subreddit, instruction, `Refine this reply: "${editedComment}". Instruction: ${instruction}`, user?.id);
       setGeneratedReply(reply);
       setEditedComment(reply.comment);
-      if (reply.credits !== undefined) updateUser({ credits: reply.credits });
+      if (reply.credits !== undefined) {
+        updateUser({
+          credits: reply.credits,
+          dailyUsagePoints: reply.dailyUsagePoints,
+          dailyUsage: reply.dailyUsage
+        });
+      }
     } catch (err: any) {
       console.error(err);
-      showToast('Refinement failed.', 'error');
+      if (err.message === 'DAILY_LIMIT_REACHED') {
+        setShowDailyLimitModal(true);
+      } else {
+        showToast('Refinement failed.', 'error');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -816,6 +877,31 @@ export const Comments: React.FC = () => {
             <div className="p-6 md:p-10 space-y-8 overflow-y-auto custom-scrollbar">
               {wizardStep === 1 ? (
                 <div className="space-y-8">
+                  {/* Language Selector */}
+                  <div className="space-y-4">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                      🌐 Output Language
+                    </label>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+                    >
+                      <option value="English">🇺🇸 English</option>
+                      <option value="Arabic">🇸🇦 Arabic (العربية)</option>
+                      <option value="French">🇫🇷 French (Français)</option>
+                      <option value="Spanish">🇪🇸 Spanish (Español)</option>
+                      <option value="German">🇩🇪 German (Deutsch)</option>
+                      <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
+                      <option value="Italian">🇮🇹 Italian (Italiano)</option>
+                      <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
+                      <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
+                      <option value="Japanese">🇯🇵 Japanese (日本語)</option>
+                      <option value="Korean">🇰🇷 Korean (한국어)</option>
+                      <option value="Chinese">🇨🇳 Chinese (中文)</option>
+                    </select>
+                  </div>
+
                   <div className="space-y-4">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Engagement Strategy</label>
                     <div className="grid grid-cols-2 gap-4">
@@ -1005,6 +1091,7 @@ export const Comments: React.FC = () => {
                     )}
                   </div>
 
+
                   {/* Toggles */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1057,6 +1144,52 @@ export const Comments: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div >
+        </div >
+      )}
+      {/* Daily Limit Modal */}
+      {showDailyLimitModal && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-['Outfit']">
+          <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50 to-white -z-10" />
+
+            <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-blue-200">
+              <Clock size={40} className="fill-current" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-slate-900 leading-tight">Daily Limit Reached! 🕒</h3>
+              <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                You've reached your allowed quota of <span className="text-orange-600 font-bold">
+                  {(() => {
+                    const plan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
+                    const planLimit = user?.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+                    return (Number(user?.customDailyLimit) > 0) ? user?.customDailyLimit : (planLimit || 0);
+                  })()} PTS
+                </span> for today. Your limit resets every 24 hours.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <Link
+                to="/support"
+                className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+              >
+                Contact Support <MessageSquare size={16} />
+              </Link>
+              <Link
+                to="/pricing"
+                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black shadow-xl shadow-orange-100 hover:bg-orange-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+              >
+                Upgrade Plan <Crown size={18} />
+              </Link>
+              <button
+                onClick={() => setShowDailyLimitModal(false)}
+                className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>

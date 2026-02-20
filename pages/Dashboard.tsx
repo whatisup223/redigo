@@ -164,6 +164,7 @@ export const Dashboard: React.FC = () => {
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
     setIsLoading(true);
+    syncUser(); // Refresh daily limit and credits (essential for dashboard snapshot)
     try {
       const [histRes, profileRes, redditRes] = await Promise.allSettled([
         fetch(`/api/user/replies/sync?userId=${user.id}`),
@@ -536,87 +537,130 @@ export const Dashboard: React.FC = () => {
       {/* ── Bottom Row: Recent Activity + Quick Actions ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* Recent Activity */}
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden">
-          <div className="p-7 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white">
-                <Activity size={18} />
+        {/* Recent Activity & Billing */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Recent Activity */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden">
+            <div className="p-7 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white">
+                  <Activity size={18} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900">Recent Activity</h2>
+                  {!isLoading && history.length > 0 && (
+                    <p className="text-[10px] text-slate-400 font-medium">{history.length} total replies deployed</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-extrabold text-slate-900">Recent Activity</h2>
-                {!isLoading && history.length > 0 && (
-                  <p className="text-[10px] text-slate-400 font-medium">{history.length} total replies deployed</p>
-                )}
-              </div>
+              <Link to="/analytics" className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                View All <ArrowRight size={14} />
+              </Link>
             </div>
-            <Link to="/analytics" className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1">
-              View All <ArrowRight size={14} />
-            </Link>
+
+            {isLoading ? (
+              <div className="flex items-center justify-center p-16">
+                <RefreshCw className="animate-spin text-orange-600" size={28} />
+              </div>
+            ) : recent.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-16 gap-4 text-center">
+                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
+                  <MessageSquarePlus size={28} />
+                </div>
+                <p className="text-slate-900 font-bold text-sm">No activity yet</p>
+                <p className="text-slate-400 text-xs">
+                  Go to{' '}
+                  <Link to="/comment-agent" className="text-orange-600 font-bold hover:underline">Comments</Link>
+                  {' '}to deploy your first AI reply.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-50">
+                {recent.map((row) => (
+                  <div key={row.id} className="flex items-center gap-4 px-7 py-5 hover:bg-slate-50/60 transition-colors group">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 text-sm truncate group-hover:text-orange-600 transition-colors">
+                        {row.postTitle}
+                      </p>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-lg">
+                          r/{row.subreddit}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                          <Clock size={10} />
+                          {new Date(row.deployedAt).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-slate-500 shrink-0">
+                      <button
+                        onClick={() => setSelectedEntry(row)}
+                        className="p-2.5 bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all active:scale-95"
+                        title="View Details"
+                      >
+                        <LayoutList size={16} />
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <ThumbsUp size={13} className={row.ups > 0 ? 'text-green-500' : 'text-slate-300'} />
+                        <span className="text-xs font-bold">{row.ups ?? 0}</span>
+                      </div>
+                    </div>
+                    <a href={row.postUrl} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ExternalLink size={14} className="text-slate-400 hover:text-orange-600" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center p-16">
-              <RefreshCw className="animate-spin text-orange-600" size={28} />
-            </div>
-          ) : recent.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-16 gap-4 text-center">
-              <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
-                <MessageSquarePlus size={28} />
-              </div>
-              <p className="text-slate-900 font-bold text-sm">No activity yet</p>
-              <p className="text-slate-400 text-xs">
-                Go to{' '}
-                <Link to="/comment-agent" className="text-orange-600 font-bold hover:underline">Comments</Link>
-                {' '}to deploy your first AI reply.
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {recent.map((row) => (
-                <div key={row.id} className="flex items-center gap-4 px-7 py-5 hover:bg-slate-50/60 transition-colors group">
-                  <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
-                    <MessageSquare size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 text-sm truncate group-hover:text-orange-600 transition-colors">
-                      {row.postTitle}
-                    </p>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-lg">
-                        r/{row.subreddit}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                        <Clock size={10} />
-                        {new Date(row.deployedAt).toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-slate-500 shrink-0">
-                    <button
-                      onClick={() => setSelectedEntry(row)}
-                      className="p-2.5 bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all active:scale-95"
-                      title="View Details"
-                    >
-                      <LayoutList size={16} />
-                    </button>
-                    <div className="flex items-center gap-1.5">
-                      <ThumbsUp size={13} className={row.ups > 0 ? 'text-green-500' : 'text-slate-300'} />
-                      <span className="text-xs font-bold">{row.ups ?? 0}</span>
-                    </div>
-                  </div>
-                  <a href={row.postUrl} target="_blank" rel="noreferrer" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ExternalLink size={14} className="text-slate-400 hover:text-orange-600" />
-                  </a>
+          {/* Recent Billing (Moved) */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center">
+                  <CreditCard size={18} />
                 </div>
-              ))}
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900">Recent Billing</h2>
+                </div>
+              </div>
+              <Link to="/settings?tab=billing" className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1">
+                View All <ArrowRight size={14} />
+              </Link>
             </div>
-          )}
+
+            <div className="space-y-3">
+              {user?.transactions && user.transactions.length > 0 ? (
+                [...user.transactions].reverse().slice(0, 3).map((tx, i) => (
+                  <div key={tx.id || i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-colors hover:border-purple-200">
+                    <div className="flex items-center gap-4">
+                      <div className="flex flex-col">
+                        <p className="font-bold text-slate-900 text-sm">{tx.description || 'Pro Plan Subscription'}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{new Date(tx.date).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-slate-900">{tx.amount > 0 ? `$${tx.amount.toFixed(2)}` : 'FREE'}</p>
+                      <span className="text-[9px] font-black text-green-600 bg-green-100 px-2 py-0.5 rounded-md">PAID</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                  <p className="text-sm font-bold text-slate-300">No invoices found</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Quick Actions + Recent Billing + Reddit Karma */}
+        {/* Quick Actions + Reddit Karma */}
         <div className="space-y-6">
           <div className="flex flex-col gap-6">
             <div className="space-y-4">
@@ -641,39 +685,6 @@ export const Dashboard: React.FC = () => {
               />
             </div>
 
-            {/* Recent Billing Summary */}
-            <div className="bg-white rounded-[1.75rem] border border-slate-200/60 shadow-sm p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CreditCard size={16} className="text-purple-600" />
-                  <h2 className="text-sm font-extrabold text-slate-900">Recent Billing</h2>
-                </div>
-                <Link to="/settings?tab=billing" className="text-[10px] font-black text-slate-400 hover:text-orange-600 uppercase tracking-widest transition-colors">
-                  All Invoices
-                </Link>
-              </div>
-
-              <div className="space-y-2">
-                {user?.transactions && user.transactions.length > 0 ? (
-                  [...user.transactions].reverse().slice(0, 2).map((tx, i) => (
-                    <div key={tx.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-orange-100 transition-all">
-                      <div className="flex flex-col">
-                        <p className="text-[11px] font-bold text-slate-900 truncate max-w-[120px]">{tx.description || 'Transaction'}</p>
-                        <p className="text-[9px] text-slate-400 font-medium">{new Date(tx.date).toLocaleDateString()}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[11px] font-black text-slate-900">{tx.amount > 0 ? `$${tx.amount.toFixed(2)}` : 'FREE'}</p>
-                        <p className="text-[8px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block">PAID</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    <p className="text-[10px] text-slate-400 font-bold italic">No billing history yet</p>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
           <QuickAction
             icon={BarChart3}

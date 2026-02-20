@@ -74,7 +74,7 @@ const StatCard = ({ label, value, trend, icon: Icon, color }: any) => (
 );
 
 export const Analytics: React.FC = () => {
-  const { user } = useAuth();
+  const { user, syncUser } = useAuth();
   const [history, setHistory] = useState<any[]>([]);
   const [postsHistory, setPostsHistory] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
@@ -94,6 +94,7 @@ export const Analytics: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
+      syncUser(); // Ensure credits and daily limits are accurate for analytics view
       try {
         // Fetch comments history
         const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}`);

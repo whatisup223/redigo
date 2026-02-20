@@ -68,28 +68,37 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
     const freshData = loadSettings();
     const localUsers = freshData.users || [];
 
-    const { userEmail, plan, credits } = session.metadata || {};
+    const { userEmail, plan, credits, billingCycle } = session.metadata || {};
     const stripeCustomerEmail = session.customer_details?.email;
     const emailToSearch = userEmail || stripeCustomerEmail;
 
-    addSystemLog('INFO', `[Webhook] Processing: ${emailToSearch} | Plan: ${plan}`);
-    console.log(`[Webhook] Processing: ${emailToSearch} | Plan: ${plan}`);
+    addSystemLog('INFO', `[Webhook] Processing: ${emailToSearch} | Plan: ${plan} | Cycle: ${billingCycle}`);
+    console.log(`[Webhook] Processing: ${emailToSearch} | Plan: ${plan} | Cycle: ${billingCycle}`);
 
     if (emailToSearch && plan) {
       const userIndex = localUsers.findIndex(u => u.email.toLowerCase() === emailToSearch.toLowerCase());
 
       if (userIndex !== -1) {
-        const creditsToAdd = credits ? parseInt(credits) : getPlanCredits(plan);
+        let creditsToAdd = credits ? parseInt(credits) : getPlanCredits(plan);
+
+        // UPFRONT CREDITS FOR YEARLY
+        if (billingCycle === 'yearly') {
+          creditsToAdd = creditsToAdd * 12;
+          addSystemLog('INFO', `[Webhook] Yearly billing detected. Multiplying credits by 12: ${creditsToAdd}`);
+        }
+
         const currentCredits = localUsers[userIndex].credits || 0;
         const now = new Date();
-        const oneMonthLater = new Date(now);
-        oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+        const expirationDate = new Date(now);
+        if (billingCycle === 'yearly') expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        else expirationDate.setMonth(expirationDate.getMonth() + 1);
 
         localUsers[userIndex].plan = plan;
+        localUsers[userIndex].billingCycle = billingCycle || 'monthly';
         localUsers[userIndex].status = 'Active';
         localUsers[userIndex].credits = currentCredits + creditsToAdd;
         localUsers[userIndex].subscriptionStart = now.toISOString();
-        localUsers[userIndex].subscriptionEnd = oneMonthLater.toISOString();
+        localUsers[userIndex].subscriptionEnd = expirationDate.toISOString();
 
         if (!localUsers[userIndex].transactions) localUsers[userIndex].transactions = [];
         const newBalance = currentCredits + creditsToAdd;
@@ -100,7 +109,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
           amount: (session.amount_total || 0) / 100,
           currency: session.currency || 'USD',
           type: 'stripe_payment',
-          description: `Payment for ${plan} plan successful.`,
+          description: `Payment for ${plan} (${billingCycle}) plan successful.`,
           subDescription: `Previous: ${currentCredits} + New: ${creditsToAdd} = ${newBalance} Credits`,
           creditsAdded: creditsToAdd,
           previousBalance: currentCredits,
@@ -237,6 +246,8 @@ let plans = savedData.plans || [
     monthlyPrice: 0,
     yearlyPrice: 0,
     credits: 100,
+    dailyLimitMonthly: 5,
+    dailyLimitYearly: 5,
     features: ['20 AI Actions/mo', 'Basic Reddit Analytics', '1 Connected Account', 'Community Support'],
     isPopular: false,
     isCustom: true
@@ -247,6 +258,8 @@ let plans = savedData.plans || [
     monthlyPrice: 29,
     yearlyPrice: 290,
     credits: 150,
+    dailyLimitMonthly: 20,
+    dailyLimitYearly: 50,
     features: ['150 AI Actions/mo', 'Advanced Post Scheduling', '3 Connected Accounts', 'Priority Support', 'Image Generation'],
     isPopular: true,
     highlightText: 'Most Popular',
@@ -258,6 +271,8 @@ let plans = savedData.plans || [
     monthlyPrice: 99,
     yearlyPrice: 990,
     credits: 600,
+    dailyLimitMonthly: 100,
+    dailyLimitYearly: 300,
     features: ['600 AI Actions/mo', 'Unlimited Accounts', 'Team Collaboration', 'Dedicated Manager', 'API Access', 'White-label Reports'],
     isPopular: false,
     isCustom: true
@@ -272,7 +287,7 @@ const superuser = {
   email: process.env.ADMIN_EMAIL,
   password: process.env.ADMIN_PASSWORD,
   role: 'admin',
-  plan: 'Pro',
+  plan: 'Professional',
   status: 'Active',
   credits: 999999,
   hasCompletedOnboarding: true
@@ -400,9 +415,25 @@ app.post('/api/auth/signup', (req, res) => {
     password, // In a real app, hash this!
     role: 'user',
     plan: 'Starter',
+    billingCycle: 'monthly',
     status: 'Active',
     credits: 100, // Grant initial credits upon signup
-    hasCompletedOnboarding: false
+    hasCompletedOnboarding: false,
+    dailyUsage: 0,
+    dailyUsagePoints: 0,
+    customDailyLimit: 0,
+    lastUsageDate: new Date().toISOString().split('T')[0],
+    transactions: [],
+    usageStats: {
+      posts: 0,
+      comments: 0,
+      images: 0,
+      postsCredits: 0,
+      commentsCredits: 0,
+      imagesCredits: 0,
+      totalSpent: 0,
+      history: []
+    }
   };
 
   users.push(newUser);
@@ -481,9 +512,21 @@ app.post('/api/user/brand-profile', (req, res) => {
 let aiSettings = savedData.ai || {
   provider: 'google',
   model: 'gemini-1.5-flash',
-  temperature: 0.7,
-  maxOutputTokens: 1024,
-  systemPrompt: 'You are a helpful Reddit assistant. Generate engaging and valuable replies.',
+  temperature: 0.75,
+  maxOutputTokens: 1000,
+  systemPrompt: `IDENTITY: You are a Reddit growth expert acting as a highly helpful, authentic power-user. You don't sell; you solve.
+
+CORE STRATEGY:
+1. VALUE FIRST: Address the OP's pain point immediately with a non-obvious, actionable insight.
+2. AUTHENTICITY: Write like a human — vary sentence length, use contractions (it's, I've), and avoid corporate jargon.
+3. SUBTLE MARKETING: Mention the product only if it directly solves a problem mentioned. Frame it as "I found this tool" or "I've been using X for this".
+4. ANTI-AI RULES: Never use "Great question!", "leverage", "game-changer", "delve into", or "hope this helps".
+
+STRUCTURE:
+- Hook: Direct answer or relatable comment.
+- Meat: 1-2 specific points of value.
+- The Bridge: A natural transition to the tool/brand (if applicable).
+- Closing: A low-friction question or a "tldr" statement.`,
   apiKey: process.env.GEMINI_API_KEY || '',
   baseUrl: 'https://openrouter.ai/api/v1',
   creditCosts: {
@@ -533,7 +576,7 @@ app.get('/api/plans', (req, res) => {
 });
 
 app.post('/api/plans', (req, res) => {
-  const { id, name, monthlyPrice, yearlyPrice, credits, features, isPopular, highlightText } = req.body;
+  const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText } = req.body;
 
   if (!id || !name || monthlyPrice === undefined || yearlyPrice === undefined || credits === undefined) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -549,6 +592,8 @@ app.post('/api/plans', (req, res) => {
     monthlyPrice: parseFloat(monthlyPrice),
     yearlyPrice: parseFloat(yearlyPrice),
     credits: parseInt(credits),
+    dailyLimitMonthly: parseInt(dailyLimitMonthly) || 0,
+    dailyLimitYearly: parseInt(dailyLimitYearly) || 0,
     features: features || [],
     isPopular: !!isPopular,
     highlightText: highlightText || '',
@@ -569,7 +614,7 @@ app.put('/api/plans/:id', (req, res) => {
     return res.status(404).json({ error: 'Plan not found' });
   }
 
-  const { name, monthlyPrice, yearlyPrice, credits, features, isPopular, highlightText } = req.body;
+  const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText } = req.body;
 
   plans[planIndex] = {
     ...plans[planIndex],
@@ -577,6 +622,8 @@ app.put('/api/plans/:id', (req, res) => {
     monthlyPrice: monthlyPrice !== undefined ? parseFloat(monthlyPrice) : plans[planIndex].monthlyPrice,
     yearlyPrice: yearlyPrice !== undefined ? parseFloat(yearlyPrice) : plans[planIndex].yearlyPrice,
     credits: credits !== undefined ? parseInt(credits) : plans[planIndex].credits,
+    dailyLimitMonthly: dailyLimitMonthly !== undefined ? parseInt(dailyLimitMonthly) : plans[planIndex].dailyLimitMonthly,
+    dailyLimitYearly: dailyLimitYearly !== undefined ? parseInt(dailyLimitYearly) : plans[planIndex].dailyLimitYearly,
     features: features || plans[planIndex].features,
     isPopular: isPopular !== undefined ? !!isPopular : plans[planIndex].isPopular,
     highlightText: highlightText || plans[planIndex].highlightText,
@@ -686,6 +733,7 @@ app.post('/api/user/subscribe', async (req, res) => {
       metadata: {
         userEmail: user.email,
         plan: plan.name, // Pass ID or Name
+        billingCycle: billingCycle,
         credits: plan.credits.toString(),
         previousCreditsSnap: (user.credits || 0).toString()
       },
@@ -920,6 +968,15 @@ app.get('/api/users/:id', (req, res) => {
   const user = users.find(u => u.id == id);
 
   if (user) {
+    // PROACTIVE DAILY LIMIT RESET
+    const today = new Date().toISOString().split('T')[0];
+    if (user.role !== 'admin' && user.lastUsageDate !== today) {
+      user.dailyUsage = 0;
+      user.dailyUsagePoints = 0;
+      user.lastUsageDate = today;
+      saveSettings({ users });
+    }
+
     const { password, ...safeUser } = user;
     res.json(safeUser);
   } else {
@@ -1272,18 +1329,39 @@ app.post('/api/generate', async (req, res) => {
       return res.status(500).json({ error: 'AI provider is not configured. Please contact the administrator.' });
     }
 
-    // CHECK CREDITS
     const userIndex = users.findIndex(u => String(u.id) === String(userId));
-    if (userIndex === -1) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
     const user = users[userIndex];
+
     const rawCost = (aiSettings.creditCosts && aiSettings.creditCosts[type]);
     const cost = Number(rawCost) || (type === 'post' ? 2 : 1);
 
-    if (user.role !== 'admin' && (user.credits || 0) < cost) {
-      return res.status(402).json({ error: `Insufficient credits. This action requires ${cost} credits.` });
+    const today = new Date().toISOString().split('T')[0];
+
+    // Reset daily usage if date changed (FOR EVERYONE)
+    if (user.lastUsageDate !== today) {
+      user.dailyUsage = 0;
+      user.dailyUsagePoints = 0;
+      user.lastUsageDate = today;
+    }
+
+    if (user.role !== 'admin') {
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
+        addSystemLog('WARN', `Daily limit reached for user: ${user.email}`, { dailyLimit, usagePoints: user.dailyUsagePoints, cost });
+        return res.status(429).json({
+          error: `Daily limit reached. Your ${Number(user.customDailyLimit) > 0 ? 'Custom' : user.plan} plan allows ${dailyLimit} credits per day.`,
+          used: user.dailyUsagePoints,
+          limit: dailyLimit
+        });
+      }
+
+      if ((user.credits || 0) < cost) {
+        return res.status(402).json({ error: `Insufficient credits. This action requires ${cost} credits.` });
+      }
     }
 
     let text = '';
@@ -1291,7 +1369,13 @@ app.post('/api/generate', async (req, res) => {
     if (aiSettings.provider === 'google') {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(keyToUse);
-      const model = genAI.getGenerativeModel({ model: aiSettings.model });
+      const model = genAI.getGenerativeModel({
+        model: aiSettings.model,
+        generationConfig: {
+          temperature: aiSettings.temperature,
+          maxOutputTokens: aiSettings.maxOutputTokens,
+        }
+      });
 
       const result = await model.generateContent([
         aiSettings.systemPrompt,
@@ -1336,24 +1420,33 @@ app.post('/api/generate', async (req, res) => {
       }
     }
 
-    // DEDUCT CREDIT (except for admin)
+    // UPDATE STATS AND USAGE (FOR EVERYONE)
     if (user.role !== 'admin') {
       user.credits = Math.max(0, (user.credits || 0) - cost);
-      // Track usage stats
-      if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
-      const statKey = type === 'post' ? 'posts' : 'comments';
-      const creditKey = type === 'post' ? 'postsCredits' : 'commentsCredits';
-      user.usageStats[statKey] = (user.usageStats[statKey] || 0) + 1;
-      user.usageStats[creditKey] = (user.usageStats[creditKey] || 0) + cost;
-      user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
-      user.usageStats.history = user.usageStats.history || [];
-      user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
-      console.log(`[USAGE] user=${userId} type=${type} cost=${cost} => stats:`, JSON.stringify({ posts: user.usageStats.posts, comments: user.usageStats.comments, totalSpent: user.usageStats.totalSpent }));
-      saveSettings({ users });
-      addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits });
     }
+    user.dailyUsage = (user.dailyUsage || 0) + 1;
+    user.dailyUsagePoints = (user.dailyUsagePoints || 0) + cost;
+    user.lastUsageDate = today;
 
-    res.json({ text, credits: user.credits });
+    // Track usage stats
+    if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+    const statKey = type === 'post' ? 'posts' : 'comments';
+    const creditKey = type === 'post' ? 'postsCredits' : 'commentsCredits';
+    user.usageStats[statKey] = (user.usageStats[statKey] || 0) + 1;
+    user.usageStats[creditKey] = (user.usageStats[creditKey] || 0) + cost;
+    user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
+    user.usageStats.history = user.usageStats.history || [];
+    user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
+
+    saveSettings({ users });
+    addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
+
+    res.json({
+      text,
+      credits: user.credits,
+      dailyUsage: user.dailyUsage,
+      dailyUsagePoints: user.dailyUsagePoints
+    });
   } catch (error) {
     console.error('AI Generation Error:', error);
     res.status(500).json({ error: error.message });
@@ -1377,8 +1470,32 @@ app.post('/api/generate-image', async (req, res) => {
     const user = users[userIndex];
     const cost = Number(aiSettings.creditCosts?.image) || 5;
 
-    if (user.role !== 'admin' && (user.credits || 0) < cost) {
-      return res.status(402).json({ error: `Insufficient credits. Image generation requires ${cost} credits.` });
+    const today = new Date().toISOString().split('T')[0];
+
+    // Reset daily usage if date changed (FOR EVERYONE)
+    if (user.lastUsageDate !== today) {
+      user.dailyUsage = 0;
+      user.dailyUsagePoints = 0;
+      user.lastUsageDate = today;
+    }
+
+    if (user.role !== 'admin') {
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
+        addSystemLog('WARN', `Daily limit reached (Image) for user: ${user.email}`, { dailyLimit, usagePoints: user.dailyUsagePoints, cost });
+        return res.status(429).json({
+          error: `Daily limit reached. Your ${Number(user.customDailyLimit) > 0 ? 'Custom' : user.plan} plan allows ${dailyLimit} credits per day.`,
+          used: user.dailyUsagePoints,
+          limit: dailyLimit
+        });
+      }
+
+      if ((user.credits || 0) < cost) {
+        return res.status(402).json({ error: `Insufficient credits. Image generation requires ${cost} credits.` });
+      }
     }
 
     const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -1398,25 +1515,50 @@ app.post('/api/generate-image', async (req, res) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'Image AI API Error');
 
-    // DEDUCT CREDIT
+    // UPDATE STATS (FOR EVERYONE)
     if (user.role !== 'admin') {
       user.credits = Math.max(0, (user.credits || 0) - cost);
-      // Track usage stats
-      if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
-      user.usageStats.images = (user.usageStats.images || 0) + 1;
-      user.usageStats.imagesCredits = (user.usageStats.imagesCredits || 0) + cost;
-      user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
-      user.usageStats.history = user.usageStats.history || [];
-      user.usageStats.history.push({ date: new Date().toISOString(), type: 'image', cost });
-      saveSettings({ users });
-      addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: user.credits });
     }
+    user.dailyUsage = (user.dailyUsage || 0) + 1;
+    user.dailyUsagePoints = (user.dailyUsagePoints || 0) + cost;
+    user.lastUsageDate = today;
 
-    res.json({ url: data.data[0].url, credits: user.credits });
+    // Track usage stats
+    if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+    user.usageStats.images = (user.usageStats.images || 0) + 1;
+    user.usageStats.imagesCredits = (user.usageStats.imagesCredits || 0) + cost;
+    user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
+    user.usageStats.history = user.usageStats.history || [];
+    user.usageStats.history.push({ date: new Date().toISOString(), type: 'image', cost });
+
+    // SAVE LATEST IMAGE FOR RECOVERY
+    user.latestImage = {
+      url: data.data[0].url,
+      prompt: prompt,
+      date: new Date().toISOString()
+    };
+
+    saveSettings({ users });
+    addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
+
+    res.json({
+      url: data.data[0].url,
+      credits: user.credits,
+      dailyUsage: user.dailyUsage,
+      dailyUsagePoints: user.dailyUsagePoints
+    });
   } catch (error) {
     console.error("Image Gen Error:", error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Endpoint to recover latest image
+app.get('/api/user/latest-image', (req, res) => {
+  const { userId } = req.query;
+  const user = users.find(u => String(u.id) === String(userId));
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json(user.latestImage || null);
 });
 
 // Reddit Fetching Proxy (Free JSON Method)
@@ -1487,13 +1629,8 @@ app.post('/api/reddit/reply', async (req, res) => {
     sentReplies.unshift(entry);
     saveSettings({ replies: sentReplies });
 
-    // Deduct credits logic (simplified for mock)
-    const userIndex = users.findIndex(u => u.id == userId);
-    if (userIndex !== -1 && users[userIndex].plan === 'Starter') {
-      users[userIndex].credits = (users[userIndex].credits || 3) - 1;
-    }
-
-    addSystemLog('SUCCESS', `Reddit Reply sent by User ${userId}`, { subreddit, postTitle, creditsRemaining: users[userIndex]?.credits });
+    // Log the successful reply
+    addSystemLog('SUCCESS', `Reddit Reply sent by User ${userId}`, { subreddit, postTitle });
 
     res.json({ success: true, entry });
   } catch (error) {
