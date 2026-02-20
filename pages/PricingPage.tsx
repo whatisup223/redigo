@@ -7,6 +7,7 @@ export const PricingPage: React.FC = () => {
     interface Plan {
         id: string;
         name: string;
+        description?: string;
         monthlyPrice: number;
         yearlyPrice: number;
         credits: number;
@@ -95,7 +96,6 @@ export const PricingPage: React.FC = () => {
                     Unlock the full potential of your AI agent. Cancel anytime.
                 </p>
 
-                {/* Billing Toggle */}
                 <div className="flex items-center justify-center gap-4 mt-8">
                     <span className={`text-sm font-bold ${billingCycle === 'monthly' ? 'text-slate-900' : 'text-slate-500'}`}>Monthly</span>
                     <button
@@ -105,9 +105,23 @@ export const PricingPage: React.FC = () => {
                         <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${billingCycle === 'monthly' ? 'translate-x-0' : 'translate-x-6'}`}></div>
                     </button>
                     <span className={`text-sm font-bold ${billingCycle === 'yearly' ? 'text-slate-900' : 'text-slate-500'}`}>
-                        Yearly <span className="text-green-600 text-xs ml-1 font-extrabold uppercase bg-green-100 px-2 py-0.5 rounded-full">-20%</span>
+                        Yearly
+                        {plans.length > 0 && (() => {
+                            const discounts = plans
+                                .filter((p: any) => p.monthlyPrice > 0 && p.yearlyPrice > 0)
+                                .map((p: any) => Math.round(100 - (p.yearlyPrice / (p.monthlyPrice * 12) * 100)));
+                            const maxDiscount = Math.max(...discounts, 0);
+
+                            return maxDiscount > 0 ? (
+                                <span className="text-green-600 text-[10px] ml-1.5 font-black uppercase bg-green-100 px-2.5 py-1 rounded-lg border border-green-200">
+                                    SAVE UP TO {maxDiscount}%
+                                </span>
+                            ) : null;
+                        })()}
                     </span>
+
                 </div>
+
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
@@ -121,6 +135,11 @@ export const PricingPage: React.FC = () => {
                     const credits = isYearlySelected ? plan.credits * 12 : plan.credits;
                     const dailyLimit = isYearlySelected ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
 
+                    // Calculate actual discount percentage
+                    const actualDiscount = (plan.monthlyPrice > 0 && plan.yearlyPrice > 0)
+                        ? Math.round(100 - (plan.yearlyPrice / (plan.monthlyPrice * 12) * 100))
+                        : 0;
+
                     return (
                         <div key={plan.id} className={`relative bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 flex flex-col`}>
                             {plan.isPopular && (
@@ -130,11 +149,21 @@ export const PricingPage: React.FC = () => {
                             )}
 
                             <div className="mb-8">
-                                <h3 className={`text-2xl font-bold ${plan.isPopular ? 'text-orange-600' : 'text-slate-900'}`}>{plan.name}</h3>
+                                <div className="flex flex-col gap-1.5">
+                                    <h3 className={`text-2xl font-bold ${plan.isPopular ? 'text-orange-600' : 'text-slate-900'}`}>{plan.name}</h3>
+                                    {isYearlySelected && actualDiscount > 0 && (
+                                        <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-lg w-fit">
+                                            SAVE {actualDiscount}%
+                                        </span>
+                                    )}
+                                </div>
+
                                 <p className="text-slate-500 text-sm mt-2 font-medium">
-                                    {plan.name === 'Starter' ? 'For individuals exploring AI replies.' :
-                                        plan.name === 'Professional' ? 'Perfect for indie hackers and solo founders.' :
-                                            plan.name === 'Agency' ? 'For serious growth and small teams.' : 'Custom plan for enterprise needs.'}
+                                    {plan.description || (
+                                        plan.name?.toLowerCase() === 'starter' ? 'For individuals exploring AI replies.' :
+                                            plan.name?.toLowerCase() === 'professional' ? 'Perfect for indie hackers and solo founders.' :
+                                                'For serious growth and small teams.'
+                                    )}
                                 </p>
                             </div>
 
@@ -143,15 +172,23 @@ export const PricingPage: React.FC = () => {
                                 {isFree ? (
                                     <span className="text-5xl font-extrabold text-slate-900">Free</span>
                                 ) : (
-                                    <>
-                                        <span className="text-5xl font-extrabold text-slate-900">${price}</span>
-                                        <span className="text-slate-400 font-medium">/mo</span>
-                                    </>
+                                    <div className="flex flex-col">
+                                        {isYearlySelected && (
+                                            <span className="text-lg font-bold text-slate-300 line-through mb-[-4px] ml-1">${plan.monthlyPrice}</span>
+                                        )}
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-5xl font-extrabold text-slate-900">${price}</span>
+                                            <span className="text-slate-400 font-medium">/mo</span>
+                                        </div>
+                                    </div>
                                 )}
                                 {isYearlySelected && (
-                                    <span className="text-xs text-green-600 font-bold ml-2 bg-green-50 px-2 py-1 rounded-full">Billed ${plan.yearlyPrice}/yr</span>
+                                    <div className="ml-auto text-right">
+                                        <span className="text-[10px] text-green-600 font-black block bg-green-50 px-2 py-1 rounded-lg border border-green-100">Billed ${plan.yearlyPrice}/yr</span>
+                                    </div>
                                 )}
                             </div>
+
 
                             <ul className="space-y-4 mb-8 flex-1">
                                 <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">

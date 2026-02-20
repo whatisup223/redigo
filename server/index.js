@@ -243,6 +243,7 @@ let plans = savedData.plans || [
   {
     id: 'starter',
     name: 'Starter',
+    description: 'For individuals exploring AI replies.',
     monthlyPrice: 0,
     yearlyPrice: 0,
     credits: 100,
@@ -258,8 +259,9 @@ let plans = savedData.plans || [
   {
     id: 'pro',
     name: 'Professional',
+    description: 'Perfect for indie hackers and solo founders.',
     monthlyPrice: 29,
-    yearlyPrice: 279, // ~20% discount (29 * 12 * 0.8 = 278.4)
+    yearlyPrice: 276,
     credits: 300,
     dailyLimitMonthly: 20,
     dailyLimitYearly: 50,
@@ -274,13 +276,14 @@ let plans = savedData.plans || [
   {
     id: 'agency',
     name: 'Agency',
+    description: 'For serious growth and small teams.',
     monthlyPrice: 99,
-    yearlyPrice: 950, // ~20% discount (99 * 12 * 0.8 = 950.4)
+    yearlyPrice: 948,
     credits: 1000,
     dailyLimitMonthly: 100,
     dailyLimitYearly: 300,
-    maxAccounts: -1, // Unlimited
-    maxBrands: -1, // Unlimited
+    maxAccounts: -1,
+    maxBrands: -1,
     allowOverride: true,
     features: ['1000 AI actions/mo', 'Unlimited Accounts', 'Unlimited Brand Profiles', 'Team Collaboration', 'Dedicated Manager', 'API Access'],
     isPopular: false,
@@ -379,13 +382,17 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
-      addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading.`);
-      console.log(`[Subscription] User ${user.email} subscription expired. Downgrading.`);
+      addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
+      console.log(`[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
       user.plan = 'Starter';
       const freePlan = plans.find(p => p.id === 'starter');
-      user.credits = freePlan ? freePlan.credits : 50;
-      user.subscriptionStart = null;
-      user.subscriptionEnd = null;
+      const now = new Date();
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+      user.credits = freePlan ? freePlan.credits : 100;
+      user.subscriptionStart = now.toISOString();
+      user.subscriptionEnd = nextMonth.toISOString();
       saveSettings({ users });
     }
 
@@ -428,6 +435,8 @@ app.post('/api/auth/signup', (req, res) => {
     billingCycle: 'monthly',
     status: 'Active',
     credits: 100, // Grant initial credits upon signup
+    subscriptionStart: new Date().toISOString(),
+    subscriptionEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
     hasCompletedOnboarding: false,
     dailyUsage: 0,
     dailyUsagePoints: 0,
@@ -582,6 +591,10 @@ app.get('/api/config', (req, res) => {
 });
 
 app.get('/api/plans', (req, res) => {
+  const freshSettings = loadSettings();
+  if (freshSettings.plans) {
+    plans = freshSettings.plans;
+  }
   res.json(plans);
 });
 
@@ -985,6 +998,39 @@ app.get('/api/users/:id', (req, res) => {
       user.dailyUsagePoints = 0;
       user.lastUsageDate = today;
       saveSettings({ users });
+    }
+
+    // PROACTIVE MONTHLY CREDIT RENEWAL (For Free/Starter Plan)
+    // If the month is up for a free user, reset their credits to 100 and set next month
+    if ((user.plan === 'Starter' || user.plan === 'starter') && user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
+      const now = new Date();
+      const nextEnd = new Date(now);
+      nextEnd.setMonth(nextEnd.getMonth() + 1);
+
+      const freePlan = plans.find(p => p.id === 'starter' || p.name === 'Starter');
+      const resetCredits = freePlan ? freePlan.credits : 100;
+
+      user.credits = resetCredits;
+      user.subscriptionStart = now.toISOString();
+      user.subscriptionEnd = nextEnd.toISOString();
+
+      if (!user.transactions) user.transactions = [];
+      user.transactions.push({
+        id: `renew_starter_${Date.now()}`,
+        date: now.toISOString(),
+        amount: 0,
+        currency: 'USD',
+        type: 'monthly_renewal',
+        description: 'Monthly Free Plan Credit Renewal',
+        subDescription: 'Your 100 monthly credits have been refilled.',
+        creditsAdded: resetCredits,
+        finalBalance: resetCredits,
+        planName: 'Starter'
+      });
+
+      saveSettings({ users });
+      addSystemLog('SUCCESS', `[Renewal] Monthly credits refilled for Starter user: ${user.email}`);
+      console.log(`[Renewal] Monthly credits refilled for ${user.email}`);
     }
 
     const { password, ...safeUser } = user;

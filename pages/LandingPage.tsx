@@ -555,11 +555,23 @@ export const LandingPage: React.FC = () => {
                 >
                   Yearly
                 </button>
-                <span className="absolute -top-6 -right-12 bg-green-500 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-md animate-bounce">
-                  SAVE 20%
-                </span>
+                {plans.length > 0 && (() => {
+                  const discounts = plans
+                    .filter((p: any) => p.monthlyPrice > 0 && p.yearlyPrice > 0)
+                    .map((p: any) => Math.round(100 - (p.yearlyPrice / (p.monthlyPrice * 12) * 100)));
+                  const maxDiscount = Math.max(...discounts, 0);
+
+                  return maxDiscount > 0 ? (
+                    <span className="absolute -top-6 -right-12 bg-green-500 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-md animate-bounce whitespace-nowrap">
+                      SAVE UP TO {maxDiscount}%
+                    </span>
+                  ) : null;
+                })()}
               </div>
+
             </div>
+
+
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch">
@@ -586,33 +598,52 @@ export const LandingPage: React.FC = () => {
                     <div className="absolute top-0 right-0 w-48 h-48 bg-orange-50 rounded-bl-[160px] -mr-12 -mt-12 pointer-events-none transition-transform hover:scale-110"></div>
                   )}
                   {plan.isPopular && (
-                    <div className="absolute top-8 right-8 bg-orange-100 text-orange-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                    <div className="absolute top-6 right-6 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
                       Most Popular
                     </div>
                   )}
 
                   <div className="relative z-10 flex flex-col h-full">
                     <div className="mb-8">
-                      <span className={`font-black uppercase tracking-widest text-[10px] px-3 py-1 rounded-full ${plan.isPopular ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-500'}`}>{plan.name}</span>
-                      <div className="flex items-baseline gap-1 mt-6">
-                        {isFree ? (
-                          <span className="text-6xl font-black text-slate-900 tracking-tight">Free</span>
-                        ) : (
-                          <>
-                            <span className="text-6xl font-black text-slate-900 tracking-tight">${price}</span>
-                            <span className="text-slate-400 font-bold text-lg">/mo</span>
-                          </>
+                      <div className="flex flex-col gap-2">
+                        <span className={`font-black uppercase tracking-widest text-[10px] px-3 py-1 rounded-full w-fit ${plan.isPopular ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-500'}`}>{plan.name}</span>
+                        {isYearlySelected && actualDiscount > 0 && (
+                          <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded-lg w-fit">
+                            SAVE {actualDiscount}%
+                          </span>
                         )}
                       </div>
+
+
+                      <div className="mt-6">
+                        <div className="flex items-baseline gap-2">
+                          {isFree ? (
+                            <span className="text-6xl font-black text-slate-900 tracking-tight">Free</span>
+                          ) : (
+                            <div className="flex flex-col">
+                              {isYearlySelected && (
+                                <span className="text-xl font-bold text-slate-300 line-through mb-[-8px] ml-1">${plan.monthlyPrice}</span>
+                              )}
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-6xl font-black text-slate-900 tracking-tight">${price}</span>
+                                <span className="text-slate-400 font-bold text-lg">/mo</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {billingCycle === 'yearly' && !isFree && plan.yearlyPrice > 0 && (
                         <p className="text-green-600 text-xs font-black mt-2 bg-green-50 px-2 py-1 rounded-lg w-fit">
                           Billed ${plan.yearlyPrice} annually
                         </p>
                       )}
                       <p className="text-slate-400 text-sm mt-4 font-medium leading-relaxed">
-                        {plan.name === 'Starter' ? 'Perfect for trying out the platform.' :
-                          plan.name === 'Growth' ? 'Everything you need to scale fast.' :
-                            'For power users and teams.'}
+                        {plan.description || (
+                          plan.name?.toLowerCase() === 'starter' ? 'Perfect for individuals exploring AI replies.' :
+                            plan.name?.toLowerCase() === 'professional' ? 'Perfect for indie hackers and solo founders.' :
+                              'For serious growth and small teams.'
+                        )}
                       </p>
                     </div>
 
