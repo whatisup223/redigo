@@ -161,11 +161,15 @@ export const Dashboard: React.FC = () => {
     }
   }, [syncUser]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isInitial = false) => {
     if (!user?.id) return;
-    setIsLoading(true);
-    syncUser(); // Refresh daily limit and credits (essential for dashboard snapshot)
+
+    if (isInitial) setIsLoading(true);
+
     try {
+      // We don't necessarily need to syncUser here because AuthContext handles it on mount
+      // and other components handle it after actions. But if we must, we do it safely.
+
       const [histRes, profileRes, redditRes] = await Promise.allSettled([
         fetch(`/api/user/replies/sync?userId=${user.id}`),
         fetch(`/api/user/reddit/profile?userId=${user.id}`),
@@ -188,13 +192,14 @@ export const Dashboard: React.FC = () => {
     } catch (e) {
       console.error(e);
     } finally {
-      setIsLoading(false);
+      if (isInitial) setIsLoading(false);
     }
-  }, [user]);
+  }, [user?.id]); // Only depend on ID, not the whole user object
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
   }, [fetchData]);
+
 
   // ── derived stats ────────────────────────────────────────────────────────
 
@@ -365,7 +370,7 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           {/* Refresh button */}
           <button
-            onClick={fetchData}
+            onClick={() => fetchData(true)}
             disabled={isLoading}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-500 hover:text-orange-600 hover:border-orange-200 transition-all disabled:opacity-50"
           >

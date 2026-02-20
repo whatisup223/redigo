@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
 interface User {
     id: number;
@@ -48,7 +48,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
-    const syncUser = async () => {
+    const logout = useCallback(() => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setToken(null);
+        setUser(null);
+    }, []);
+
+    const syncUser = useCallback(async () => {
         const storedUser = localStorage.getItem('user');
         if (!storedUser) return;
 
@@ -59,74 +66,75 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
             if (response.ok) {
                 const freshUser = await response.json();
-                setUser(freshUser);
-                localStorage.setItem('user', JSON.stringify(freshUser));
+
+                // Only update if data is actually different to avoid unnecessary re-renders
+                setUser(prev => {
+                    const isDifferent = JSON.stringify(prev) !== JSON.stringify(freshUser);
+                    if (isDifferent) {
+                        localStorage.setItem('user', JSON.stringify(freshUser));
+                        return freshUser;
+                    }
+                    return prev;
+                });
+
                 console.log('[Auth] User synced with server:', freshUser.plan);
             } else if (response.status === 403) {
                 const data = await response.json();
                 if (data.error && (data.error.toLowerCase().includes('banned') || data.error.toLowerCase().includes('suspended'))) {
-                    // logout will trigger ProtectedRoute to redirect with state if on protected page
                     logout();
                 }
             }
         } catch (error) {
             console.error('[Auth] Sync failed:', error);
         }
-    };
+    }, [token, logout]);
 
     useEffect(() => {
-        // Check if token exists in localStorage on initial load
         const storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
         if (storedToken && storedUser) {
             setToken(storedToken);
             setUser(JSON.parse(storedUser));
-            // Always sync once on load
             syncUser();
         }
+    }, [syncUser]);
+
+    const login = useCallback((newToken: string, userData: User) => {
+        localStorage.setItem('token', newToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setToken(newToken);
+        setUser(userData);
     }, []);
 
-    const login = (newToken: string, userData: User) => {
+    const signup = useCallback((newToken: string, userData: User) => {
         localStorage.setItem('token', newToken);
         localStorage.setItem('user', JSON.stringify(userData));
         setToken(newToken);
         setUser(userData);
-    };
+    }, []);
 
-    const signup = (newToken: string, userData: User) => {
-        localStorage.setItem('token', newToken);
-        localStorage.setItem('user', JSON.stringify(userData));
-        setToken(newToken);
-        setUser(userData);
-    };
-
-    const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setToken(null);
-        setUser(null);
-    };
-
-    const updateUser = (userData: Partial<User>) => {
-        if (user) {
-            const updatedUser = { ...user, ...userData };
+    const updateUser = useCallback((userData: Partial<User>) => {
+        setUser(prev => {
+            if (!prev) return null;
+            const updatedUser = { ...prev, ...userData };
             localStorage.setItem('user', JSON.stringify(updatedUser));
-            setUser(updatedUser);
-        }
-    };
+            return updatedUser;
+        });
+    }, []);
 
-    const completeOnboarding = (credits?: number) => {
-        if (user) {
+    const completeOnboarding = useCallback((credits?: number) => {
+        setUser(prev => {
+            if (!prev) return null;
             const updatedUser = {
-                ...user,
+                ...prev,
                 hasCompletedOnboarding: true,
-                credits: credits !== undefined ? credits : user.credits
+                credits: credits !== undefined ? credits : prev.credits
             };
-            setUser(updatedUser);
             localStorage.setItem('user', JSON.stringify(updatedUser));
-        }
-    };
+            return updatedUser;
+        });
+    }, []);
 
     const isAuthenticated = !!token;
 
@@ -144,3 +152,4 @@ export const useAuth = (): AuthContextType => {
     }
     return context;
 };
+
