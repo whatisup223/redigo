@@ -7,9 +7,11 @@ interface User {
     role: string;
     plan: string;
     status: string;
+    statusMessage?: string;
     hasCompletedOnboarding: boolean;
     credits: number;
     avatar?: string;
+    transactions?: any[];
 }
 
 interface AuthContextType {
@@ -36,12 +38,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
             const userData = JSON.parse(storedUser);
-            const response = await fetch(`/api/users/${userData.id}`);
+            const response = await fetch(`/api/users/${userData.id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (response.ok) {
                 const freshUser = await response.json();
                 setUser(freshUser);
                 localStorage.setItem('user', JSON.stringify(freshUser));
                 console.log('[Auth] User synced with server:', freshUser.plan);
+            } else if (response.status === 403) {
+                const data = await response.json();
+                if (data.error && (data.error.toLowerCase().includes('banned') || data.error.toLowerCase().includes('suspended'))) {
+                    // logout will trigger ProtectedRoute to redirect with state if on protected page
+                    logout();
+                }
             }
         } catch (error) {
             console.error('[Auth] Sync failed:', error);

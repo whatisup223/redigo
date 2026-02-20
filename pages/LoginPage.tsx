@@ -1,19 +1,33 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Zap, Bot, BarChart, ArrowRight, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Zap, Bot, BarChart, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [errorReason, setErrorReason] = useState<string | null>(null);
+    const [isBlocked, setIsBlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    useEffect(() => {
+        // Handle redirect from ProtectedRoute with ban status
+        if (location.state?.isBlocked) {
+            setError(location.state.message);
+            setErrorReason(location.state.reason);
+            setIsBlocked(true);
+        }
+    }, [location]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        setError(null);
+        setErrorReason(null);
+        setIsBlocked(false);
         setIsLoading(true);
 
         try {
@@ -26,10 +40,10 @@ export const LoginPage: React.FC = () => {
             const data = await response.json();
 
             if (!response.ok) {
-                const errorMessage = data.reason
-                    ? `${data.error}\nReason: ${data.reason}`
-                    : (data.error || 'Login failed');
-                throw new Error(errorMessage);
+                setError(data.error || 'Login failed');
+                setErrorReason(data.reason || null);
+                setIsBlocked(data.error && (data.error.toLowerCase().includes('banned') || data.error.toLowerCase().includes('suspended')));
+                return;
             }
 
             login(data.token, data.user);
@@ -41,7 +55,7 @@ export const LoginPage: React.FC = () => {
                 navigate('/dashboard');
             }
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'An unexpected error occurred');
         } finally {
             setIsLoading(false);
         }
@@ -116,8 +130,18 @@ export const LoginPage: React.FC = () => {
 
                         <form className="space-y-5" onSubmit={handleSubmit}>
                             {error && (
-                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg font-medium border border-red-100 whitespace-pre-wrap">
-                                    {error}
+                                <div className={`p-4 rounded-2xl border font-medium ${isBlocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-50 text-red-600 border-red-100'} animate-in fade-in slide-in-from-top-2 duration-300`}>
+                                    <div className="flex items-start gap-3">
+                                        <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                                        <div className="space-y-1">
+                                            <p className="font-extrabold">{error}</p>
+                                            {errorReason && (
+                                                <p className="text-xs opacity-80 bg-red-100/50 p-2 rounded-lg mt-2 border border-red-200/50">
+                                                    <span className="font-black uppercase tracking-widest text-[10px]">Reason:</span> {errorReason}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                             <div className="space-y-1.5">

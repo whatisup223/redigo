@@ -5,7 +5,7 @@ import {
     User, CreditCard, Shield, Globe, Link as LinkIcon,
     LogOut, RefreshCw, CheckCircle2, Tag, Palette,
     Building2, Target, Zap, Save, Check, Pencil,
-    Upload, Trash2, Eye, X
+    Upload, Trash2, Eye, X, Archive
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -58,28 +58,23 @@ export const Settings: React.FC = () => {
 
     const [previewInvoice, setPreviewInvoice] = useState<string | null>(null);
 
-    const generateInvoiceImage = (user: any) => {
+    const generateInvoiceImage = (user: any, tx?: any) => {
         return new Promise<string>((resolve) => {
             const canvas = document.createElement('canvas');
             canvas.width = 800;
-            canvas.height = 600;
+            canvas.height = 640;
             const ctx = canvas.getContext('2d');
 
             // Plan Details Logic
-            let planCredits = 0;
-            let planPrice = '0.00';
-            const planName = user.plan || 'Free';
-
-            if (planName.toLowerCase() === 'professional' || planName.toLowerCase() === 'pro') {
-                planCredits = 150;
-                planPrice = '29.00';
-            } else if (planName.toLowerCase() === 'agency') {
-                planCredits = 600;
-                planPrice = '99.00';
-            } else {
-                planCredits = 100; // Starter/Free default
-                planPrice = '0.00';
-            }
+            const planName = tx?.planName || user.plan || 'Starter';
+            const price = tx?.amount !== undefined ? tx.amount.toFixed(2) : '0.00';
+            const description = tx?.description || `${planName} Plan Subscription`;
+            const isAdminAdj = tx?.isAdjustment === true;
+            const adjType = tx?.adjustmentType;
+            const prevBal = tx?.previousBalance;
+            const finalBal = tx?.finalBalance;
+            const creditsAdded = tx?.creditsAdded;
+            const subDescription = tx?.subDescription || (creditsAdded ? `Added ${creditsAdded} Credits` : '');
 
             if (ctx) {
                 // Background
@@ -112,9 +107,10 @@ export const Settings: React.FC = () => {
 
                 // Info
                 ctx.textAlign = 'right';
-                const date = new Date().toLocaleDateString();
+                const date = tx?.date ? new Date(tx.date).toLocaleDateString() : new Date().toLocaleDateString();
                 ctx.fillText(`Date: ${date}`, 750, 230);
-                ctx.fillText(`Invoice #: INV-${Math.floor(1000 + Math.random() * 9000)}`, 750, 255);
+                const invId = tx?.id ? String(tx.id).slice(-6).toUpperCase() : Math.floor(1000 + Math.random() * 9000);
+                ctx.fillText(`Invoice #: INV-${invId}`, 750, 255);
 
                 // Item Row
                 ctx.fillStyle = '#f1f5f9';
@@ -126,37 +122,90 @@ export const Settings: React.FC = () => {
                 ctx.textAlign = 'right';
                 ctx.fillText('AMOUNT', 730, 325);
 
-                // Item Details
+                // Item Details - Description
                 ctx.font = '16px Arial';
                 ctx.fillStyle = '#1e293b';
                 ctx.textAlign = 'left';
-                ctx.fillText(`${planName} Plan Subscription`, 70, 370);
+                ctx.fillText(description, 70, 370);
 
-                ctx.font = '14px Arial';
-                ctx.fillStyle = '#64748b';
-                ctx.fillText(`Includes ${planCredits} Credits`, 70, 395);
+                if (subDescription) {
+                    ctx.font = '13px Arial';
+                    ctx.fillStyle = '#64748b';
+                    ctx.fillText(subDescription, 70, 392);
+                }
+
+                // Credits breakdown for admin adjustments
+                let detailsY = 415;
+                if (isAdminAdj && prevBal !== undefined && finalBal !== undefined) {
+                    ctx.font = '13px Arial';
+                    ctx.textAlign = 'left';
+
+                    if (adjType === 'add_extra') {
+                        ctx.fillStyle = '#94a3b8';
+                        ctx.fillText(`Previous Balance:  ${prevBal} pts`, 70, detailsY);
+                        detailsY += 20;
+                        ctx.fillStyle = '#16a34a';
+                        ctx.fillText(`Credits Added:       +${creditsAdded} pts`, 70, detailsY);
+                        detailsY += 20;
+                        ctx.fillStyle = '#ea580c';
+                        ctx.font = 'bold 13px Arial';
+                        ctx.fillText(`Final Balance:        ${finalBal} pts`, 70, detailsY);
+                        detailsY += 15;
+                    } else if (adjType === 'plan_reset') {
+                        ctx.fillStyle = '#94a3b8';
+                        ctx.fillText(`Previous Balance:  ${prevBal} pts`, 70, detailsY);
+                        detailsY += 20;
+                        ctx.fillStyle = '#ea580c';
+                        ctx.font = 'bold 13px Arial';
+                        ctx.fillText(`Reset to Plan Default: ${finalBal} pts`, 70, detailsY);
+                        detailsY += 15;
+                    }
+                }
 
                 ctx.textAlign = 'right';
                 ctx.font = '16px Arial';
                 ctx.fillStyle = '#1e293b';
-                ctx.fillText(`$${planPrice}`, 730, 370);
+                ctx.fillText(`$${price}`, 730, 370);
 
                 // Total Line
+                const lineY = Math.max(detailsY + 20, 445);
                 ctx.beginPath();
-                ctx.moveTo(500, 430);
-                ctx.lineTo(750, 430);
+                ctx.moveTo(500, lineY);
+                ctx.lineTo(750, lineY);
                 ctx.strokeStyle = '#e2e8f0';
                 ctx.stroke();
 
                 ctx.font = 'bold 20px Arial';
                 ctx.fillStyle = '#0f172a';
-                ctx.fillText(`Total: $${planPrice}`, 730, 470);
+                ctx.fillText(`Total: $${price}`, 730, lineY + 35);
+
+                // Admin Adjustment Badge
+                if (isAdminAdj) {
+                    let badgeLabel = 'ADMIN ADJUSTMENT';
+                    let badgeColor = '#fef3c7';
+                    let textColor = '#92400e';
+                    if (adjType === 'add_extra') {
+                        badgeLabel = 'ADMIN EXTRA CREDITS';
+                        badgeColor = '#dcfce7'; textColor = '#166534';
+                    } else if (adjType === 'plan_reset') {
+                        badgeLabel = 'ADMIN PLAN CHANGE';
+                        badgeColor = '#fff7ed'; textColor = '#c2410c';
+                    }
+                    ctx.fillStyle = badgeColor;
+                    ctx.beginPath();
+                    ctx.roundRect?.(50, lineY + 15, 220, 28, 6);
+                    ctx.fill?.();
+                    ctx.font = 'bold 11px Arial';
+                    ctx.fillStyle = textColor;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(badgeLabel, 160, lineY + 34);
+                }
 
                 // Footer
                 ctx.textAlign = 'center';
                 ctx.font = '14px Arial';
                 ctx.fillStyle = '#94a3b8';
-                ctx.fillText('Thank you for choosing Redigo.', 400, 550);
+                ctx.fillText('Thank you for choosing Redigo.', 400, 615);
 
                 resolve(canvas.toDataURL('image/png'));
             }
@@ -811,15 +860,15 @@ export const Settings: React.FC = () => {
                                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg text-[10px] font-black tracking-widest uppercase mb-4 text-orange-400">
                                         <Shield size={12} /> Current Plan
                                     </div>
-                                    <p className="text-4xl font-extrabold mb-2">{user.plan || 'Free'} Plan</p>
+                                    <p className="text-4xl font-extrabold mb-2">{user.plan || 'Starter'} Plan</p>
                                     <p className="text-slate-400 text-sm opacity-80">
-                                        {user.plan === 'Free'
+                                        {user.plan === 'Starter'
                                             ? 'Basic access. Upgrade to unlock more power.'
                                             : 'Your plan serves you well. Keep growing!'}
                                     </p>
                                 </div>
                                 <div className="text-right">
-                                    {user.plan === 'Free' ? (
+                                    {user.plan === 'Starter' ? (
                                         <Link to="/pricing" className="px-8 py-3 bg-orange-600 text-white rounded-xl font-black hover:bg-orange-500 hover:shadow-lg hover:shadow-orange-600/30 transition-all inline-block">
                                             UPGRADE NOW
                                         </Link>
@@ -837,8 +886,9 @@ export const Settings: React.FC = () => {
                         </div>
 
                         {/* Usage & Credits */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
+                        <div className="flex flex-col gap-8">
+                            {/* Credits Counter Card */}
+                            <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4 max-w-md">
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                                         <Zap size={20} fill="currentColor" />
@@ -865,65 +915,85 @@ export const Settings: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* Billing History Card - Now Below */}
                             <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                                        <CreditCard size={20} />
-                                    </div>
-                                    <div>
-                                        <p className="font-extrabold text-slate-900">Recent Invoices</p>
-                                        <p className="text-xs text-slate-400 font-medium">Last 3 payments</p>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                                            <CreditCard size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="font-extrabold text-slate-900">Billing History</p>
+                                            <p className="text-xs text-slate-400 font-medium">View and download your invoices ({user.transactions?.length || 0})</p>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="space-y-3">
-                                    {/* Placeholder Invoices - In a real app, fetch these */}
-                                    {user.plan === 'Free' ? (
-                                        <p className="text-sm text-slate-400 italic py-2">No payment history available.</p>
-                                    ) : (
-                                        [1].map((_, i) => (
-                                            <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-orange-200 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-white rounded-lg border border-slate-100 text-slate-400 group-hover:text-orange-500 transition-colors">
-                                                        <CreditCard size={14} />
+                                <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar space-y-3">
+                                    {(user.transactions && user.transactions.length > 0) ? (
+                                        [...user.transactions].reverse().map((tx, i) => (
+                                            <div key={tx.id || i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-orange-200 transition-all">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`p-2.5 rounded-xl border border-slate-100 transition-colors ${tx.type === 'stripe_payment' ? 'bg-blue-100 text-blue-600' :
+                                                        tx.type === 'admin_plan_change' ? 'bg-purple-100 text-purple-600' :
+                                                            'bg-orange-100 text-orange-600'
+                                                        }`}>
+                                                        {tx.type === 'stripe_payment' ? <CreditCard size={18} /> :
+                                                            tx.type === 'admin_plan_change' ? <Shield size={18} /> :
+                                                                <Zap size={18} />}
                                                     </div>
                                                     <div>
-                                                        <p className="text-xs font-bold text-slate-900">Subscription Renewal</p>
-                                                        <p className="text-[10px] text-slate-400">{new Date().toLocaleDateString()}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-bold text-slate-900">{tx.description || 'Transaction'}</p>
+                                                            {tx.isAdjustment && (
+                                                                <span className="text-[8px] font-black bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded uppercase tracking-tighter">Adjusted by Admin</span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-400 font-medium">{new Date(tx.date).toLocaleDateString()} • {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-4">
                                                     <div className="text-right">
-                                                        <p className="text-xs font-bold text-slate-900">$29.00</p>
-                                                        <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md">PAID</span>
+                                                        <p className="text-sm font-black text-slate-900">
+                                                            {tx.amount > 0 ? `$${tx.amount.toFixed(2)}` : 'FREE'}
+                                                        </p>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${tx.type === 'stripe_payment' ? 'text-green-600 bg-green-50' : 'text-slate-500 bg-slate-200'
+                                                            }`}>
+                                                            {tx.type === 'stripe_payment' ? 'PAID' : 'PROCESSED'}
+                                                        </span>
                                                     </div>
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
                                                         <button
                                                             onClick={async () => {
-                                                                const dataUrl = await generateInvoiceImage(user);
+                                                                const dataUrl = await generateInvoiceImage(user, tx);
                                                                 setPreviewInvoice(dataUrl);
                                                             }}
-                                                            className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
                                                             title="Preview Invoice"
                                                         >
-                                                            <Eye size={16} />
+                                                            <Eye size={18} />
                                                         </button>
                                                         <button
                                                             onClick={async () => {
-                                                                const dataUrl = await generateInvoiceImage(user);
+                                                                const dataUrl = await generateInvoiceImage(user, tx);
                                                                 const link = document.createElement('a');
-                                                                link.download = `Redigo-Invoice-${new Date().toISOString().split('T')[0]}.png`;
+                                                                link.download = `Redigo-Invoice-${tx.id || 'TX'}.png`;
                                                                 link.href = dataUrl;
                                                                 link.click();
                                                             }}
-                                                            className="p-2 text-slate-300 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all"
+                                                            className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"
                                                             title="Download Invoice"
                                                         >
-                                                            <Upload className="rotate-180" size={16} />
+                                                            <Upload className="rotate-180" size={18} />
                                                         </button>
                                                     </div>
                                                 </div>
                                             </div>
                                         ))
+                                    ) : (
+                                        <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                            <Archive className="mx-auto text-slate-200 mb-2" size={32} />
+                                            <p className="text-sm text-slate-400 font-medium italic">No Billing History yet.</p>
+                                        </div>
                                     )}
                                 </div>
                             </div>

@@ -406,7 +406,7 @@ export const Analytics: React.FC = () => {
       )}
 
       <CreditsBanner
-        plan={user?.plan || 'Free'}
+        plan={user?.plan || 'Starter'}
         credits={user?.credits || 0}
       />
 

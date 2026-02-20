@@ -337,7 +337,8 @@ export const Comments: React.FC = () => {
         productMention: '',
         productLink: '',
         description: '',
-        targetAudience: ''
+        targetAudience: '',
+        problemSolved: ''
       });
       localStorage.removeItem('redigo_comment_draft');
     } catch (err: any) {
@@ -589,7 +590,7 @@ export const Comments: React.FC = () => {
         )}
 
         {/* Credits */}
-        <CreditsBanner plan={user?.plan || 'Free'} credits={user?.credits || 0} />
+        <CreditsBanner plan={user?.plan || 'Starter'} credits={user?.credits || 0} />
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
           {/* Posts List */}

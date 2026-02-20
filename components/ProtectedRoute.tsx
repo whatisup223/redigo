@@ -26,5 +26,14 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: b
         return <Navigate to="/dashboard" replace />;
     }
 
+    if (user && (user.status === 'Banned' || user.status === 'Suspended')) {
+        console.log('[ProtectedRoute] Blocking banned/suspended user');
+        return <Navigate to="/login" replace state={{
+            isBlocked: true,
+            message: `Your account has been ${user.status.toLowerCase()}.`,
+            reason: user.statusMessage || 'Contact support for details.'
+        }} />;
+    }
+
     return <>{children}</>;
 };

@@ -24,7 +24,7 @@ const CreditsBanner: React.FC<CreditsBannerProps> = ({ plan, credits }) => {
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-extrabold text-xl tracking-tight">{plan} Plan Active</h3>
-                        {plan === 'Free' && (
+                        {plan === 'Starter' && (
                             <span className="px-2 py-0.5 bg-orange-500/10 text-orange-500 text-[10px] font-black rounded-lg border border-orange-500/20 uppercase tracking-widest">Limited</span>
                         )}
                     </div>
@@ -44,7 +44,7 @@ const CreditsBanner: React.FC<CreditsBannerProps> = ({ plan, credits }) => {
                         <Crown size={18} className="text-orange-600 fill-orange-600" />
                         GET MORE CREDITS
                     </Link>
-                ) : plan === 'Free' ? (
+                ) : plan === 'Starter' ? (
                     <Link
                         to="/pricing"
                         className="w-full md:w-auto bg-slate-800 hover:bg-slate-700 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 border border-slate-700 hover:border-slate-600"

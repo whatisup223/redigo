@@ -87,6 +87,18 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
         localUsers[userIndex].subscriptionStart = now.toISOString();
         localUsers[userIndex].subscriptionEnd = oneMonthLater.toISOString();
 
+        if (!localUsers[userIndex].transactions) localUsers[userIndex].transactions = [];
+        localUsers[userIndex].transactions.push({
+          id: session.id || `tx_stripe_${Date.now()}`,
+          date: new Date().toISOString(),
+          amount: (session.amount_total || 0) / 100,
+          currency: session.currency || 'USD',
+          type: 'stripe_payment',
+          description: `Payment for ${plan} plan successful.`,
+          creditsAdded: creditsToAdd,
+          planName: plan
+        });
+
         users = localUsers;
         saveSettings({ users: localUsers });
         console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
@@ -103,27 +115,21 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
 
 // Middleware
 app.use(cors());
-
-// Use JSON parser for all other routes
-app.use((req, res, next) => {
-  if (req.originalUrl === '/api/webhook') {
-    next();
-  } else {
-    express.json()(req, res, next);
-  }
-});
+app.use(express.json());
 
 // Request Logging
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  if (req.method === 'POST') console.log('Body:', JSON.stringify(req.body));
+  const path = req.path.replace(/\/$/, '');
+  console.log(`[${new Date().toISOString()}] ${req.method} ${path}`);
+  if (req.method === 'POST' && !path.includes('/api/webhook')) {
+    console.log('Body:', JSON.stringify(req.body));
+  }
   next();
 });
 
-// JSON Error Handler for Body Parser
+// JSON Error Handler
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    console.error('Bad JSON request:', err.message);
     return res.status(400).json({ error: 'Invalid JSON payload' });
   }
   next();
@@ -192,14 +198,61 @@ console.log(`--- ADMIN ACCOUNT READY: ${superuser.email} ---`);
 let tickets = savedData.tickets || [];
 let sentReplies = savedData.replies || [];
 
+// General Auth Middleware to enforce Bans/Suspensions on every request
+const generalAuth = (req, res, next) => {
+  const path = req.path.replace(/\/$/, '');
+  // Try to extract user from token or ID
+  const authHeader = req.headers.authorization;
+  let userId = req.body?.userId || req.query?.userId || req.params?.id;
+
+  if (!userId && authHeader && authHeader.startsWith('Bearer mock-user-token-')) {
+    userId = authHeader.replace('Bearer mock-user-token-', '');
+  }
+
+  // Exempt public routes explicitly
+  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/forgot-password', '/api/health', '/api/webhook'];
+
+  if (publicRoutes.includes(path)) return next();
+
+  // If we have a userId, check status
+  if (userId) {
+    const user = users.find(u => u.id == userId);
+    if (user && (user.status === 'Banned' || user.status === 'Suspended')) {
+      console.log(`[AUTH] Blocked ${user.status} user: ${user.email}`);
+      return res.status(403).json({
+        error: `Your account has been ${user.status.toLowerCase()}.`,
+        reason: user.statusMessage || 'Contact support for details.'
+      });
+    }
+  } else if (authHeader === 'Bearer mock-jwt-token-123') {
+    // Admin token - check if admin is banned
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser && (adminUser.status === 'Banned' || adminUser.status === 'Suspended')) {
+      return res.status(403).json({
+        error: `Your account has been ${adminUser.status.toLowerCase()}.`,
+        reason: adminUser.statusMessage || ''
+      });
+    }
+  }
+
+  next();
+};
+
+app.use(generalAuth);
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
 // Authentication Endpoints
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  const user = users.find(u => u.email === email && u.password === password);
+  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
 
   if (user) {
     // Check if user is banned or suspended
     if (user.status === 'Banned' || user.status === 'Suspended') {
+      console.log(`[LOGIN] Blocked ${user.status} user: ${user.email}`);
       return res.status(403).json({
         error: `Your account has been ${user.status.toLowerCase()}.`,
         reason: user.statusMessage || 'No specific reason provided.'
@@ -218,7 +271,8 @@ app.post('/api/auth/login', (req, res) => {
 
     // In a real app, generate a JWT token here
     const { password, ...userWithoutPassword } = user;
-    res.json({ user: userWithoutPassword, token: 'mock-jwt-token-123' });
+    const token = user.role === 'admin' ? 'mock-jwt-token-123' : `mock-user-token-${user.id}`;
+    res.json({ user: userWithoutPassword, token });
   } else {
     res.status(401).json({ error: 'Invalid email or password' });
   }
@@ -227,7 +281,15 @@ app.post('/api/auth/login', (req, res) => {
 app.post('/api/auth/signup', (req, res) => {
   const { name, email, password } = req.body;
 
-  if (users.find(u => u.email === email)) {
+  const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  if (existingUser) {
+    if (existingUser.status === 'Banned' || existingUser.status === 'Suspended') {
+      console.log(`[SIGNUP] Blocked ${existingUser.status} user: ${existingUser.email}`);
+      return res.status(403).json({
+        error: `Your account has been ${existingUser.status.toLowerCase()}.`,
+        reason: existingUser.statusMessage || 'Contact support for details.'
+      });
+    }
     return res.status(400).json({ error: 'User already exists' });
   }
 
@@ -237,7 +299,7 @@ app.post('/api/auth/signup', (req, res) => {
     email,
     password, // In a real app, hash this!
     role: 'user',
-    plan: 'Free',
+    plan: 'Starter',
     status: 'Active',
     credits: 100, // Grant initial credits upon signup
     hasCompletedOnboarding: false
@@ -246,18 +308,27 @@ app.post('/api/auth/signup', (req, res) => {
   users.push(newUser);
   saveSettings({ users }); // Persist new user
   const { password: _, ...userWithoutPassword } = newUser;
-  res.status(201).json({ user: userWithoutPassword, token: 'mock-jwt-token-new' });
+  res.status(201).json({ user: userWithoutPassword, token: `mock-user-token-${newUser.id}` });
 });
 
 app.post('/api/auth/forgot-password', (req, res) => {
   const { email } = req.body;
-  const user = users.find(u => u.email === email);
+  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
   if (user) {
+    // Check if user is banned or suspended
+    if (user.status === 'Banned' || user.status === 'Suspended') {
+      console.log(`[FORGOT-PASSWORD] Blocked ${user.status} user: ${user.email}`);
+      return res.status(403).json({
+        error: `Your account has been ${user.status.toLowerCase()}.`,
+        reason: user.statusMessage || 'Contact support for details.'
+      });
+    }
+
     console.log(`[Mock Email] Password reset link sent to ${email}`);
     res.json({ message: 'If an account exists, a reset link has been sent.' });
   } else {
-    // For security, distinct generic message or same message
+    // For security, generic message
     res.json({ message: 'If an account exists, a reset link has been sent.' });
   }
 });
@@ -573,13 +644,6 @@ const adminAuth = (req, res, next) => {
   }
 };
 
-// Routes
-
-// Health Check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
-});
-
 // Admin Stats
 app.get('/api/admin/stats', adminAuth, (req, res) => {
   res.json({
@@ -619,9 +683,65 @@ app.put('/api/admin/users/:id', adminAuth, (req, res) => {
       delete updateData.password;
     }
 
-    // Explicitly handle status updates
+    // Logic for Plan Change & Refill
+    const oldPlanName = users[index].plan;
+    const oldCredits = users[index].credits;
+
+    // Explicitly handle status updates first
     if (req.body.status) updateData.status = req.body.status;
     if (req.body.statusMessage !== undefined) updateData.statusMessage = req.body.statusMessage;
+
+    // --- Plan changed: reset credits to new plan's default ---
+    if (updateData.plan && updateData.plan !== oldPlanName) {
+      const newPlanObj = plans.find(p => p.name === updateData.plan);
+      const newPlanCredits = newPlanObj?.credits ?? oldCredits;
+      // Base credits after plan change = new plan's credits
+      updateData.credits = newPlanCredits;
+
+      if (!users[index].transactions) users[index].transactions = [];
+      users[index].transactions.push({
+        id: `tx_admin_plan_${Date.now()}`,
+        date: new Date().toISOString(),
+        amount: 0, currency: 'USD',
+        type: 'admin_plan_change',
+        description: `Plan changed by Admin: ${oldPlanName} → ${updateData.plan}`,
+        subDescription: `Credits reset to ${newPlanCredits} pts (was ${oldCredits} pts).`,
+        creditsAdded: newPlanCredits - oldCredits,
+        finalBalance: newPlanCredits,
+        previousBalance: oldCredits,
+        adjustmentType: 'plan_reset',
+        planName: updateData.plan,
+        isAdjustment: true
+      });
+    }
+
+    // --- Add extra credits on top (applies after plan change if both sent) ---
+    if (updateData.extraCreditsToAdd !== undefined && parseInt(updateData.extraCreditsToAdd) > 0) {
+      const extra = parseInt(updateData.extraCreditsToAdd);
+      const baseCredits = updateData.credits ?? oldCredits; // use post-plan-change value if applicable
+      const finalCredits = baseCredits + extra;
+      updateData.credits = finalCredits;
+
+      if (!users[index].transactions) users[index].transactions = [];
+      users[index].transactions.push({
+        id: `tx_admin_extra_${Date.now()}`,
+        date: new Date().toISOString(),
+        amount: 0, currency: 'USD',
+        type: 'admin_credit_adjustment',
+        description: 'Extra Credits Added by Admin',
+        subDescription: `${baseCredits} + ${extra} = ${finalCredits} pts.`,
+        creditsAdded: extra,
+        finalBalance: finalCredits,
+        previousBalance: baseCredits,
+        adjustmentType: 'add_extra',
+        planName: updateData.plan || users[index].plan,
+        isAdjustment: true
+      });
+    }
+
+    // Clean up helper fields
+    delete updateData.extraCreditsToAdd;
+    delete updateData.creditAdjustmentType;
 
     users[index] = { ...users[index], ...updateData };
     saveSettings({ users });
@@ -630,6 +750,38 @@ app.put('/api/admin/users/:id', adminAuth, (req, res) => {
     res.status(404).json({ error: 'User not found' });
   }
 });
+
+// Admin: Get detailed user stats
+app.get('/api/admin/users/:id/stats', adminAuth, (req, res) => {
+  const { id } = req.params;
+  const user = users.find(u => u.id == id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const { password, ...safeUser } = user;
+  const stats = user.usageStats || { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+
+  // Compute avg/day from history
+  const history = stats.history || [];
+  let avgPerDay = 0;
+  if (history.length > 0) {
+    const oldest = new Date(history[0].date);
+    const days = Math.max(1, Math.ceil((Date.now() - oldest.getTime()) / (1000 * 60 * 60 * 24)));
+    avgPerDay = Math.round(stats.totalSpent / days);
+  }
+
+  // Plan info
+  const planObj = plans.find(p => p.name === user.plan);
+
+  res.json({
+    ...safeUser,
+    usageStats: stats,
+    avgPerDay,
+    planCredits: planObj?.credits ?? 0,
+    transactions: user.transactions || []
+  });
+});
+
+
 
 // Get Single User Profile (Safe)
 app.get('/api/users/:id', (req, res) => {
@@ -847,7 +999,7 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
     // Check plan limits
     const user = users.find(u => u.id == userId);
     if (user) {
-      const planLimits = { 'Free': 1, 'Starter': 1, 'Professional': 3, 'Pro': 3, 'Agency': 100 };
+      const planLimits = { 'Starter': 1, 'Professional': 3, 'Pro': 3, 'Agency': 100 };
       const limit = planLimits[user.plan] || 1;
 
       const currentAccounts = user.connectedAccounts || [];
@@ -1054,6 +1206,16 @@ app.post('/api/generate', async (req, res) => {
     // DEDUCT CREDIT (except for admin)
     if (user.role !== 'admin') {
       user.credits = Math.max(0, (user.credits || 0) - cost);
+      // Track usage stats
+      if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+      const statKey = type === 'post' ? 'posts' : 'comments';
+      const creditKey = type === 'post' ? 'postsCredits' : 'commentsCredits';
+      user.usageStats[statKey] = (user.usageStats[statKey] || 0) + 1;
+      user.usageStats[creditKey] = (user.usageStats[creditKey] || 0) + cost;
+      user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
+      user.usageStats.history = user.usageStats.history || [];
+      user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
+      console.log(`[USAGE] user=${userId} type=${type} cost=${cost} => stats:`, JSON.stringify({ posts: user.usageStats.posts, comments: user.usageStats.comments, totalSpent: user.usageStats.totalSpent }));
       saveSettings({ users });
     }
 
@@ -1105,6 +1267,13 @@ app.post('/api/generate-image', async (req, res) => {
     // DEDUCT CREDIT
     if (user.role !== 'admin') {
       user.credits = Math.max(0, (user.credits || 0) - cost);
+      // Track usage stats
+      if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+      user.usageStats.images = (user.usageStats.images || 0) + 1;
+      user.usageStats.imagesCredits = (user.usageStats.imagesCredits || 0) + cost;
+      user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
+      user.usageStats.history = user.usageStats.history || [];
+      user.usageStats.history.push({ date: new Date().toISOString(), type: 'image', cost });
       saveSettings({ users });
     }
 
@@ -1185,7 +1354,7 @@ app.post('/api/reddit/reply', async (req, res) => {
 
     // Deduct credits logic (simplified for mock)
     const userIndex = users.findIndex(u => u.id == userId);
-    if (userIndex !== -1 && users[userIndex].plan === 'Free') {
+    if (userIndex !== -1 && users[userIndex].plan === 'Starter') {
       users[userIndex].credits = (users[userIndex].credits || 3) - 1;
     }
 

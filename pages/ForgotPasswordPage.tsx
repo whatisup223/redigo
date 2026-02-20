@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, Mail, Lock, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Mail, Lock, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export const ForgotPasswordPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [message, setMessage] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [errorReason, setErrorReason] = useState<string | null>(null);
+    const [isBlocked, setIsBlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setMessage('');
+        setError(null);
+        setErrorReason(null);
+        setIsBlocked(false);
         setIsLoading(true);
 
         try {
@@ -20,9 +26,18 @@ export const ForgotPasswordPage: React.FC = () => {
             });
 
             const data = await response.json();
+
+            if (!response.ok) {
+                const blocked = response.status === 403;
+                setError(data.error || 'Failed to process request');
+                setErrorReason(data.reason || null);
+                setIsBlocked(blocked);
+                return;
+            }
+
             setMessage(data.message || 'If an account exists, a reset link has been sent.');
-        } catch (err) {
-            setMessage('Something went wrong. Please try again.');
+        } catch (err: any) {
+            setError('Something went wrong. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -32,15 +47,15 @@ export const ForgotPasswordPage: React.FC = () => {
         <div className="min-h-screen bg-slate-50 font-['Outfit'] flex items-center justify-center p-6 relative overflow-hidden">
             {/* Background Decorative Elements similar to Landing Page */}
             <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-orange-200/40 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 -z-10 animate-pulse-slow"></div>
-            <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-blue-200/30 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 -z-10 animate-pulse-slow delay-700"></div>
+            <div className="absolute bottom-0 left-0 w-[800px] h-[800px] bg-slate-200/30 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 -z-10 animate-pulse-slow delay-700"></div>
 
             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col md:flex-row min-h-[600px]">
 
                 {/* Left Side - Value Prop (Light Theme) */}
                 <div className="w-full md:w-5/12 bg-slate-50 p-10 flex flex-col justify-between relative overflow-hidden">
                     {/* Background Gradients */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-100 rounded-full blur-3xl -ml-16 -mb-16"></div>
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50/50 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-orange-100/50 rounded-full blur-3xl -ml-16 -mb-16"></div>
 
                     <div className="relative z-10 w-full h-full flex flex-col justify-between">
                         <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-orange-600 transition-colors font-bold mb-8 group">
@@ -49,13 +64,13 @@ export const ForgotPasswordPage: React.FC = () => {
                         </Link>
 
                         <div className="flex-1 flex flex-col justify-center space-y-6">
-                            <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full w-fit">
-                                <ShieldCheck size={16} className="text-blue-600 fill-blue-600" />
-                                <span className="text-blue-700 font-bold text-xs uppercase tracking-wider">Secure Access</span>
+                            <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 px-3 py-1 rounded-full w-fit">
+                                <ShieldCheck size={16} className="text-orange-600 fill-orange-600" />
+                                <span className="text-orange-700 font-bold text-xs uppercase tracking-wider">Secure Access</span>
                             </div>
 
                             <h1 className="text-4xl font-extrabold text-slate-900 leading-[1.1]">
-                                Don't worry, <br /><span className="text-blue-600">we've got you.</span>
+                                Don't worry, <br /><span className="text-orange-600">we've got you.</span>
                             </h1>
 
                             <p className="text-slate-500 text-sm leading-relaxed max-w-xs">
@@ -81,9 +96,29 @@ export const ForgotPasswordPage: React.FC = () => {
                         </div>
 
                         <form className="space-y-5" onSubmit={handleSubmit}>
+                            {error && (
+                                <div className={`p-4 rounded-2xl border font-medium ${isBlocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-50 text-red-600 border-red-100'} animate-in fade-in slide-in-from-top-2 duration-300 mb-4`}>
+                                    <div className="flex items-start gap-3">
+                                        <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                                        <div className="space-y-1">
+                                            <p className="font-extrabold">{error}</p>
+                                            {errorReason && (
+                                                <p className="text-xs opacity-80 bg-red-100/50 p-2 rounded-lg mt-2 border border-red-200/50">
+                                                    <span className="font-black uppercase tracking-widest text-[10px]">Reason:</span> {errorReason}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             {message && (
-                                <div className="p-3 bg-blue-50 text-blue-600 text-sm rounded-lg font-medium border border-blue-100">
-                                    {message}
+                                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300 mb-4">
+                                    <div className="flex items-center gap-3 text-emerald-700">
+                                        <div className="bg-emerald-100 p-1.5 rounded-full">
+                                            <CheckCircle2 size={16} />
+                                        </div>
+                                        <p className="text-sm font-bold leading-tight">{message}</p>
+                                    </div>
                                 </div>
                             )}
                             <div className="space-y-1.5">

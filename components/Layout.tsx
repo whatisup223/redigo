@@ -229,7 +229,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         </div>
 
         <div className="shrink-0 px-4 pb-20 pt-3 border-t border-slate-200/60 space-y-3">
-          {user?.plan === 'Free' && (
+          {user?.plan === 'Starter' && (
             <Link
               to="/pricing"
               onClick={() => setIsOpen(false)}
@@ -262,7 +262,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-bold text-slate-900 truncate group-hover:text-orange-600 transition-colors">{user?.name || 'Guest User'}</p>
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${user?.plan === 'Free' ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${user?.plan === 'Starter' ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`} />
                   <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider group-hover:text-slate-600 transition-colors">{user?.plan || 'Guest'} Plan</p>
                 </div>
               </div>
@@ -311,7 +311,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               >
                 <p className="text-sm font-black text-slate-900 leading-none mb-1 group-hover/name:text-orange-600 transition-colors">{user?.name || 'Guest User'}</p>
                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest leading-none">
-                  {user?.plan || 'Free'} Plan
+                  {user?.plan || 'Starter'} Plan
                 </p>
               </Link>
               <button

@@ -104,7 +104,6 @@ export const ContentArchitect: React.FC = () => {
         productUrl: '',
         description: '',
         targetAudience: '',
-        targetAudience: '',
         problemSolved: '',
         primaryColor: '',
         secondaryColor: ''
@@ -205,7 +204,6 @@ export const ContentArchitect: React.FC = () => {
             productUrl: '',
             description: '',
             targetAudience: '',
-            targetAudience: '',
             problemSolved: '',
             primaryColor: '',
             secondaryColor: ''
@@ -298,7 +296,6 @@ export const ContentArchitect: React.FC = () => {
                 brandName: postData.productMention || undefined,
                 website: postData.productUrl || undefined,
                 description: postData.description || undefined,
-                targetAudience: postData.targetAudience || undefined,
                 targetAudience: postData.targetAudience || undefined,
                 problem: postData.problemSolved || undefined,
                 primaryColor: postData.primaryColor || undefined,
@@ -602,7 +599,7 @@ export const ContentArchitect: React.FC = () => {
                 </div>
 
                 <CreditsBanner
-                    plan={user?.plan || 'Free'}
+                    plan={user?.plan || 'Starter'}
                     credits={user?.credits || 0}
                 />
 

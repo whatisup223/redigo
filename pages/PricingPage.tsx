@@ -110,7 +110,7 @@ export const PricingPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
                 {plans.map((plan) => {
-                    const isCurrentPlan = user?.plan === plan.name || (plan.name === 'Starter' && user?.plan === 'Free');
+                    const isCurrentPlan = user?.plan === plan.name;
 
                     return (
                         <div key={plan.id} className={`relative bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 flex flex-col`}>

@@ -19,6 +19,7 @@ import {
   ExternalLink,
   TrendingDown,
   LayoutList,
+  CreditCard,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CreditsBanner from '../components/CreditsBanner';
@@ -379,7 +380,7 @@ export const Dashboard: React.FC = () => {
             {redditConnected ? `Reddit: u/${profile?.name || 'Connected'}` : 'Reddit: Not linked'}
           </div>
 
-          {user?.plan === 'Free' && (
+          {user?.plan === 'Starter' && (
             <Link
               to="/pricing"
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-200 hover:scale-105 transition-transform"
@@ -392,7 +393,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <CreditsBanner
-        plan={user?.plan || 'Free'}
+        plan={user?.plan || 'Starter'}
         credits={user?.credits || 0}
       />
 
@@ -615,27 +616,65 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Quick Actions + Reddit Karma */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
-            <Sparkles size={16} className="text-orange-600" />
-            <h2 className="text-lg font-extrabold text-slate-900">Quick Actions</h2>
-          </div>
+        {/* Quick Actions + Recent Billing + Reddit Karma */}
+        <div className="space-y-6">
+          <div className="flex flex-col gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 px-1">
+                <Sparkles size={16} className="text-orange-600" />
+                <h2 className="text-lg font-extrabold text-slate-900">Quick Actions</h2>
+              </div>
 
-          <QuickAction
-            icon={MessageSquarePlus}
-            title="Comment Agent"
-            desc="Find posts & generate replies"
-            to="/comment-agent"
-            accent="bg-orange-600"
-          />
-          <QuickAction
-            icon={PenTool}
-            title="Post Agent"
-            desc="Create full Reddit posts with AI"
-            to="/post-agent"
-            accent="bg-blue-600"
-          />
+              <QuickAction
+                icon={MessageSquarePlus}
+                title="Comment Agent"
+                desc="Find posts & generate replies"
+                to="/comment-agent"
+                accent="bg-orange-600"
+              />
+              <QuickAction
+                icon={PenTool}
+                title="Post Agent"
+                desc="Create full Reddit posts with AI"
+                to="/post-agent"
+                accent="bg-blue-600"
+              />
+            </div>
+
+            {/* Recent Billing Summary */}
+            <div className="bg-white rounded-[1.75rem] border border-slate-200/60 shadow-sm p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CreditCard size={16} className="text-purple-600" />
+                  <h2 className="text-sm font-extrabold text-slate-900">Recent Billing</h2>
+                </div>
+                <Link to="/settings?tab=billing" className="text-[10px] font-black text-slate-400 hover:text-orange-600 uppercase tracking-widest transition-colors">
+                  All Invoices
+                </Link>
+              </div>
+
+              <div className="space-y-2">
+                {user?.transactions && user.transactions.length > 0 ? (
+                  [...user.transactions].reverse().slice(0, 2).map((tx, i) => (
+                    <div key={tx.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:border-orange-100 transition-all">
+                      <div className="flex flex-col">
+                        <p className="text-[11px] font-bold text-slate-900 truncate max-w-[120px]">{tx.description || 'Transaction'}</p>
+                        <p className="text-[9px] text-slate-400 font-medium">{new Date(tx.date).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] font-black text-slate-900">{tx.amount > 0 ? `$${tx.amount.toFixed(2)}` : 'FREE'}</p>
+                        <p className="text-[8px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block">PAID</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <p className="text-[10px] text-slate-400 font-bold italic">No billing history yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           <QuickAction
             icon={BarChart3}
             title="Analytics"
