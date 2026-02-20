@@ -67,7 +67,9 @@ export const generateRedditReply = async (
   audience: string,
   userId?: string | number,
   overrideProfile?: Partial<BrandProfile>,
-  language: string = 'English'
+  language: string = 'English',
+  includeBrandName: boolean = true,
+  includeLink: boolean = true
 ): Promise<GeneratedReply & { credits?: number }> => {
   try {
     // Brand Logic:
@@ -76,7 +78,27 @@ export const generateRedditReply = async (
     // Reply logic primarily uses context from the 'overrideProfile' if sent, 
     // or falls back to saved settings.
     const effectiveProfile = mergeProfiles(savedProfile, overrideProfile);
+    console.log('DEBUG: effectiveProfile in Reply:', effectiveProfile); // LOG ADDED HERE
     const brandContext = buildBrandContext(effectiveProfile);
+
+    // Build specific instructions for brand name and link
+    let brandInstructions = '';
+
+    // Brand Name & Link Logic
+    const hasBrand = includeBrandName && !!effectiveProfile.brandName;
+    const hasLink = includeLink && !!effectiveProfile.website;
+
+    if (hasBrand && hasLink) {
+      brandInstructions += `\n        - BRAND & LINK STRATEGY (CRITICAL): You MUST include exactly one link to the website using the brand name as anchor text.
+        Format: [${effectiveProfile.brandName}](${effectiveProfile.website})
+        Rule: This link MUST appear naturally in the text. Do NOT add it as a footer. Do NOT change the anchor text to "here" or "link". Use the exact Brand Name.`;
+    } else if (hasBrand) {
+      brandInstructions += `\n        - BRAND MENTION ONLY: Naturally mention "${effectiveProfile.brandName}" as the solution. Do NOT include any lines acting as links (e.g. no [Brand](url)).`;
+    } else if (hasLink) {
+      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${effectiveProfile.website}).`;
+    } else {
+      brandInstructions += `\n        - CLEAN CONTENT: Do NOT mention the brand name "${effectiveProfile.brandName || ''}" and do NOT include any links. Focus purely on value/advice.`;
+    }
 
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -101,7 +123,7 @@ export const generateRedditReply = async (
            - thought_leader: Use bullet points. Provide a structured "framework" or deep technical insight.
            - skeptic: Start by challenging a common assumption in the post (politely), then offer your solution as the logical alternative.
            - storyteller: Start with a brief personal anecdote or "I remember when I was struggling with..."
-        4. LINK INTEGRATION: If Brand Website is provided, embed it naturally where it solves a specific pain point. Format: [BrandName](Website).
+        4. BRANDING INSTRUCTIONS:${brandInstructions}
         5. NO FLUFF: Every sentence must add value or build rapport.
         6. NO CODE BLOCKS: Do NOT include any markdown code blocks (triple backticks), technical documentation style, or long variable lists. The reply must be pure conversational text, formatted for social media reading (short paragraphs).
         7. TONE CHECK: Even for 'helpful_peer' or technical topics, do NOT write like a documentation page or a tutorial with code snippets. Write like a human discussing the topic.
@@ -133,7 +155,9 @@ export const generateRedditPost = async (
   productUrl?: string,
   userId?: string | number,
   overrideProfile?: Partial<BrandProfile>,
-  language: string = 'English'
+  language: string = 'English',
+  includeBrandName: boolean = true,
+  includeLink: boolean = true
 ): Promise<{ title: string; content: string; imagePrompt: string; credits?: number }> => {
   try {
     // Brand Logic:
@@ -150,6 +174,7 @@ export const generateRedditPost = async (
     // 3. Merge: Saved <- Explicit Override Object <- Implicit Arguments
     // The 'overrideProfile' object comes from the advanced override panel.
     const effectiveProfile = mergeProfiles(savedProfile, { ...overrideProfile, ...implicitOverride });
+    console.log('DEBUG: effectiveProfile in Post:', effectiveProfile); // LOG ADDED HERE
 
     const brandContext = buildBrandContext(effectiveProfile);
     const imageColorContext = buildImageBrandContext(effectiveProfile);
@@ -158,6 +183,24 @@ export const generateRedditPost = async (
     const finalBrandName = effectiveProfile.brandName || '';
     const finalUrl = effectiveProfile.website || '';
 
+    // Build specific instructions for brand name and link
+    let brandInstructions = '';
+
+    // Brand Name & Link Logic
+    const hasBrand = includeBrandName && !!finalBrandName;
+    const hasLink = includeLink && !!finalUrl;
+
+    if (hasBrand && hasLink) {
+      brandInstructions += `\n        - BRAND & LINK STRATEGY (CRITICAL): You MUST include exactly one link to the website using the brand name as anchor text.
+        Format: [${finalBrandName}](${finalUrl})
+        Rule: This link MUST appear naturally in the body content. Do NOT add it as a footer. Do NOT change the anchor text. Use the exact Brand Name.`;
+    } else if (hasBrand) {
+      brandInstructions += `\n        - BRAND MENTION ONLY: Naturally mention "${finalBrandName}" as the solution. Do NOT include any lines acting as links.`;
+    } else if (hasLink) {
+      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${finalUrl}).`;
+    } else {
+      brandInstructions += `\n        - CLEAN CONTENT: Do NOT mention the brand name "${finalBrandName}" and do NOT include any links. Focus purely on value.`;
+    }
 
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -168,8 +211,8 @@ export const generateRedditPost = async (
         prompt: `Create a viral-potential Reddit post for r/${subreddit}.
         Goal: ${goal}
         Tone: ${tone}
-        ${finalBrandName ? `Product/Brand to Mention: ${finalBrandName}` : ''}
-        ${finalUrl ? `Product URL: ${finalUrl}` : ''}
+        ${finalBrandName ? `Product/Brand to Mention (Context only): ${finalBrandName}` : ''}
+        ${finalUrl ? `Product URL (Context only): ${finalUrl}` : ''}
         ${brandContext}
         
         ⚠️ LANGUAGE REQUIREMENT: You MUST write the entire post (title and content) in ${language}. This is mandatory.
@@ -177,7 +220,7 @@ export const generateRedditPost = async (
         RULES:
         1. Write a high-engagement headline (Title).
         2. Write a detailed, value-first post body (Content). 
-        3. If brand info is provided, weave it in naturally as a solution — NOT as an ad.
+        3. BRANDING INSTRUCTIONS:${brandInstructions}
         4. Use Reddit formatting (bolding, spacing, line breaks).
         5. STYLE based on Tone:
            - helpful_peer: Friendly, first-person, like sharing a discovery.

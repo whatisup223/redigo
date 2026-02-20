@@ -106,12 +106,15 @@ export const Comments: React.FC = () => {
     productMention: '',
     productLink: '',
     description: '',
-    targetAudience: ''
+    targetAudience: '',
+    problemSolved: ''
   });
   const [showBrandOverride, setShowBrandOverride] = useState(false);
   const [brandProfile, setBrandProfile] = useState<BrandProfile>({});
   const [language, setLanguage] = useState('English');
   const [activeTone, setActiveTone] = useState<'helpful_peer' | 'thought_leader' | 'skeptic' | 'storyteller'>('helpful_peer');
+  const [includeBrandName, setIncludeBrandName] = useState(true);
+  const [includeLink, setIncludeLink] = useState(true);
 
   useEffect(() => {
     fetch('/api/config')
@@ -201,7 +204,8 @@ export const Comments: React.FC = () => {
       productMention: '',
       productLink: '',
       description: '',
-      targetAudience: ''
+      targetAudience: '',
+      problemSolved: ''
     });
     setShowDraftBanner(false);
     setShowDiscardConfirm(false);
@@ -248,10 +252,11 @@ export const Comments: React.FC = () => {
         website: wizardData.productLink || undefined,
         description: wizardData.description || undefined,
         targetAudience: wizardData.targetAudience || undefined,
+        problem: wizardData.problemSolved || undefined
       };
 
       const context = `Tone: ${tone}, Goal: ${goal}`;
-      const reply = await generateRedditReply(post, post.subreddit, tone, context, user?.id, overrideProfile, language);
+      const reply = await generateRedditReply(post, post.subreddit, tone, context, user?.id, overrideProfile, language, includeBrandName, includeLink);
 
       setGeneratedReply(reply);
       setEditedComment(reply.comment);
@@ -855,6 +860,16 @@ export const Comments: React.FC = () => {
                                 placeholder={brandProfile.targetAudience || 'e.g. SaaS founders'}
                               />
                             </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Problem it solves</label>
+                              <input
+                                type="text"
+                                value={wizardData.problemSolved}
+                                onChange={(e) => setWizardData({ ...wizardData, problemSolved: e.target.value })}
+                                className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
+                                placeholder={brandProfile.problem || 'e.g. Difficulty finding leads'}
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -910,10 +925,54 @@ export const Comments: React.FC = () => {
                               className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
                               placeholder="Target Audience"
                             />
+                            <input
+                              type="text"
+                              value={wizardData.problemSolved}
+                              onChange={(e) => setWizardData({ ...wizardData, problemSolved: e.target.value })}
+                              className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
+                              placeholder="Problem it solves"
+                            />
                           </div>
                         )}
                       </div>
                     )}
+                  </div>
+
+                  {/* Toggles */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                          <Target size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Include Brand Name</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIncludeBrandName(!includeBrandName)}
+                        className={`w-10 h-6 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                          <LinkIcon size={16} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Include Link</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIncludeLink(!includeLink)}
+                        className={`w-10 h-6 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex gap-3">

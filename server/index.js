@@ -512,10 +512,11 @@ let brandProfiles = savedData.brandProfiles || {};
 // Brand Profile Endpoints
 // Default Profile fallback
 const DEFAULT_BRAND_PROFILE = {
-  brandName: 'My Personal Brand',
-  description: 'Building authentic connections and sharing valuable insights with the community.',
-  targetAudience: 'Like-minded professionals and enthusiasts',
-  website: '',
+  brandName: 'RedditGo',
+  description: 'AI-powered Reddit marketing tool that helps SaaS founders find leads and engage authentically in relevant conversations.',
+  targetAudience: 'SaaS founders, indie hackers, and marketers',
+  problem: 'Struggling to find relevant Reddit discussions and engaging without seeming like spam.',
+  website: 'https://redditgo.online/',
   primaryColor: '#EA580C',
   secondaryColor: '#1E293B',
   brandTone: 'Helpful Peer'

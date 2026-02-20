@@ -103,12 +103,14 @@ export const ContentArchitect: React.FC = () => {
         productMention: '',
         productUrl: '',
         description: '',
-        targetAudience: ''
+        targetAudience: '',
+        problemSolved: ''
     });
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [selectedAccount, setSelectedAccount] = useState<string>('');
-
     const [includeImage, setIncludeImage] = useState(true);
+    const [includeBrandName, setIncludeBrandName] = useState(true);
+    const [includeLink, setIncludeLink] = useState(true);
     const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5 });
     const [showRegenConfirm, setShowRegenConfirm] = useState(false);
     const [regenMode, setRegenMode] = useState<'text' | 'image' | 'both'>('text');
@@ -199,7 +201,8 @@ export const ContentArchitect: React.FC = () => {
             productMention: '',
             productUrl: '',
             description: '',
-            targetAudience: ''
+            targetAudience: '',
+            problemSolved: ''
         });
         setStep(1);
         setShowDraftBanner(false);
@@ -290,6 +293,7 @@ export const ContentArchitect: React.FC = () => {
                 website: postData.productUrl || undefined,
                 description: postData.description || undefined,
                 targetAudience: postData.targetAudience || undefined,
+                problem: postData.problemSolved || undefined
             };
 
             const generated = await generateRedditPost(
@@ -300,7 +304,9 @@ export const ContentArchitect: React.FC = () => {
                 postData.productUrl,
                 user?.id,
                 overrideProfile,
-                language
+                language,
+                includeBrandName,
+                includeLink
             );
 
             setPostData(prev => ({
@@ -710,6 +716,16 @@ export const ContentArchitect: React.FC = () => {
                                                             onChange={(e) => setPostData({ ...postData, targetAudience: e.target.value })}
                                                         />
                                                     </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Problem it solves (override)</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder={`Default: ${brandProfile.problem || 'From your Brand Profile'}`}
+                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                            value={postData.problemSolved}
+                                                            onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
+                                                        />
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -781,6 +797,16 @@ export const ContentArchitect: React.FC = () => {
                                                             className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
                                                             value={postData.targetAudience}
                                                             onChange={(e) => setPostData({ ...postData, targetAudience: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Problem it solves</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g. Difficulty finding relevant Reddit conversations"
+                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                            value={postData.problemSolved}
+                                                            onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
                                                         />
                                                     </div>
                                                     <p className="text-[10px] text-slate-400 font-medium">The more detail you provide, the more personalized the AI output will be.</p>
@@ -875,6 +901,44 @@ export const ContentArchitect: React.FC = () => {
                                             className={`w-12 h-7 rounded-full transition-all relative ${includeImage ? 'bg-orange-600' : 'bg-slate-300'}`}
                                         >
                                             <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
+                                    {/* Include Brand Name Toggle */}
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                                                <Tag size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">Include Brand Name</p>
+                                                <p className="text-[10px] text-slate-500 font-medium">Explicitly mention {postData.productMention || brandProfile.brandName || 'brand'} in post</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setIncludeBrandName(!includeBrandName)}
+                                            className={`w-12 h-7 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
+                                    {/* Include Link Toggle */}
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                                                <LinkIcon size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900">Include Website Link</p>
+                                                <p className="text-[10px] text-slate-500 font-medium">Embed link to {postData.productUrl || brandProfile.website || 'website'}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setIncludeLink(!includeLink)}
+                                            className={`w-12 h-7 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-5' : 'translate-x-0'}`} />
                                         </button>
                                     </div>
 
@@ -1170,7 +1234,7 @@ export const ContentArchitect: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         </>
     );
 };
