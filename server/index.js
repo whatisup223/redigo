@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-const SETTINGS_FILE = './settings.storage.json';
+const SETTINGS_FILE = path.join(__dirname, '../settings.storage.json');
 
 const loadSettings = () => {
   if (fs.existsSync(SETTINGS_FILE)) {
@@ -369,7 +369,7 @@ app.post('/api/tracking/create', (req, res) => {
   const id = Math.random().toString(36).substring(2, 8);
   const newLink = {
     id,
-    userId,
+    userId: Number(userId),
     originalUrl,
     subreddit,
     postId,
@@ -381,6 +381,7 @@ app.post('/api/tracking/create', (req, res) => {
 
   trackingLinks.push(newLink);
   saveSettings({ trackingLinks });
+  console.log(`[TRACKING] New link created: ${id} for user ${userId}`);
 
   const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
   const trackingUrl = `${baseUrl}/t/${id}`;

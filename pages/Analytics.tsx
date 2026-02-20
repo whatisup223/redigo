@@ -139,6 +139,7 @@ export const Analytics: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch data', err);
+      // We don't want to spam with toasts if it's a minor sync error, but log it
     } finally {
       setIsLoading(false);
     }
@@ -179,7 +180,7 @@ export const Analytics: React.FC = () => {
     const existing = acc.find(d => d.name === date);
 
     if (activeTab === 'links') {
-      const clicks = current.clicks || 0;
+      const clicks = Number(current.clicks) || 0;
       if (existing) {
         existing.clicks += clicks;
       } else {
@@ -601,6 +602,10 @@ export const Analytics: React.FC = () => {
                     <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
                     <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id="colorClick" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis
@@ -618,7 +623,14 @@ export const Analytics: React.FC = () => {
                   cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '5 5' }}
                   contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '20px' }}
                 />
-                <Area type="monotone" dataKey="upvotes" stroke="#f97316" strokeWidth={4} fillOpacity={1} fill="url(#colorUp)" />
+                <Area
+                  type="monotone"
+                  dataKey={activeTab === 'links' ? "clicks" : "upvotes"}
+                  stroke={activeTab === 'links' ? "#2563eb" : "#f97316"}
+                  strokeWidth={4}
+                  fillOpacity={1}
+                  fill={activeTab === 'links' ? "url(#colorClick)" : "url(#colorUp)"}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
