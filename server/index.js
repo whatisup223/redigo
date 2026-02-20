@@ -510,10 +510,22 @@ app.post('/api/user/subscribe', async (req, res) => {
 let brandProfiles = savedData.brandProfiles || {};
 
 // Brand Profile Endpoints
+// Default Profile fallback
+const DEFAULT_BRAND_PROFILE = {
+  brandName: 'My Personal Brand',
+  description: 'Building authentic connections and sharing valuable insights with the community.',
+  targetAudience: 'Like-minded professionals and enthusiasts',
+  website: '',
+  primaryColor: '#EA580C',
+  secondaryColor: '#1E293B',
+  brandTone: 'Helpful Peer'
+};
+
 app.get('/api/user/brand-profile', (req, res) => {
   const { userId } = req.query;
   if (!userId) return res.status(400).json({ error: 'userId required' });
-  res.json(brandProfiles[userId] || {});
+  // Return user profile if exists, otherwise default (to avoid empty state/random AI generation)
+  res.json(brandProfiles[userId] || DEFAULT_BRAND_PROFILE);
 });
 
 app.post('/api/user/brand-profile', (req, res) => {
