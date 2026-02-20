@@ -1233,7 +1233,7 @@ export const ContentArchitect: React.FC = () => {
                                                 className={`py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50 ${postData.title && postData.content ? 'px-8' : 'w-full'}`}
                                             >
                                                 <Sparkles size={20} />
-                                                {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${includeImage ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
+                                                {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${(includeImage && canGenerateImages) ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${(includeImage && canGenerateImages) ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
                                                 {!postData.title && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
                                             </button>
                                         </div>
