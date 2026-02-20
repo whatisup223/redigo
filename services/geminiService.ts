@@ -70,9 +70,13 @@ export const generateRedditReply = async (
   language: string = 'English'
 ): Promise<GeneratedReply & { credits?: number }> => {
   try {
+    // Brand Logic:
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
-    const brandProfile = mergeProfiles(savedProfile, overrideProfile);
-    const brandContext = buildBrandContext(brandProfile);
+
+    // Reply logic primarily uses context from the 'overrideProfile' if sent, 
+    // or falls back to saved settings.
+    const effectiveProfile = mergeProfiles(savedProfile, overrideProfile);
+    const brandContext = buildBrandContext(effectiveProfile);
 
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -99,6 +103,8 @@ export const generateRedditReply = async (
            - storyteller: Start with a brief personal anecdote or "I remember when I was struggling with..."
         4. LINK INTEGRATION: If Brand Website is provided, embed it naturally where it solves a specific pain point. Format: [BrandName](Website).
         5. NO FLUFF: Every sentence must add value or build rapport.
+        6. NO CODE BLOCKS: Do NOT include any markdown code blocks (triple backticks), technical documentation style, or long variable lists. The reply must be pure conversational text, formatted for social media reading (short paragraphs).
+        7. TONE CHECK: Even for 'helpful_peer' or technical topics, do NOT write like a documentation page or a tutorial with code snippets. Write like a human discussing the topic.
         
         Return STRICT JSON with keys: comment, tone, actionable_points, keywords, reddit_strategy.`,
         context: { postId: post.id, subreddit: post.subreddit }
@@ -130,14 +136,28 @@ export const generateRedditPost = async (
   language: string = 'English'
 ): Promise<{ title: string; content: string; imagePrompt: string; credits?: number }> => {
   try {
+    // Brand Logic:
+    // 1. Fetch Saved Profile (Source of Truth)
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
-    const brandProfile = mergeProfiles(savedProfile, overrideProfile);
-    const brandContext = buildBrandContext(brandProfile);
-    const imageColorContext = buildImageBrandContext(brandProfile);
 
-    // Merge explicit overrides with brand profile
-    const finalBrandName = productMention || brandProfile.brandName || '';
-    const finalUrl = productUrl || brandProfile.website || '';
+    // 2. Prepare Override: 
+    // If 'productMention' or 'productUrl' are passed as arguments (from the Quick Override or manually typed), 
+    // they should be treated as overrides. If they are empty strings, they are IGNORED.
+    const implicitOverride: Partial<BrandProfile> = {};
+    if (productMention && productMention.trim() !== '') implicitOverride.brandName = productMention;
+    if (productUrl && productUrl.trim() !== '') implicitOverride.website = productUrl;
+
+    // 3. Merge: Saved <- Explicit Override Object <- Implicit Arguments
+    // The 'overrideProfile' object comes from the advanced override panel.
+    const effectiveProfile = mergeProfiles(savedProfile, { ...overrideProfile, ...implicitOverride });
+
+    const brandContext = buildBrandContext(effectiveProfile);
+    const imageColorContext = buildImageBrandContext(effectiveProfile);
+
+    // Final logic: Use effective profile data
+    const finalBrandName = effectiveProfile.brandName || '';
+    const finalUrl = effectiveProfile.website || '';
+
 
     const response = await fetch('/api/generate', {
       method: 'POST',

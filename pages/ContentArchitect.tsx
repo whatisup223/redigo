@@ -944,59 +944,57 @@ export const ContentArchitect: React.FC = () => {
                                         />
                                     </div>
 
-                                    {/* Image with skeleton */}
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                <ImageIcon size={12} />
-                                                AI Brand Visual
-                                                {isGeneratingImage && (
-                                                    <span className="text-orange-500 flex items-center gap-1">
-                                                        <RefreshCw size={10} className="animate-spin" />
-                                                        Generating...
-                                                    </span>
-                                                )}
-                                            </label>
-                                            {!isGeneratingImage && postData.imageUrl && (
-                                                <button
-                                                    onClick={() => triggerImageGeneration(postData.imagePrompt)}
-                                                    className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
-                                                >
-                                                    <RefreshCw size={10} /> Regenerate
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <div className="relative rounded-3xl overflow-hidden bg-slate-100 min-h-[200px]">
-                                            {/* Skeleton shimmer while loading */}
-                                            {(isGeneratingImage || !imageLoaded) && postData.imageUrl === '' && (
-                                                <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 animate-pulse flex items-center justify-center">
-                                                    <div className="flex flex-col items-center gap-3">
-                                                        <Sparkles size={28} className="text-orange-300 animate-pulse" />
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                            {isGeneratingImage ? 'Crafting your brand visual...' : 'Visual will appear here'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Image with blur-up effect */}
-                                            {postData.imageUrl && (
-                                                <>
-                                                    {!imageLoaded && (
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 animate-pulse" />
+                                    {includeImage && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                    <ImageIcon size={12} />
+                                                    AI Brand Visual
+                                                    {isGeneratingImage && (
+                                                        <span className="text-orange-500 flex items-center gap-1">
+                                                            <RefreshCw size={10} className="animate-spin" />
+                                                            Generating...
+                                                        </span>
                                                     )}
-                                                    <img
-                                                        src={postData.imageUrl}
-                                                        alt="AI Generated Brand Visual"
-                                                        onLoad={() => setImageLoaded(true)}
-                                                        className={`w-full object-cover rounded-3xl transition-all duration-700 ${imageLoaded ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-sm scale-105'
-                                                            }`}
-                                                    />
-                                                </>
-                                            )}
+                                                </label>
+                                                {!isGeneratingImage && postData.imageUrl && (
+                                                    <button
+                                                        onClick={() => triggerImageGeneration(postData.imagePrompt)}
+                                                        className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
+                                                    >
+                                                        <RefreshCw size={10} /> Regenerate
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className="relative rounded-3xl overflow-hidden bg-slate-100 min-h-[200px]">
+                                                {(isGeneratingImage || !imageLoaded) && postData.imageUrl === '' && (
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 animate-pulse flex items-center justify-center">
+                                                        <div className="flex flex-col items-center gap-3">
+                                                            <Sparkles size={28} className="text-orange-300 animate-pulse" />
+                                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                                {isGeneratingImage ? 'Crafting your brand visual...' : 'Visual will appear here'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {postData.imageUrl && (
+                                                    <>
+                                                        {!imageLoaded && (
+                                                            <div className="absolute inset-0 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 animate-pulse" />
+                                                        )}
+                                                        <img
+                                                            src={postData.imageUrl}
+                                                            alt="AI Generated Brand Visual"
+                                                            onLoad={() => setImageLoaded(true)}
+                                                            className={`w-full object-cover rounded-3xl transition-all duration-700 ${imageLoaded ? 'opacity-100 blur-0 scale-100' : 'opacity-0 blur-sm scale-105'}`}
+                                                        />
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 <div className="flex gap-4">
