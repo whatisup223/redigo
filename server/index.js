@@ -198,6 +198,14 @@ app.post('/api/auth/login', (req, res) => {
   const user = users.find(u => u.email === email && u.password === password);
 
   if (user) {
+    // Check if user is banned or suspended
+    if (user.status === 'Banned' || user.status === 'Suspended') {
+      return res.status(403).json({
+        error: `Your account has been ${user.status.toLowerCase()}.`,
+        reason: user.statusMessage || 'No specific reason provided.'
+      });
+    }
+
     if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
       console.log(`[Subscription] User ${user.email} subscription expired. Downgrading.`);
       user.plan = 'Starter';
@@ -610,6 +618,11 @@ app.put('/api/admin/users/:id', adminAuth, (req, res) => {
     if (!updateData.password) {
       delete updateData.password;
     }
+
+    // Explicitly handle status updates
+    if (req.body.status) updateData.status = req.body.status;
+    if (req.body.statusMessage !== undefined) updateData.statusMessage = req.body.statusMessage;
+
     users[index] = { ...users[index], ...updateData };
     saveSettings({ users });
     res.json(users[index]);

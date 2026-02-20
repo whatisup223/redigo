@@ -40,6 +40,7 @@ interface User {
     role: string;
     plan: string;
     status: string;
+    statusMessage?: string;
 }
 
 interface AISettings {
@@ -149,7 +150,7 @@ export const Admin: React.FC = () => {
     const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
     const [planForm, setPlanForm] = useState<Partial<Plan>>({ features: [''] });
 
-    const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '' });
+    const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '', statusMessage: '' });
 
     // Fetch Data Function (Real Backend)
     const fetchData = async () => {
@@ -520,7 +521,11 @@ export const Admin: React.FC = () => {
                                                         <button
                                                             onClick={() => {
                                                                 setSelectedUser(user);
-                                                                setEditForm({ ...user, password: '' }); // Don't pre-fill password for security
+                                                                setEditForm({
+                                                                    ...user,
+                                                                    password: '',
+                                                                    statusMessage: user.statusMessage || ''
+                                                                }); // Don't pre-fill password for security
                                                                 setIsEditModalOpen(true);
                                                             }}
                                                             className="p-2 bg-white border border-slate-200 rounded-lg hover:text-orange-600 hover:border-orange-200 transition-all shadow-sm"
@@ -1071,12 +1076,12 @@ export const Admin: React.FC = () => {
                         isEditModalOpen && (
                             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
                                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)}></div>
-                                <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-                                    <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                                <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+                                    <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
                                         <h2 className="text-2xl font-black text-slate-900">Edit User Details</h2>
                                         <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={24} /></button>
                                     </div>
-                                    <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
+                                    <form onSubmit={handleUpdateUser} className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-2">
                                                 <label className="text-xs font-black uppercase tracking-widest text-slate-400">Full Name</label>
@@ -1136,6 +1141,40 @@ export const Admin: React.FC = () => {
                                                 placeholder="••••••••"
                                                 onChange={e => setEditForm({ ...editForm, password: e.target.value })}
                                             />
+                                        </div>
+
+                                        {/* Status Management */}
+                                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Account Status</label>
+                                                <select
+                                                    className={`w-full p-4 border rounded-2xl focus:outline-none transition-all font-bold ${editForm.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        editForm.status === 'Suspended' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                            'bg-red-50 text-red-700 border-red-200'
+                                                        }`}
+                                                    value={editForm.status}
+                                                    onChange={e => setEditForm({ ...editForm, status: e.target.value })}
+                                                >
+                                                    <option value="Active">Active</option>
+                                                    <option value="Suspended">Suspended (Temporary)</option>
+                                                    <option value="Banned">Banned (Permanent)</option>
+                                                </select>
+                                            </div>
+
+                                            {editForm.status !== 'Active' && (
+                                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                                                        <AlertTriangle size={12} className="text-red-500" />
+                                                        Reason for {editForm.status}
+                                                    </label>
+                                                    <textarea
+                                                        className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:border-red-500 transition-all font-medium text-slate-700 resize-none h-24"
+                                                        placeholder={`Explain why the account is ${editForm.status.toLowerCase()}. This message will be shown to the user upon login attempt.`}
+                                                        value={editForm.statusMessage}
+                                                        onChange={e => setEditForm({ ...editForm, statusMessage: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="pt-4">

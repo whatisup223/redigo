@@ -26,7 +26,10 @@ export const LoginPage: React.FC = () => {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Login failed');
+                const errorMessage = data.reason
+                    ? `${data.error}\nReason: ${data.reason}`
+                    : (data.error || 'Login failed');
+                throw new Error(errorMessage);
             }
 
             login(data.token, data.user);
@@ -113,7 +116,7 @@ export const LoginPage: React.FC = () => {
 
                         <form className="space-y-5" onSubmit={handleSubmit}>
                             {error && (
-                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg font-medium border border-red-100">
+                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg font-medium border border-red-100 whitespace-pre-wrap">
                                     {error}
                                 </div>
                             )}
