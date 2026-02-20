@@ -487,11 +487,11 @@ export const Settings: React.FC = () => {
                                             <div>
                                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Account Slots</p>
                                                 <p className="text-sm font-bold text-slate-900">
-                                                    {(redditStatus.accounts || []).length} / {user.plan === 'Agency' ? '∞' : (user.plan === 'Professional' || user.plan === 'Pro' || user.plan === 'Starter') ? (user.plan === 'Starter' ? '1' : '3') : '1'} <span className="text-slate-400 font-medium ml-1">accounts connected</span>
+                                                    {(redditStatus.accounts || []).length} / {plans.find(p => (p.id || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.name || '').toLowerCase() === (user.plan || '').toLowerCase())?.maxAccounts || 1} <span className="text-slate-400 font-medium ml-1">accounts connected</span>
                                                 </p>
                                             </div>
                                         </div>
-                                        {(redditStatus.accounts || []).length >= ((user.plan === 'Professional' || user.plan === 'Pro') ? 3 : user.plan === 'Agency' ? 999 : 1) ? (
+                                        {(redditStatus.accounts || []).length >= (plans.find(p => (p.id || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.name || '').toLowerCase() === (user.plan || '').toLowerCase())?.maxAccounts || 1) ? (
                                             <Link to="/pricing" className="text-[10px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">UPGRADE FOR MORE</Link>
                                         ) : (
                                             <button

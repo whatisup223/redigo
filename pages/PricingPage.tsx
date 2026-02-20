@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Shield, Crown, Zap, ArrowRight, Loader2, X } from 'lucide-react';
+import { Check, Shield, Crown, Zap, ArrowRight, Loader2, X, Users } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -19,6 +19,7 @@ export const PricingPage: React.FC = () => {
         isCustom?: boolean;
         allowImages: boolean;
         allowTracking: boolean;
+        maxAccounts: number;
     }
 
     const { user, updateUser } = useAuth();
@@ -206,6 +207,13 @@ export const PricingPage: React.FC = () => {
                                         <Zap size={12} strokeWidth={4} />
                                     </div>
                                     {dailyLimit || 0} Daily Actions
+                                </li>
+
+                                <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                                        <Users size={12} strokeWidth={4} />
+                                    </div>
+                                    {plan.maxAccounts || 1} Connected {plan.maxAccounts === 1 ? 'Account' : 'Accounts'}
                                 </li>
 
                                 {/* Feature Toggles (Visual) */}

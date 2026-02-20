@@ -1358,8 +1358,9 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
     // Check plan limits
     const user = users.find(u => u.id == userId);
     if (user) {
-      const planLimits = { 'Starter': 1, 'Professional': 3, 'Pro': 3, 'Agency': 100 };
-      const limit = planLimits[user.plan] || 1;
+      // Find the limit from the configured plans
+      const userPlan = plans.find(p => (p.id || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.name || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const limit = userPlan?.maxAccounts || 1;
 
       const currentAccounts = user.connectedAccounts || [];
       const alreadyConnected = currentAccounts.find(a => a.username === redditUsername);

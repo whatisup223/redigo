@@ -89,6 +89,7 @@ interface Plan {
     isCustom?: boolean;
     allowImages: boolean;
     allowTracking: boolean;
+    maxAccounts: number;
 }
 
 interface RedditSettings {
@@ -1687,6 +1688,17 @@ export const Admin: React.FC = () => {
                                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                                                     />
                                                 </label>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Max Reddit Accounts</span>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={planForm.maxAccounts || 1}
+                                                    onChange={(e) => setPlanForm({ ...planForm, maxAccounts: parseInt(e.target.value) || 1 })}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                                />
                                             </div>
 
                                             <div className="space-y-2">
