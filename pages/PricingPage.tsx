@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Shield, Crown, Zap, ArrowRight, Loader2 } from 'lucide-react';
+import { Check, Shield, Crown, Zap, ArrowRight, Loader2, X } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -17,6 +17,8 @@ export const PricingPage: React.FC = () => {
         isPopular: boolean;
         highlightText?: string;
         isCustom?: boolean;
+        allowImages: boolean;
+        allowTracking: boolean;
     }
 
     const { user, updateUser } = useAuth();
@@ -191,13 +193,13 @@ export const PricingPage: React.FC = () => {
 
 
                             <ul className="space-y-4 mb-8 flex-1">
+                                {/* Dynamic Primary Features */}
                                 <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                         <Zap size={12} strokeWidth={4} />
                                     </div>
-                                    {credits} Credits {isYearlySelected ? 'Upfront' : '/ Month'}
+                                    {credits.toLocaleString()} Credits {isYearlySelected ? 'Upfront' : '/ Month'}
                                 </li>
-
 
                                 <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
@@ -206,6 +208,26 @@ export const PricingPage: React.FC = () => {
                                     {dailyLimit || 0} Daily Actions
                                 </li>
 
+                                {/* Feature Toggles (Visual) */}
+                                <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.allowImages ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
+                                        {plan.allowImages ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
+                                    </div>
+                                    <span className={plan.allowImages ? '' : 'text-slate-400'}>
+                                        AI Image Generation
+                                    </span>
+                                </li>
+
+                                <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.allowTracking ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
+                                        {plan.allowTracking ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
+                                    </div>
+                                    <span className={plan.allowTracking ? '' : 'text-slate-400'}>
+                                        Advanced Link Tracking
+                                    </span>
+                                </li>
+
+                                {/* Custom Decorative Features */}
                                 {plan.features.map((feature, i) => (
                                     <li key={i} className="flex items-center gap-3 text-slate-700 font-medium text-sm">
                                         <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>

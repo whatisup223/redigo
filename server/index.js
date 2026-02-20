@@ -321,13 +321,14 @@ app.get('/t/:id', (req, res) => {
     referer: req.headers['referer']
   });
 
+  // Save changes for persistency
+  saveSettings({ trackingLinks });
+
   addSystemLog('INFO', `Tracking Click: ${id} -> ${link.originalUrl}`, {
     subreddit: link.subreddit,
-    userId: link.userId
+    userId: link.userId,
+    clicks: link.clicks
   });
-
-  // Save changes if using persistency logic (mocked here by being in memory)
-  // res.redirect(link.originalUrl); // Standard redirect
 
   // Premium feel: Meta refresh or simple redirect
   res.send(`
@@ -379,9 +380,17 @@ app.post('/api/tracking/create', (req, res) => {
   };
 
   trackingLinks.push(newLink);
+  saveSettings({ trackingLinks });
 
-  const baseUrl = process.env.BASE_URL || `http://localhost:5000`;
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
   const trackingUrl = `${baseUrl}/t/${id}`;
+
+  addSystemLog('INFO', `Tracking Link Created: ${id}`, {
+    userId,
+    subreddit,
+    trackingUrl,
+    originalUrl
+  });
 
   res.json({ id, trackingUrl });
 });
