@@ -44,6 +44,7 @@ export const LandingPage: React.FC = () => {
   }, []);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   return (
     <div className="min-h-screen font-['Outfit'] scroll-smooth">
@@ -528,7 +529,7 @@ export const LandingPage: React.FC = () => {
       <section id="pricing" className="py-24 bg-gradient-to-b from-slate-50 to-white relative overflow-hidden">
         <div className="absolute top-0 w-full h-px bg-slate-200"></div>
         <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16 space-y-4">
+          <div className="text-center mb-16 space-y-6">
             <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest inline-flex items-center gap-2">
               <Star size={12} fill="currentColor" /> Simple Pricing
             </span>
@@ -538,49 +539,82 @@ export const LandingPage: React.FC = () => {
             <p className="text-slate-500 text-lg max-w-2xl mx-auto">
               Start for free, upgrade when you see results. No hidden fees.
             </p>
+
+            {/* Billing Toggle (Premium Design) */}
+            <div className="flex items-center justify-center gap-4 mt-12 bg-white/50 backdrop-blur-sm border border-slate-200/50 p-2 rounded-3xl w-fit mx-auto shadow-sm">
+              <button
+                onClick={() => setBillingCycle('monthly')}
+                className={`px-6 py-2 rounded-2xl text-sm font-bold transition-all ${billingCycle === 'monthly' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Monthly
+              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setBillingCycle('yearly')}
+                  className={`px-6 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${billingCycle === 'yearly' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Yearly
+                </button>
+                <span className="absolute -top-6 -right-12 bg-green-500 text-white text-[10px] font-black px-2 py-1 rounded-full shadow-md animate-bounce">
+                  SAVE 20%
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-start">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch">
             {plans.map((plan: any) => {
               const theme = plan.isPopular ? 'orange' : (plan.name === 'Agency' ? 'slate' : 'slate');
-              const isDark = plan.name === 'Agency'; // Example logic, or keep all light
+              const price = billingCycle === 'monthly' ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12);
+              const credits = billingCycle === 'yearly' ? plan.credits * 12 : plan.credits;
 
               return (
-                <div key={plan.id} className={`bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-200 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 relative overflow-hidden flex flex-col h-full`}>
+                <div key={plan.id} className={`bg-white rounded-[2.5rem] p-10 border ${plan.isPopular ? 'border-orange-200 shadow-2xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-all duration-500 relative overflow-hidden flex flex-col`}>
                   {plan.isPopular && (
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-orange-50 rounded-bl-[120px] -mr-8 -mt-8 pointer-events-none"></div>
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-orange-50 rounded-bl-[160px] -mr-12 -mt-12 pointer-events-none transition-transform hover:scale-110"></div>
                   )}
                   {plan.isPopular && (
-                    <div className="absolute top-6 right-8 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                    <div className="absolute top-8 right-8 bg-orange-100 text-orange-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
                       Most Popular
                     </div>
                   )}
 
-                  <div className="relative z-10 flex-col h-full flex pt-2">
-                    <div className="mb-6">
-                      <span className={`font-bold uppercase tracking-widest text-xs ${plan.isPopular ? 'text-orange-600' : 'text-slate-500'}`}>{plan.name}</span>
-                      <div className="flex items-baseline gap-1 mt-2">
-                        <span className="text-5xl font-extrabold text-slate-900">${plan.monthlyPrice}</span>
-                        <span className="text-slate-400 font-medium">/mo</span>
+                  <div className="relative z-10 flex flex-col h-full">
+                    <div className="mb-8">
+                      <span className={`font-black uppercase tracking-widest text-[10px] px-3 py-1 rounded-full ${plan.isPopular ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-500'}`}>{plan.name}</span>
+                      <div className="flex items-baseline gap-1 mt-6">
+                        <span className="text-6xl font-black text-slate-900 tracking-tight">${price}</span>
+                        <span className="text-slate-400 font-bold text-lg">/mo</span>
                       </div>
-                      <p className="text-slate-400 text-sm mt-2">
+                      {billingCycle === 'yearly' && plan.yearlyPrice > 0 && (
+                        <p className="text-green-600 text-xs font-black mt-2 bg-green-50 px-2 py-1 rounded-lg w-fit">
+                          Billed ${plan.yearlyPrice} annually
+                        </p>
+                      )}
+                      <p className="text-slate-400 text-sm mt-4 font-medium leading-relaxed">
                         {plan.name === 'Starter' ? 'Perfect for trying out the platform.' :
                           plan.name === 'Growth' ? 'Everything you need to scale fast.' :
                             'For power users and teams.'}
                       </p>
                     </div>
 
-                    <ul className="space-y-4 mb-8 flex-1">
-                      <li className="flex items-center gap-3 text-sm font-bold text-slate-700">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100' : 'bg-slate-100'}`}>
-                          <Zap size={12} className={plan.isPopular ? 'text-orange-600' : 'text-slate-500'} fill={plan.isPopular ? "currentColor" : "none"} />
+                    <ul className="space-y-4 mb-10 flex-1">
+                      <li className="flex items-center gap-3.5 text-sm font-black text-slate-900">
+                        <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                          <Zap size={14} fill={plan.isPopular ? "currentColor" : "none"} strokeWidth={3} />
                         </div>
-                        {plan.credits} Credits / Month
+                        {credits.toLocaleString()} AI Actions {billingCycle === 'yearly' ? 'Upfront' : '/mo'}
+                      </li>
+                      <li className="flex items-center gap-3.5 text-sm font-bold text-slate-700">
+                        <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
+                          <Star size={14} fill={plan.isPopular ? "currentColor" : "none"} strokeWidth={3} />
+                        </div>
+                        {(billingCycle === 'yearly' ? plan.dailyLimitYearly : plan.dailyLimitMonthly) || 0} Actions / day
                       </li>
                       {plan.features.map((f: string, i: number) => (
-                        <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                          <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100' : 'bg-slate-100'}`}>
-                            <CheckCircle2 size={12} className={plan.isPopular ? 'text-orange-600' : 'text-slate-500'} />
+                        <li key={i} className="flex items-center gap-3.5 text-sm font-medium text-slate-500">
+                          <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-50 text-slate-400'}`}>
+                            <CheckCircle2 size={14} strokeWidth={3} />
                           </div>
                           {f}
                         </li>
@@ -589,18 +623,19 @@ export const LandingPage: React.FC = () => {
 
                     <Link
                       to="/signup"
-                      className={`w-full py-4 rounded-2xl font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-center block ${plan.isPopular
-                        ? 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200'
+                      className={`w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 text-center block ${plan.isPopular
+                        ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-orange-200'
                         : 'bg-slate-900 text-white hover:bg-slate-800'
                         }`}
                     >
-                      {plan.monthlyPrice === 0 ? 'Start Free' : 'Get Started'}
+                      {plan.monthlyPrice === 0 ? 'Start Free' : 'Choose Plan'}
                     </Link>
                   </div>
                 </div>
               );
             })}
           </div>
+
         </div>
       </section>
 
