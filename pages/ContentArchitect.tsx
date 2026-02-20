@@ -104,7 +104,10 @@ export const ContentArchitect: React.FC = () => {
         productUrl: '',
         description: '',
         targetAudience: '',
-        problemSolved: ''
+        targetAudience: '',
+        problemSolved: '',
+        primaryColor: '',
+        secondaryColor: ''
     });
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [selectedAccount, setSelectedAccount] = useState<string>('');
@@ -202,7 +205,10 @@ export const ContentArchitect: React.FC = () => {
             productUrl: '',
             description: '',
             targetAudience: '',
-            problemSolved: ''
+            targetAudience: '',
+            problemSolved: '',
+            primaryColor: '',
+            secondaryColor: ''
         });
         setStep(1);
         setShowDraftBanner(false);
@@ -293,7 +299,10 @@ export const ContentArchitect: React.FC = () => {
                 website: postData.productUrl || undefined,
                 description: postData.description || undefined,
                 targetAudience: postData.targetAudience || undefined,
-                problem: postData.problemSolved || undefined
+                targetAudience: postData.targetAudience || undefined,
+                problem: postData.problemSolved || undefined,
+                primaryColor: postData.primaryColor || undefined,
+                secondaryColor: postData.secondaryColor || undefined
             };
 
             const generated = await generateRedditPost(
@@ -726,6 +735,33 @@ export const ContentArchitect: React.FC = () => {
                                                             onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
                                                         />
                                                     </div>
+                                                    {/* Color Overrides */}
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Color</label>
+                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                <input
+                                                                    type="color"
+                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                    value={postData.primaryColor || brandProfile.primaryColor || '#EA580C'}
+                                                                    onChange={(e) => setPostData({ ...postData, primaryColor: e.target.value })}
+                                                                />
+                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.primaryColor || brandProfile.primaryColor || '#EA580C'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Color</label>
+                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                <input
+                                                                    type="color"
+                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                    value={postData.secondaryColor || brandProfile.secondaryColor || '#1E293B'}
+                                                                    onChange={(e) => setPostData({ ...postData, secondaryColor: e.target.value })}
+                                                                />
+                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.secondaryColor || brandProfile.secondaryColor || '#1E293B'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -808,6 +844,33 @@ export const ContentArchitect: React.FC = () => {
                                                             value={postData.problemSolved}
                                                             onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
                                                         />
+                                                    </div>
+                                                    {/* Quick Override Colors */}
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Color</label>
+                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                <input
+                                                                    type="color"
+                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                    value={postData.primaryColor || '#EA580C'}
+                                                                    onChange={(e) => setPostData({ ...postData, primaryColor: e.target.value })}
+                                                                />
+                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.primaryColor || '#EA580C'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Color</label>
+                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                <input
+                                                                    type="color"
+                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                    value={postData.secondaryColor || '#1E293B'}
+                                                                    onChange={(e) => setPostData({ ...postData, secondaryColor: e.target.value })}
+                                                                />
+                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.secondaryColor || '#1E293B'}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <p className="text-[10px] text-slate-400 font-medium">The more detail you provide, the more personalized the AI output will be.</p>
                                                 </div>

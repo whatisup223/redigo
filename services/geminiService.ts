@@ -78,24 +78,27 @@ export const generateRedditReply = async (
     // Reply logic primarily uses context from the 'overrideProfile' if sent, 
     // or falls back to saved settings.
     const effectiveProfile = mergeProfiles(savedProfile, overrideProfile);
-    console.log('DEBUG: effectiveProfile in Reply:', effectiveProfile); // LOG ADDED HERE
     const brandContext = buildBrandContext(effectiveProfile);
 
     // Build specific instructions for brand name and link
     let brandInstructions = '';
 
     // Brand Name & Link Logic
+    // FORCE FALLBACK: If website is empty but user wants a link, use RedditGo as default
+    const effectiveWebsite = effectiveProfile.website || 'https://redditgo.online/';
+
+    // Check if we have valid data to work with
     const hasBrand = includeBrandName && !!effectiveProfile.brandName;
-    const hasLink = includeLink && !!effectiveProfile.website;
+    const hasLink = includeLink && !!effectiveWebsite;
 
     if (hasBrand && hasLink) {
       brandInstructions += `\n        - BRAND & LINK STRATEGY (CRITICAL): You MUST include exactly one link to the website using the brand name as anchor text.
-        Format: [${effectiveProfile.brandName}](${effectiveProfile.website})
+        Format: [${effectiveProfile.brandName}](${effectiveWebsite})
         Rule: This link MUST appear naturally in the text. Do NOT add it as a footer. Do NOT change the anchor text to "here" or "link". Use the exact Brand Name.`;
     } else if (hasBrand) {
       brandInstructions += `\n        - BRAND MENTION ONLY: Naturally mention "${effectiveProfile.brandName}" as the solution. Do NOT include any lines acting as links (e.g. no [Brand](url)).`;
     } else if (hasLink) {
-      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${effectiveProfile.website}).`;
+      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${effectiveWebsite}).`;
     } else {
       brandInstructions += `\n        - CLEAN CONTENT: Do NOT mention the brand name "${effectiveProfile.brandName || ''}" and do NOT include any links. Focus purely on value/advice.`;
     }
@@ -174,7 +177,6 @@ export const generateRedditPost = async (
     // 3. Merge: Saved <- Explicit Override Object <- Implicit Arguments
     // The 'overrideProfile' object comes from the advanced override panel.
     const effectiveProfile = mergeProfiles(savedProfile, { ...overrideProfile, ...implicitOverride });
-    console.log('DEBUG: effectiveProfile in Post:', effectiveProfile); // LOG ADDED HERE
 
     const brandContext = buildBrandContext(effectiveProfile);
     const imageColorContext = buildImageBrandContext(effectiveProfile);
@@ -187,17 +189,20 @@ export const generateRedditPost = async (
     let brandInstructions = '';
 
     // Brand Name & Link Logic
+    // FORCE FALLBACK: If website is empty but user wants a link, use RedditGo as default
+    const effectiveWebsite = finalUrl || 'https://redditgo.online/';
+
     const hasBrand = includeBrandName && !!finalBrandName;
-    const hasLink = includeLink && !!finalUrl;
+    const hasLink = includeLink && !!effectiveWebsite;
 
     if (hasBrand && hasLink) {
       brandInstructions += `\n        - BRAND & LINK STRATEGY (CRITICAL): You MUST include exactly one link to the website using the brand name as anchor text.
-        Format: [${finalBrandName}](${finalUrl})
+        Format: [${finalBrandName}](${effectiveWebsite})
         Rule: This link MUST appear naturally in the body content. Do NOT add it as a footer. Do NOT change the anchor text. Use the exact Brand Name.`;
     } else if (hasBrand) {
       brandInstructions += `\n        - BRAND MENTION ONLY: Naturally mention "${finalBrandName}" as the solution. Do NOT include any lines acting as links.`;
     } else if (hasLink) {
-      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${finalUrl}).`;
+      brandInstructions += `\n        - LINK ONLY: Embed the website link naturally using generic anchor text like "here" or "this tool": [Link](${effectiveWebsite}).`;
     } else {
       brandInstructions += `\n        - CLEAN CONTENT: Do NOT mention the brand name "${finalBrandName}" and do NOT include any links. Focus purely on value.`;
     }
