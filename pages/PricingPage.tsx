@@ -209,14 +209,16 @@ export const PricingPage: React.FC = () => {
                                     {dailyLimit || 0} Daily Actions
                                 </li>
 
-                                <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
-                                        <Users size={12} strokeWidth={4} />
+                                {/* Feature Toggles (Visual) */}
+                                <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.maxAccounts > 1 ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
+                                        {plan.maxAccounts > 1 ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
                                     </div>
-                                    {plan.maxAccounts || 1} Connected {plan.maxAccounts === 1 ? 'Account' : 'Accounts'}
+                                    <span className={plan.maxAccounts > 1 ? '' : 'text-slate-400'}>
+                                        {plan.maxAccounts >= 100 ? 'Unlimited Accounts' : plan.maxAccounts > 1 ? `Up to ${plan.maxAccounts} Accounts` : 'Multiple Accounts Support'}
+                                    </span>
                                 </li>
 
-                                {/* Feature Toggles (Visual) */}
                                 <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.allowImages ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
                                         {plan.allowImages ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
