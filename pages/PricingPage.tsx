@@ -113,6 +113,10 @@ export const PricingPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
                 {plans.map((plan) => {
                     const isCurrentPlan = user?.plan === plan.name;
+                    const isFree = plan.monthlyPrice === 0 && plan.yearlyPrice === 0;
+                    const price = (billingCycle === 'monthly' || isFree) ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12);
+                    const credits = (billingCycle === 'yearly' && !isFree) ? plan.credits * 12 : plan.credits;
+                    const dailyLimit = (billingCycle === 'yearly' && !isFree) ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
 
                     return (
                         <div key={plan.id} className={`relative bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 flex flex-col`}>
@@ -133,7 +137,7 @@ export const PricingPage: React.FC = () => {
 
                             <div className="mb-8 flex items-baseline gap-1">
                                 <span className="text-5xl font-extrabold text-slate-900">
-                                    ${billingCycle === 'monthly' ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12)}
+                                    ${price}
                                 </span>
                                 <span className="text-slate-400 font-medium">/mo</span>
                                 {billingCycle === 'yearly' && plan.yearlyPrice > 0 && (
@@ -146,14 +150,15 @@ export const PricingPage: React.FC = () => {
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                         <Zap size={12} strokeWidth={4} />
                                     </div>
-                                    {billingCycle === 'yearly' ? plan.credits * 12 : plan.credits} Credits {billingCycle === 'yearly' ? 'Upfront' : '/ Month'}
+                                    {credits} Credits {billingCycle === 'yearly' && !isFree ? 'Upfront' : '/ Month'}
                                 </li>
                                 <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                         <Zap size={12} strokeWidth={4} />
                                     </div>
-                                    {billingCycle === 'yearly' ? (plan.dailyLimitYearly || 0) : (plan.dailyLimitMonthly || 0)} Daily Actions
+                                    {dailyLimit || 0} Daily Actions
                                 </li>
+
                                 {plan.features.map((feature, i) => (
                                     <li key={i} className="flex items-center gap-3 text-slate-700 font-medium text-sm">
                                         <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>

@@ -565,8 +565,10 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch">
             {plans.map((plan: any) => {
               const theme = plan.isPopular ? 'orange' : (plan.name === 'Agency' ? 'slate' : 'slate');
-              const price = billingCycle === 'monthly' ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12);
-              const credits = billingCycle === 'yearly' ? plan.credits * 12 : plan.credits;
+              const isFree = plan.monthlyPrice === 0 && plan.yearlyPrice === 0;
+              const price = (billingCycle === 'monthly' || isFree) ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12);
+              const credits = (billingCycle === 'yearly' && !isFree) ? plan.credits * 12 : plan.credits;
+              const dailyLimit = (billingCycle === 'yearly' && !isFree) ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
 
               return (
                 <div key={plan.id} className={`bg-white rounded-[2.5rem] p-10 border ${plan.isPopular ? 'border-orange-200 shadow-2xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-all duration-500 relative overflow-hidden flex flex-col`}>
@@ -609,7 +611,7 @@ export const LandingPage: React.FC = () => {
                         <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                           <Star size={14} fill={plan.isPopular ? "currentColor" : "none"} strokeWidth={3} />
                         </div>
-                        {(billingCycle === 'yearly' ? plan.dailyLimitYearly : plan.dailyLimitMonthly) || 0} Actions / day
+                        {dailyLimit || 0} Actions / day
                       </li>
                       {plan.features.map((f: string, i: number) => (
                         <li key={i} className="flex items-center gap-3.5 text-sm font-medium text-slate-500">
