@@ -87,6 +87,8 @@ interface Plan {
     isPopular: boolean;
     highlightText?: string;
     isCustom?: boolean;
+    allowImages: boolean;
+    allowTracking: boolean;
 }
 
 interface RedditSettings {
@@ -1695,6 +1697,38 @@ export const Admin: React.FC = () => {
                                                     value={planForm.features?.join('\n') || ''}
                                                     onChange={(e) => setPlanForm({ ...planForm, features: e.target.value.split('\n') })}
                                                 />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                                <label className="flex items-center gap-3 cursor-pointer group">
+                                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${planForm.allowImages ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-300 text-transparent group-hover:border-orange-400'}`}>
+                                                        <Check size={16} strokeWidth={4} />
+                                                        <input
+                                                            type="checkbox"
+                                                            className="hidden"
+                                                            checked={planForm.allowImages || false}
+                                                            onChange={(e) => setPlanForm({ ...planForm, allowImages: e.target.checked })}
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700 text-xs">Allow AI Images</span>
+                                                    </div>
+                                                </label>
+
+                                                <label className="flex items-center gap-3 cursor-pointer group">
+                                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${planForm.allowTracking ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 text-transparent group-hover:border-blue-400'}`}>
+                                                        <Check size={16} strokeWidth={4} />
+                                                        <input
+                                                            type="checkbox"
+                                                            className="hidden"
+                                                            checked={planForm.allowTracking || false}
+                                                            onChange={(e) => setPlanForm({ ...planForm, allowTracking: e.target.checked })}
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700 text-xs">Allow Tracking</span>
+                                                    </div>
+                                                </label>
                                             </div>
 
                                             <div className="flex items-center gap-4">

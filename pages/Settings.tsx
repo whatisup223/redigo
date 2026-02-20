@@ -13,11 +13,11 @@ import { useAuth } from '../context/AuthContext';
 type Tab = 'profile' | 'brand' | 'billing' | 'history';
 
 const DEFAULT_BRAND = {
-    brandName: 'Redigo',
+    brandName: 'Redditgo',
     description: 'An AI-powered Reddit outreach tool that helps SaaS founders find and engage with their target audience authentically.',
     targetAudience: 'SaaS founders, indie hackers, B2B marketers',
     problem: 'Manual Reddit outreach is slow, inconsistent, and hard to scale without sounding spammy.',
-    website: 'https://redigo.io',
+    website: 'https://redditgo.online/',
     primaryColor: '#EA580C',
     secondaryColor: '#1E293B',
     brandTone: 'professional',
@@ -88,7 +88,7 @@ export const Settings: React.FC = () => {
 
                 ctx.font = 'bold 40px Arial';
                 ctx.fillStyle = '#ea580c';
-                ctx.fillText('Redigo', 50, 90);
+                ctx.fillText('Redditgo', 50, 90);
 
                 ctx.font = '20px Arial';
                 ctx.fillStyle = '#64748b';
@@ -206,7 +206,7 @@ export const Settings: React.FC = () => {
                 ctx.textAlign = 'center';
                 ctx.font = '14px Arial';
                 ctx.fillStyle = '#94a3b8';
-                ctx.fillText('Thank you for choosing Redigo.', 400, 615);
+                ctx.fillText('Thank you for choosing Redditgo.', 400, 615);
 
                 resolve(canvas.toDataURL('image/png'));
             }
@@ -597,7 +597,7 @@ export const Settings: React.FC = () => {
                                     </label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. Redigo"
+                                        placeholder="e.g. Redditgo"
                                         className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-slate-900"
                                         value={brandProfile.brandName}
                                         onChange={e => setBrandProfile(p => ({ ...p, brandName: e.target.value }))}
@@ -621,7 +621,7 @@ export const Settings: React.FC = () => {
                                 <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">What does your product do?</label>
                                 <textarea
                                     rows={2}
-                                    placeholder="e.g. Redigo is an AI-powered Reddit outreach tool that helps SaaS founders find and engage with their target audience authentically."
+                                    placeholder="e.g. Redditgo is an AI-powered Reddit outreach tool that helps SaaS founders find and engage with their target audience authentically."
                                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-slate-700 resize-none transition-all"
                                     value={brandProfile.description}
                                     onChange={e => setBrandProfile(p => ({ ...p, description: e.target.value }))}

@@ -104,6 +104,9 @@ export const Comments: React.FC = () => {
   const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
 
+  const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
+  const canTrack = user?.role === 'admin' || (currentPlan && currentPlan.allowTracking === true);
+
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
     goal: 'help',
@@ -119,6 +122,7 @@ export const Comments: React.FC = () => {
   const [activeTone, setActiveTone] = useState<'helpful_peer' | 'thought_leader' | 'skeptic' | 'storyteller'>('helpful_peer');
   const [includeBrandName, setIncludeBrandName] = useState(true);
   const [includeLink, setIncludeLink] = useState(true);
+  const [useTracking, setUseTracking] = useState(false);
 
   useEffect(() => {
     syncUser(); // Refresh user data (credits, daily limits) on mount
@@ -284,7 +288,7 @@ export const Comments: React.FC = () => {
       };
 
       const context = `Tone: ${tone}, Goal: ${goal}`;
-      const reply = await generateRedditReply(post, post.subreddit, tone, context, user?.id, overrideProfile, language, includeBrandName, includeLink);
+      const reply = await generateRedditReply(post, post.subreddit, tone, context, user?.id, overrideProfile, language, includeBrandName, includeLink, useTracking);
 
       setGeneratedReply(reply);
       setEditedComment(reply.comment);
@@ -1127,6 +1131,31 @@ export const Comments: React.FC = () => {
                         <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-4' : 'translate-x-0'}`} />
                       </button>
                     </div>
+
+                    {/* Link Tracking Toggle */}
+                    {includeLink && (
+                      <div className="flex items-center justify-between p-4 bg-blue-50/30 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-sm ${!canTrack ? 'bg-slate-100 text-slate-400' : 'bg-white text-blue-600'}`}>
+                            {!canTrack ? <Crown size={14} /> : <Zap size={14} />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-slate-900">Track Clicks</p>
+                              {!canTrack && <span className="bg-blue-100 text-blue-600 text-[7px] font-black px-1 py-0.5 rounded-md uppercase tracking-tighter">Pro</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => canTrack ? setUseTracking(!useTracking) : window.location.href = '/pricing'}
+                          className={`w-10 h-6 rounded-full transition-all relative ${useTracking && canTrack ? 'bg-blue-600' : 'bg-slate-300'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${useTracking && canTrack ? 'translate-x-4' : 'translate-x-0'} flex items-center justify-center`}>
+                            {!canTrack && <AlertCircle size={8} className="text-slate-400" />}
+                          </div>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-3">

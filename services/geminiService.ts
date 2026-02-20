@@ -52,7 +52,7 @@ BRAND INTELLIGENCE (internalize this — do NOT parrot it back verbatim):
 
 const buildImageBrandContext = (profile: BrandProfile): string => {
   if (!profile || !profile.brandName) {
-    return 'CRITICAL: Use Redigo brand colors ONLY: Vibrant Orange (#EA580C) for primary elements/highlights, Deep Slate Navy (#1E293B) for backgrounds/contrast, and White for text/details.';
+    return 'CRITICAL: Use Redditgo brand colors ONLY: Vibrant Orange (#EA580C) for primary elements/highlights, Deep Slate Navy (#1E293B) for backgrounds/contrast, and White for text/details.';
   }
   const primary = profile.primaryColor || '#EA580C';
   const secondary = profile.secondaryColor || '#1E293B';
@@ -116,7 +116,8 @@ export const generateRedditReply = async (
   overrideProfile?: Partial<BrandProfile>,
   language: string = 'English',
   includeBrandName: boolean = true,
-  includeLink: boolean = true
+  includeLink: boolean = true,
+  useTracking: boolean = false
 ): Promise<GeneratedReply & { credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
@@ -124,31 +125,62 @@ export const generateRedditReply = async (
     const brandContext = buildBrandContext(effectiveProfile);
     const toneStrategy = buildToneStrategy(tone);
 
-    const effectiveWebsite = effectiveProfile.website || 'https://redditgo.online/';
+    let effectiveWebsite = effectiveProfile.website || 'https://redditgo.online/';
+
+    // LINK TRACKING INTEGRATION
+    if (useTracking && includeLink && userId) {
+      try {
+        const trackRes = await fetch('/api/tracking/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            originalUrl: effectiveWebsite,
+            subreddit: post.subreddit,
+            postId: post.id,
+            type: 'comment'
+          })
+        });
+        if (trackRes.ok) {
+          const trackData = await trackRes.json();
+          effectiveWebsite = trackData.trackingUrl;
+        }
+      } catch (err) {
+        console.warn('Tracking link creation failed, falling back to direct link:', err);
+      }
+    }
+
     const hasBrand = includeBrandName && !!effectiveProfile.brandName;
     const hasLink = includeLink && !!effectiveWebsite;
 
     let brandInstructions = '';
     if (hasBrand && hasLink) {
       brandInstructions = `
-BRAND INTEGRATION (Subtle & Contextual):
+BRAND INTEGRATION (STRICT REQUIREMENT):
+- You MUST use the brand name: "${effectiveProfile.brandName}".
+- You MUST use the URL: "${effectiveWebsite}".
 - Mention "${effectiveProfile.brandName}" as a tool or discovery that helped you achieve a specific result.
 - Embed the link ONCE, naturally in a sentence: [${effectiveProfile.brandName}](${effectiveWebsite}).
+- DO NOT hallucinate any other brand names, product names, or websites.
 - DO NOT use marketing superlatives (best, amazing, game-changer).
 - Frame it as an 'afterthought' or a 'side note': "By the way, I used [${effectiveProfile.brandName}](${effectiveWebsite}) to handle the X part of this, and it worked well."
-- The goal is to make the reader think "That's a useful tip" rather than "This is an ad".`;
+- Redditgo is your internal identity, but your public recommendation is "${effectiveProfile.brandName}".`;
     } else if (hasBrand) {
       brandInstructions = `
-BRAND INTEGRATION:
-- Mention "${effectiveProfile.brandName}" organically ONCE as a personal recommendation. No links.
-- Keep it casual: "I've been using ${effectiveProfile.brandName} for this" — not "You should buy ${effectiveProfile.brandName}".`;
+BRAND INTEGRATION (STRICT REQUIREMENT):
+- Mention "${effectiveProfile.brandName}" organically ONCE as a personal recommendation.
+- Do NOT include any links.
+- Keep it casual: "I've been using ${effectiveProfile.brandName} for this" — not "You should buy ${effectiveProfile.brandName}".
+- DO NOT mention any other products or brands.`;
     } else if (hasLink) {
       brandInstructions = `
-LINK INTEGRATION:
-- Include ONE natural link using generic anchor text: [this tool](${effectiveWebsite}) or [here](${effectiveWebsite}).
-- Embed it mid-sentence, not as a standalone or footer.`;
+LINK INTEGRATION (STRICT REQUIREMENT):
+- Include ONE natural link using ONLY this URL: "${effectiveWebsite}".
+- Use natural anchor text: [this tool](${effectiveWebsite}) or [here](${effectiveWebsite}).
+- Embed it mid-sentence, not as a standalone or footer.
+- DO NOT mention any brand name if none was provided.`;
     } else {
-      brandInstructions = `NO BRAND/LINK: Do not mention any product or include any links. Pure value only.`;
+      brandInstructions = `NO BRAND/LINK ALLOWED: Do not mention any product name, brand name, or include any links/URLs. Focus 100% on providing pure, expert advice.`;
     }
 
     const response = await fetch('/api/generate', {
@@ -218,7 +250,8 @@ export const generateRedditPost = async (
   overrideProfile?: Partial<BrandProfile>,
   language: string = 'English',
   includeBrandName: boolean = true,
-  includeLink: boolean = true
+  includeLink: boolean = true,
+  useTracking: boolean = false
 ): Promise<{ title: string; content: string; imagePrompt: string; credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
@@ -234,26 +267,52 @@ export const generateRedditPost = async (
 
     const finalBrandName = effectiveProfile.brandName || '';
     const finalUrl = effectiveProfile.website || '';
-    const effectiveWebsite = finalUrl || 'https://redditgo.online/';
+    let effectiveWebsite = finalUrl || 'https://redditgo.online/';
+
+    // LINK TRACKING INTEGRATION
+    if (useTracking && includeLink && userId) {
+      try {
+        const trackRes = await fetch('/api/tracking/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            originalUrl: effectiveWebsite,
+            subreddit,
+            type: 'post'
+          })
+        });
+        if (trackRes.ok) {
+          const trackData = await trackRes.json();
+          effectiveWebsite = trackData.trackingUrl;
+        }
+      } catch (err) {
+        console.warn('Tracking link creation failed, falling back to direct:', err);
+      }
+    }
+
     const hasBrand = includeBrandName && !!finalBrandName;
     const hasLink = includeLink && !!effectiveWebsite;
 
     let brandInstructions = '';
     if (hasBrand && hasLink) {
       brandInstructions = `
-BRAND INTEGRATION IN POST BODY:
+BRAND INTEGRATION IN POST BODY (STRICT REQUIREMENT):
+- You MUST use the brand name: "${finalBrandName}".
+- You MUST use the URL: "${effectiveWebsite}".
 - The post MUST feel like it is written by a community member, NOT by the brand itself.
 - Mention "${finalBrandName}" as a natural discovery or tool you found, not as a promotion.
 - Embed the link ONCE, naturally in the post body: [${finalBrandName}](${effectiveWebsite})
 - Anchor text = exact brand name. No exceptions.
+- DO NOT use any other brand names or websites.
 - GOOD: "After trying a bunch of things, [${finalBrandName}](${effectiveWebsite}) was the one that actually clicked for me."
 - BAD: "Try out our tool [${finalBrandName}](${effectiveWebsite})!" — this is promotional and will be flagged.`;
     } else if (hasBrand) {
-      brandInstructions = `BRAND MENTION: Reference "${finalBrandName}" once, casually, as something that worked for you. No links.`;
+      brandInstructions = `BRAND MENTION (STRICT): Reference "${finalBrandName}" once, casually, as something that worked for you. Do NOT use any other brand names or links.`;
     } else if (hasLink) {
-      brandInstructions = `LINK INTEGRATION: Include ONE organic link using natural anchor text. Avoid generic "click here".`;
+      brandInstructions = `LINK INTEGRATION (STRICT): Include ONE organic link using ONLY this URL: "${effectiveWebsite}". Avoid generic "click here". Do NOT use any brand names.`;
     } else {
-      brandInstructions = `PURE VALUE POST: No brand mention, no links. Write content that stands on its own merit.`;
+      brandInstructions = `PURE VALUE POST (STRICT): No brand mention, no links, no URLs. Focus 100% on high-quality storytelling and insight.`;
     }
 
     const goalGuide: Record<string, string> = {

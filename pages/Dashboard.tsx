@@ -327,7 +327,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative">
                   <div className="absolute top-0 right-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest shadow-lg shadow-orange-200">
-                    {selectedEntry.productMention || 'Redigo'} Mentioned
+                    {selectedEntry.productMention || 'Redditgo'} Mentioned
                   </div>
                   <p className="text-slate-800 text-base leading-relaxed whitespace-pre-wrap italic font-medium">"{selectedEntry.comment}"</p>
                 </div>

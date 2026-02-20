@@ -252,6 +252,8 @@ let plans = savedData.plans || [
     maxAccounts: 1,
     maxBrands: 1,
     allowOverride: false,
+    allowImages: false, // Feature Flag
+    allowTracking: false, // Feature Flag
     features: ['100 AI actions/mo', 'Basic Reddit Analytics', '1 Connected Account', '1 Brand Profile', 'Community Support'],
     isPopular: false,
     isCustom: true
@@ -268,6 +270,8 @@ let plans = savedData.plans || [
     maxAccounts: 3,
     maxBrands: 1,
     allowOverride: true,
+    allowImages: true, // Feature Flag
+    allowTracking: true, // Feature Flag
     features: ['300 AI actions/mo', 'Advanced Post Scheduling', '3 Connected Accounts', '1 Brand Profile (with Override)', 'Priority Support', 'Image Generation'],
     isPopular: true,
     highlightText: 'Most Popular',
@@ -285,11 +289,109 @@ let plans = savedData.plans || [
     maxAccounts: -1,
     maxBrands: -1,
     allowOverride: true,
+    allowImages: true, // Feature Flag
+    allowTracking: true, // Feature Flag
     features: ['1000 AI actions/mo', 'Unlimited Accounts', 'Unlimited Brand Profiles', 'Team Collaboration', 'Dedicated Manager', 'API Access'],
     isPopular: false,
     isCustom: true
   }
 ];
+
+// Mock Tracking Database
+let trackingLinks = savedData.trackingLinks || [];
+
+// ─── Tracking Redirector ──────────────────────────────────────────────────
+app.get('/t/:id', (req, res) => {
+  const { id } = req.params;
+  const link = trackingLinks.find(l => l.id === id);
+
+  if (!link) {
+    return res.status(404).send('Tracking link not found or expired.');
+  }
+
+  // Log the click
+  link.clicks = (link.clicks || 0) + 1;
+  link.lastClickedAt = new Date().toISOString();
+
+  // Optional: Capture more data from headers/ip if needed
+  if (!link.clickDetails) link.clickDetails = [];
+  link.clickDetails.push({
+    timestamp: new Date().toISOString(),
+    userAgent: req.headers['user-agent'],
+    referer: req.headers['referer']
+  });
+
+  addSystemLog('INFO', `Tracking Click: ${id} -> ${link.originalUrl}`, {
+    subreddit: link.subreddit,
+    userId: link.userId
+  });
+
+  // Save changes if using persistency logic (mocked here by being in memory)
+  // res.redirect(link.originalUrl); // Standard redirect
+
+  // Premium feel: Meta refresh or simple redirect
+  res.send(`
+    <html>
+      <head>
+        <title>Redirecting...</title>
+        <meta http-equiv="refresh" content="0;url=${link.originalUrl}">
+        <style>
+          body { font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc; color: #64748b; }
+          .loader { border: 3px solid #f3f3f3; border-top: 3px solid #f97316; border-radius: 50%; width: 24px; height: 24px; animate: spin 1s linear infinite; margin-right: 12px; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      </head>
+      <body>
+        <div class="loader"></div>
+        <p>Redirecting you safely...</p>
+        <script>window.location.href = "${link.originalUrl}";</script>
+      </body>
+    </html>
+  `);
+});
+
+// ─── Create Tracking Link ──────────────────────────────────────────────────
+app.post('/api/tracking/create', (req, res) => {
+  const { userId, originalUrl, subreddit, postId, type } = req.body;
+  if (!userId || !originalUrl) return res.status(400).json({ error: 'Missing required fields' });
+
+  const user = users.find(u => u.id == userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const userPlan = plans.find(p => p.id === user.plan || p.name === user.plan);
+
+  // PLAN PERMISSION CHECK
+  if (user.role !== 'admin' && userPlan && userPlan.allowTracking === false) {
+    return res.status(403).json({ error: 'Link tracking is not included in your current plan.' });
+  }
+
+  const id = Math.random().toString(36).substring(2, 8);
+  const newLink = {
+    id,
+    userId,
+    originalUrl,
+    subreddit,
+    postId,
+    type, // 'comment' or 'post'
+    createdAt: new Date().toISOString(),
+    clicks: 0,
+    clickDetails: []
+  };
+
+  trackingLinks.push(newLink);
+
+  const baseUrl = process.env.BASE_URL || `http://localhost:5000`;
+  const trackingUrl = `${baseUrl}/t/${id}`;
+
+  res.json({ id, trackingUrl });
+});
+
+// ─── Get User Tracking Links ──────────────────────────────────────────────
+app.get('/api/tracking/user/:userId', (req, res) => {
+  const { userId } = req.params;
+  const userLinks = trackingLinks.filter(l => l.userId == userId);
+  res.json(userLinks);
+});
 
 
 // Superuser enforcement - info@marketation.online is the ONLY admin for now
@@ -576,7 +678,7 @@ let redditSettings = savedData.reddit || {
   clientId: '',
   clientSecret: '',
   redirectUri: '', // Dynamically handled in /url endpoint
-  userAgent: 'RedigoApp/1.0'
+  userAgent: 'RedditgoApp/1.0'
 };
 
 // Store user Reddit tokens (In-memory for now, should be in DB)
@@ -599,7 +701,7 @@ app.get('/api/plans', (req, res) => {
 });
 
 app.post('/api/plans', (req, res) => {
-  const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText } = req.body;
+  const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
 
   if (!id || !name || monthlyPrice === undefined || yearlyPrice === undefined || credits === undefined) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -620,6 +722,8 @@ app.post('/api/plans', (req, res) => {
     features: features || [],
     isPopular: !!isPopular,
     highlightText: highlightText || '',
+    allowImages: Boolean(allowImages || false),
+    allowTracking: Boolean(allowTracking || false),
     isCustom: true // Mark as custom created plan
   };
 
@@ -637,7 +741,7 @@ app.put('/api/plans/:id', (req, res) => {
     return res.status(404).json({ error: 'Plan not found' });
   }
 
-  const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText } = req.body;
+  const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
 
   plans[planIndex] = {
     ...plans[planIndex],
@@ -648,8 +752,10 @@ app.put('/api/plans/:id', (req, res) => {
     dailyLimitMonthly: dailyLimitMonthly !== undefined ? parseInt(dailyLimitMonthly) : plans[planIndex].dailyLimitMonthly,
     dailyLimitYearly: dailyLimitYearly !== undefined ? parseInt(dailyLimitYearly) : plans[planIndex].dailyLimitYearly,
     features: features || plans[planIndex].features,
-    isPopular: isPopular !== undefined ? !!isPopular : plans[planIndex].isPopular,
-    highlightText: highlightText || plans[planIndex].highlightText,
+    isPopular: isPopular !== undefined ? Boolean(isPopular) : plans[planIndex].isPopular,
+    highlightText: highlightText !== undefined ? String(highlightText) : plans[planIndex].highlightText,
+    allowImages: allowImages !== undefined ? Boolean(allowImages) : (plans[planIndex].allowImages || false),
+    allowTracking: allowTracking !== undefined ? Boolean(allowTracking) : (plans[planIndex].allowTracking || false),
     isCustom: true
   };
 
@@ -1221,7 +1327,7 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': redditSettings.userAgent || 'RedigoApp/1.0'
+        'User-Agent': redditSettings.userAgent || 'RedditgoApp/1.0'
       },
       body: params
     });
@@ -1524,6 +1630,17 @@ app.post('/api/generate-image', async (req, res) => {
     if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
 
     const user = users[userIndex];
+    const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+
+    // PLAN FEATURE CHECK
+    if (user.role !== 'admin' && plan && plan.allowImages === false) {
+      addSystemLog('WARN', `Feature Blocked: Image generation attempted by ${user.plan} user: ${user.email}`);
+      return res.status(403).json({
+        error: 'AI Image Generation is not included in your current plan.',
+        requiredPlan: 'Professional'
+      });
+    }
+
     const cost = Number(aiSettings.creditCosts?.image) || 5;
 
     const today = new Date().toISOString().split('T')[0];
@@ -1536,7 +1653,6 @@ app.post('/api/generate-image', async (req, res) => {
     }
 
     if (user.role !== 'admin') {
-      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
       const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
       const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
 

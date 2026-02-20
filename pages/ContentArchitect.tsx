@@ -126,6 +126,12 @@ export const ContentArchitect: React.FC = () => {
     const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
     const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
 
+    const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
+    const canGenerateImages = user?.role === 'admin' || (currentPlan && currentPlan.allowImages === true);
+    const canTrack = user?.role === 'admin' || (currentPlan && currentPlan.allowTracking === true);
+
+    const [useTracking, setUseTracking] = useState(false);
+
     useEffect(() => {
         syncUser(); // Refresh credits & daily limits on mount
         fetch('/api/config')
@@ -404,7 +410,8 @@ export const ContentArchitect: React.FC = () => {
                 overrideProfile,
                 language,
                 includeBrandName,
-                includeLink
+                includeLink,
+                useTracking
             );
 
             setPostData(prev => ({
@@ -1101,26 +1108,37 @@ export const ContentArchitect: React.FC = () => {
                                     <div className="flex flex-col gap-4 mt-8">
                                         <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm">
-                                                    <ImageIcon size={20} />
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${!canGenerateImages ? 'bg-slate-100 text-slate-400' : 'bg-white text-orange-600'}`}>
+                                                    {!canGenerateImages ? <Crown size={18} /> : <ImageIcon size={20} />}
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-bold text-slate-900">Include Base Image</p>
                                                     <div className="flex items-center gap-2">
-                                                        <p className="text-[10px] text-slate-500 font-medium">Generate visual (+{Number(costs.image)} pts)</p>
-                                                        <div className="flex gap-1" title="Applying your brand colors">
-                                                            <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
-                                                            <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
-                                                        </div>
+                                                        <p className="text-sm font-bold text-slate-900">Include Base Image</p>
+                                                        {!canGenerateImages && <span className="bg-orange-100 text-orange-600 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Pro Feature</span>}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-[10px] text-slate-500 font-medium">
+                                                            {canGenerateImages ? `Generate visual (+${Number(costs.image)} pts)` : 'Upgrade to generate AI visuals for your posts'}
+                                                        </p>
+                                                        {canGenerateImages && (
+                                                            <div className="flex gap-1" title="Applying your brand colors">
+                                                                <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
+                                                                <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={() => setIncludeImage(!includeImage)}
-                                                className={`w-12 h-7 rounded-full transition-all relative ${includeImage ? 'bg-orange-600' : 'bg-slate-300'}`}
-                                            >
-                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-5' : 'translate-x-0'}`} />
-                                            </button>
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => canGenerateImages ? setIncludeImage(!includeImage) : window.location.href = '/pricing'}
+                                                    className={`w-12 h-7 rounded-full transition-all relative ${includeImage && canGenerateImages ? 'bg-orange-600' : 'bg-slate-300'} ${!canGenerateImages ? 'cursor-pointer hover:bg-slate-400' : ''}`}
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage && canGenerateImages ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}>
+                                                        {!canGenerateImages && <AlertCircle size={10} className="text-slate-400" />}
+                                                    </div>
+                                                </button>
+                                            </div>
                                         </div>
 
                                         {/* Include Brand Name Toggle */}
@@ -1160,6 +1178,34 @@ export const ContentArchitect: React.FC = () => {
                                                 <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-5' : 'translate-x-0'}`} />
                                             </button>
                                         </div>
+
+                                        {/* Link Tracking Toggle */}
+                                        {includeLink && (
+                                            <div className="flex items-center justify-between p-4 bg-blue-50/30 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${!canTrack ? 'bg-slate-100 text-slate-400' : 'bg-white text-blue-600'}`}>
+                                                        {!canTrack ? <Crown size={18} /> : <Zap size={18} />}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-bold text-slate-900">Enable Link Tracking</p>
+                                                            {!canTrack && <span className="bg-blue-100 text-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Pro Feature</span>}
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-500 font-medium">
+                                                            {canTrack ? 'Get analytics on every click' : 'Track clicks & performance for your links'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => canTrack ? setUseTracking(!useTracking) : window.location.href = '/pricing'}
+                                                    className={`w-12 h-7 rounded-full transition-all relative ${useTracking && canTrack ? 'bg-blue-600' : 'bg-slate-300'}`}
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${useTracking && canTrack ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}>
+                                                        {!canTrack && <AlertCircle size={10} className="text-slate-400" />}
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        )}
 
                                         <div className="flex gap-3">
                                             {postData.title && postData.content && (

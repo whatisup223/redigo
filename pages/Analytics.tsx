@@ -14,7 +14,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { TrendingUp, Users, MousePointer2, ExternalLink, Calendar, ChevronRight, LayoutList, RefreshCw, BarChart3, PieChart as PieIcon, MessageSquare, PenTool, Image as ImageIcon, ChevronDown, Check } from 'lucide-react';
+import { TrendingUp, Users, MousePointer2, ExternalLink, Calendar, ChevronRight, LayoutList, RefreshCw, BarChart3, PieChart as PieIcon, MessageSquare, PenTool, Image as ImageIcon, ChevronDown, Check, Link2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CreditsBanner from '../components/CreditsBanner';
 
@@ -80,9 +80,10 @@ export const Analytics: React.FC = () => {
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'comments' | 'posts'>('comments');
+  const [activeTab, setActiveTab] = useState<'comments' | 'posts' | 'links'>('comments');
   const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
+  const [trackingLinks, setTrackingLinks] = useState<any[]>([]);
 
 
   // Date Filtering State
@@ -91,45 +92,59 @@ export const Analytics: React.FC = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.id) return;
-      syncUser(); // Ensure credits and daily limits are accurate for analytics view
-      try {
-        // Fetch comments history
-        const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}`);
-        if (historyRes.ok) {
-          const historyData = await historyRes.json();
-          setHistory(Array.isArray(historyData) ? historyData : []);
-        }
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-        // Fetch posts history
-        const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}`);
-        if (postsRes.ok) {
-          const postsData = await postsRes.json();
-          setPostsHistory(Array.isArray(postsData) ? postsData : []);
-        }
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
-        // Fetch profile
-        const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}`);
-        if (profileRes.ok) {
-          const profileData = await profileRes.json();
-          setProfile(profileData);
-        }
-
-        // Fetch reddit accounts
-        const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}`);
-        if (statusRes.ok) {
-          const status = await statusRes.json();
-          setRedditStatus(status);
-        }
-      } catch (err) {
-        console.error('Failed to fetch data', err);
-      } finally {
-        setIsLoading(false);
+  const fetchData = async () => {
+    if (!user?.id) return;
+    syncUser(); // Ensure credits and daily limits are accurate for analytics view
+    try {
+      // Fetch comments history
+      const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}`);
+      if (historyRes.ok) {
+        const historyData = await historyRes.json();
+        setHistory(Array.isArray(historyData) ? historyData : []);
       }
-    };
 
+      // Fetch posts history
+      const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}`);
+      if (postsRes.ok) {
+        const postsData = await postsRes.json();
+        setPostsHistory(Array.isArray(postsData) ? postsData : []);
+      }
+
+      // Fetch tracking links
+      const tracksRes = await fetch(`/api/tracking/user/${user.id}`);
+      if (tracksRes.ok) {
+        const tracksData = await tracksRes.json();
+        setTrackingLinks(Array.isArray(tracksData) ? tracksData : []);
+      }
+
+      // Fetch profile
+      const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}`);
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        setProfile(profileData);
+      }
+
+      // Fetch reddit accounts
+      const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}`);
+      if (statusRes.ok) {
+        const status = await statusRes.json();
+        setRedditStatus(status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch data', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [user, selectedAccount]);
 
@@ -158,24 +173,36 @@ export const Analytics: React.FC = () => {
   const activeHistory = filteredHistory;
 
   // Process history for charts
-  const chartData = [...activeHistory].reverse().reduce((acc: any[], current) => {
-    const date = new Date(current.deployedAt).toLocaleDateString('en-US', { weekday: 'short' });
+  const chartData = (activeTab === 'links' ? trackingLinks : activeHistory).reduce((acc: any[], current) => {
+    const timestamp = activeTab === 'links' ? (current.createdAt || current.deployedAt) : current.deployedAt;
+    const date = new Date(timestamp).toLocaleDateString('en-US', { weekday: 'short' });
     const existing = acc.find(d => d.name === date);
-    if (existing) {
-      existing.upvotes += current.ups || 0;
-      existing.replies += current.replies || 0;
+
+    if (activeTab === 'links') {
+      const clicks = current.clicks || 0;
+      if (existing) {
+        existing.clicks += clicks;
+      } else {
+        acc.push({ name: date, clicks: clicks, upvotes: 0, replies: 0 });
+      }
     } else {
-      acc.push({ name: date, upvotes: current.ups || 0, replies: current.replies || 0 });
+      if (existing) {
+        existing.upvotes += current.ups || 0;
+        existing.replies += current.replies || 0;
+      } else {
+        acc.push({ name: date, upvotes: current.ups || 0, replies: current.replies || 0, clicks: 0 });
+      }
     }
     return acc;
   }, []);
 
   // Ensure we have at least some data to show trends, even if zero
-  const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0 }];
+  const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0, clicks: 0 }];
 
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
   const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
-  const activeSubreddits = new Set(activeHistory.map(r => r.subreddit)).size;
+  const totalClicks = trackingLinks.reduce((a, b) => a + (b.clicks || 0), 0);
+  const activeSubreddits = new Set([...activeHistory, ...trackingLinks].map(r => r.subreddit)).size;
 
   // Sentiment Logic (Calculated based on upvotes/replies ratio)
   const sentimentData = [
@@ -433,36 +460,46 @@ export const Analytics: React.FC = () => {
           <PenTool size={18} className={activeTab === 'posts' ? 'text-orange-600' : ''} />
           POSTS
         </button>
+        <button
+          onClick={() => setActiveTab('links')}
+          className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'links'
+            ? 'bg-white text-slate-900 shadow-xl shadow-slate-200'
+            : 'text-slate-400 hover:text-slate-600'
+            }`}
+        >
+          <Link2 size={18} className={activeTab === 'links' ? 'text-blue-600' : ''} />
+          LINKS
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          label={activeTab === 'comments' ? "Total Upvotes" : "Post Karma"}
-          value={totalUpvotes.toLocaleString()}
-          trend="+12.5%"
-          icon={activeTab === 'comments' ? TrendingUp : BarChart3}
-          color="bg-orange-600 text-white shadow-orange-100"
+          label={activeTab === 'links' ? "Total Clicks" : (activeTab === 'comments' ? "Total Upvotes" : "Post Karma")}
+          value={activeTab === 'links' ? totalClicks.toLocaleString() : totalUpvotes.toLocaleString()}
+          trend={activeTab === 'links' ? `${trackingLinks.length} Links` : "+12.5%"}
+          icon={activeTab === 'links' ? MousePointer2 : (activeTab === 'comments' ? TrendingUp : BarChart3)}
+          color={activeTab === 'links' ? "bg-blue-600 text-white shadow-blue-100" : "bg-orange-600 text-white shadow-orange-100"}
         />
         <StatCard
-          label="Account Authority"
-          value={profile ? (activeTab === 'comments' ? profile.commentKarma.toLocaleString() : (profile.linkKarma || profile.totalKarma).toLocaleString()) : "---"}
+          label={activeTab === 'links' ? "Avg Click Rate" : "Account Authority"}
+          value={activeTab === 'links' ? (trackingLinks.length > 0 ? (totalClicks / trackingLinks.length).toFixed(1) : "0.0") : (profile ? (activeTab === 'comments' ? profile.commentKarma.toLocaleString() : (profile.linkKarma || profile.totalKarma).toLocaleString()) : "---")}
           trend="Live"
-          icon={Users}
-          color="bg-blue-600 text-white shadow-blue-100"
+          icon={activeTab === 'links' ? TrendingUp : Users}
+          color={activeTab === 'links' ? "bg-emerald-600 text-white shadow-emerald-100" : "bg-blue-600 text-white shadow-blue-100"}
         />
         <StatCard
-          label={activeTab === 'comments' ? "Engagement Impact" : "Viral Reach"}
-          value={(totalUpvotes + totalReplies).toLocaleString()}
-          trend="+15.0%"
-          icon={activeTab === 'comments' ? MousePointer2 : TrendingUp}
-          color="bg-purple-600 text-white shadow-purple-100"
+          label={activeTab === 'links' ? "Link Conversions" : (activeTab === 'comments' ? "Engagement Impact" : "Viral Reach")}
+          value={activeTab === 'links' ? totalClicks.toLocaleString() : (totalUpvotes + totalReplies).toLocaleString()}
+          trend={activeTab === 'links' ? "100%" : "+15.0%"}
+          icon={activeTab === 'links' ? ExternalLink : (activeTab === 'comments' ? MousePointer2 : TrendingUp)}
+          color={activeTab === 'links' ? "bg-indigo-600 text-white shadow-indigo-100" : "bg-purple-600 text-white shadow-purple-100"}
         />
         <StatCard
           label="Target Communities"
           value={activeSubreddits}
           trend="Active"
           icon={ExternalLink}
-          color="bg-emerald-600 text-white shadow-emerald-100"
+          color="bg-slate-900 text-white shadow-slate-100"
         />
       </div>
 
@@ -591,24 +628,19 @@ export const Analytics: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden min-h-[400px]">
         <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-extrabold text-slate-900">Outreach History</h2>
-            {activeHistory.length > 0 && (
-              <span className="px-2 py-0.5 bg-slate-900 text-white text-[10px] font-black rounded-lg">{activeHistory.length}</span>
+            <h2 className="text-xl font-extrabold text-slate-900">
+              {activeTab === 'links' ? 'Link Tracking History' : 'Outreach History'}
+            </h2>
+            {(activeTab === 'links' ? trackingLinks : activeHistory).length > 0 && (
+              <span className={`px-2 py-0.5 text-white text-[10px] font-black rounded-lg ${activeTab === 'links' ? 'bg-blue-600' : 'bg-slate-900'}`}>
+                {(activeTab === 'links' ? trackingLinks : activeHistory).length}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-4">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Sync Active</p>
             <button
-              onClick={() => {
-                setIsLoading(true);
-                const refresh = async () => {
-                  if (!user?.id) return;
-                  const res = await fetch(`/api/user/replies/sync?userId=${user.id}`);
-                  if (res.ok) setHistory(await res.json());
-                  setIsLoading(false);
-                };
-                refresh();
-              }}
+              onClick={() => fetchData()}
               className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-orange-600 hover:border-orange-200 transition-all active:scale-95 shadow-sm"
             >
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
@@ -619,50 +651,56 @@ export const Analytics: React.FC = () => {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center p-20 gap-4">
               <RefreshCw className="animate-spin text-orange-600" size={32} />
-              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Loading History...</p>
+              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Loading Records...</p>
             </div>
-          ) : activeHistory.length === 0 ? (
+          ) : (activeTab === 'links' ? trackingLinks : activeHistory).length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 gap-4">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
-                <LayoutList size={32} />
+                {activeTab === 'links' ? <Link2 size={32} /> : <LayoutList size={32} />}
               </div>
-              <p className="text-slate-900 font-bold">No {activeTab} deployed yet</p>
-              <p className="text-slate-400 text-sm">Start engaging on the Dashboard to see data here.</p>
+              <p className="text-slate-900 font-bold">No {activeTab} tracked yet</p>
+              <p className="text-slate-400 text-sm">Deploy engaging content to see {activeTab} data.</p>
             </div>
           ) : (
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50/50 text-slate-400 text-[11px] font-extrabold uppercase tracking-[0.2em]">
-                  <th className="px-10 py-5">{activeTab === 'posts' ? 'Preview' : 'Origin'}</th>
-                  <th className="px-10 py-5">Conversation</th>
-                  {selectedAccount === 'all' && <th className="px-10 py-5">Account</th>}
-                  <th className="px-10 py-5">Impact</th>
-                  <th className="px-10 py-5">Product</th>
+                  <th className="px-10 py-5">{activeTab === 'links' ? 'Subreddit' : (activeTab === 'posts' ? 'Preview' : 'Origin')}</th>
+                  <th className="px-10 py-5">{activeTab === 'links' ? 'Tracked URL' : 'Conversation'}</th>
+                  {selectedAccount === 'all' && (activeTab !== 'links') && <th className="px-10 py-5">Account</th>}
+                  <th className="px-10 py-5">{activeTab === 'links' ? 'Performance' : 'Impact'}</th>
+                  <th className="px-10 py-5">Type</th>
                   <th className="px-10 py-5">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm font-medium">
-                {activeHistory.map((row) => (
+                {(activeTab === 'links' ? trackingLinks : activeHistory).map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 transition-all group">
-                    <td className="px-10 py-6 font-bold text-orange-600">
-                      {activeTab === 'posts' && row.imageUrl ? (
+                    <td className="px-10 py-6 font-bold text-slate-900">
+                      {activeTab === 'links' ? (
+                        <span className="text-blue-600 font-black">r/{row.subreddit}</span>
+                      ) : (activeTab === 'posts' && row.imageUrl ? (
                         <div className="w-16 h-10 rounded-lg overflow-hidden border border-slate-200 shadow-sm group-hover:scale-105 transition-transform">
                           <img src={row.imageUrl} className="w-full h-full object-cover" alt="Post" />
                         </div>
                       ) : (
                         `r/${row.subreddit}`
-                      )}
+                      ))}
                     </td>
                     <td className="px-10 py-6">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-bold text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-1">{row.postTitle}</span>
+                      <div className="flex flex-col gap-1 max-w-xs">
+                        <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
+                          {activeTab === 'links' ? row.originalUrl : row.postTitle}
+                        </span>
                         <div className="flex items-center gap-2">
-                          {activeTab === 'posts' && <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded">r/{row.subreddit}</span>}
-                          <span className="text-[10px] text-slate-400 font-medium">{new Date(row.deployedAt).toLocaleString()}</span>
+                          {activeTab === 'links' && <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded">Redirect Link</span>}
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {new Date(row.createdAt || row.deployedAt).toLocaleString()}
+                          </span>
                         </div>
                       </div>
                     </td>
-                    {selectedAccount === 'all' && (
+                    {selectedAccount === 'all' && (activeTab !== 'links') && (
                       <td className="px-10 py-6">
                         <div className="flex items-center gap-2">
                           <div className="w-5 h-5 rounded-lg bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400">u/</div>
@@ -672,11 +710,11 @@ export const Analytics: React.FC = () => {
                     )}
                     <td className="px-10 py-6">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 font-extrabold">
-                          <TrendingUp size={14} className="text-green-500" />
-                          {row.ups}
+                        <div className="flex items-center gap-1.5 font-extrabold text-blue-600">
+                          <MousePointer2 size={14} className="text-blue-500" />
+                          {activeTab === 'links' ? row.clicks : row.ups} clicks
                         </div>
-                        {activeTab === 'posts' && (
+                        {activeTab !== 'links' && (
                           <div className="flex items-center gap-1.5 font-extrabold text-slate-400">
                             <MessageSquare size={14} />
                             {row.replies}
@@ -684,26 +722,41 @@ export const Analytics: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-10 py-6 text-blue-600 font-bold">
-                      {row.productMention}
+                    <td className="px-10 py-6 uppercase text-[10px] font-black tracking-widest text-slate-400">
+                      {activeTab === 'links' ? row.type : (row.productMention || 'Engagement')}
                     </td>
                     <td className="px-10 py-6">
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setSelectedEntry(row)}
-                          className="px-6 py-2 bg-slate-100 hover:bg-orange-600 hover:text-white rounded-xl font-bold transition-all active:scale-95"
-                        >
-                          View Details
-                        </button>
-                        <a
-                          href={row.postUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-95"
-                          title="Open on Reddit"
-                        >
-                          <ExternalLink size={18} />
-                        </a>
+                        {activeTab === 'links' ? (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(row.trackingUrl);
+                              showToast('Tracking URL copied!', 'success');
+                            }}
+                            className="px-6 py-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl font-bold transition-all active:scale-95 flex items-center gap-2"
+                          >
+                            <ExternalLink size={14} />
+                            Copy Link
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setSelectedEntry(row)}
+                              className="px-6 py-2 bg-slate-100 hover:bg-orange-600 hover:text-white rounded-xl font-bold transition-all active:scale-95"
+                            >
+                              View Details
+                            </button>
+                            <a
+                              href={row.postUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-2.5 bg-slate-100 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-95"
+                              title="Open on Reddit"
+                            >
+                              <ExternalLink size={18} />
+                            </a>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
