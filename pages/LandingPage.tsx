@@ -565,10 +565,20 @@ export const LandingPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch">
             {plans.map((plan: any) => {
               const theme = plan.isPopular ? 'orange' : (plan.name === 'Agency' ? 'slate' : 'slate');
-              const isFree = plan.monthlyPrice === 0 && plan.yearlyPrice === 0;
-              const price = (billingCycle === 'monthly' || isFree) ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12);
-              const credits = (billingCycle === 'yearly' && !isFree) ? plan.credits * 12 : plan.credits;
-              const dailyLimit = (billingCycle === 'yearly' && !isFree) ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
+              const isFree = plan.monthlyPrice === 0;
+
+              // Only show yearly if selected, not free, and a yearly price exists
+              const isYearlySelected = billingCycle === 'yearly' && !isFree && (plan.yearlyPrice || 0) > 0;
+              const price = isYearlySelected ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice;
+              const credits = isYearlySelected ? plan.credits * 12 : plan.credits;
+              const dailyLimit = isYearlySelected ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
+
+              // Calculate actual discount percentage to show on the badge if needed
+              const actualDiscount = (plan.monthlyPrice > 0 && plan.yearlyPrice > 0)
+                ? Math.round(100 - (plan.yearlyPrice / (plan.monthlyPrice * 12) * 100))
+                : 0;
+
+
 
               return (
                 <div key={plan.id} className={`bg-white rounded-[2.5rem] p-10 border ${plan.isPopular ? 'border-orange-200 shadow-2xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-all duration-500 relative overflow-hidden flex flex-col`}>
@@ -585,10 +595,16 @@ export const LandingPage: React.FC = () => {
                     <div className="mb-8">
                       <span className={`font-black uppercase tracking-widest text-[10px] px-3 py-1 rounded-full ${plan.isPopular ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-500'}`}>{plan.name}</span>
                       <div className="flex items-baseline gap-1 mt-6">
-                        <span className="text-6xl font-black text-slate-900 tracking-tight">${price}</span>
-                        <span className="text-slate-400 font-bold text-lg">/mo</span>
+                        {isFree ? (
+                          <span className="text-6xl font-black text-slate-900 tracking-tight">Free</span>
+                        ) : (
+                          <>
+                            <span className="text-6xl font-black text-slate-900 tracking-tight">${price}</span>
+                            <span className="text-slate-400 font-bold text-lg">/mo</span>
+                          </>
+                        )}
                       </div>
-                      {billingCycle === 'yearly' && plan.yearlyPrice > 0 && (
+                      {billingCycle === 'yearly' && !isFree && plan.yearlyPrice > 0 && (
                         <p className="text-green-600 text-xs font-black mt-2 bg-green-50 px-2 py-1 rounded-lg w-fit">
                           Billed ${plan.yearlyPrice} annually
                         </p>
@@ -605,8 +621,9 @@ export const LandingPage: React.FC = () => {
                         <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                           <Zap size={14} fill={plan.isPopular ? "currentColor" : "none"} strokeWidth={3} />
                         </div>
-                        {credits.toLocaleString()} AI Actions {billingCycle === 'yearly' ? 'Upfront' : '/mo'}
+                        {credits.toLocaleString()} AI Actions {isYearlySelected ? 'Upfront' : '/mo'}
                       </li>
+
                       <li className="flex items-center gap-3.5 text-sm font-bold text-slate-700">
                         <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                           <Star size={14} fill={plan.isPopular ? "currentColor" : "none"} strokeWidth={3} />

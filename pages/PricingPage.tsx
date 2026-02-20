@@ -113,10 +113,13 @@ export const PricingPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
                 {plans.map((plan) => {
                     const isCurrentPlan = user?.plan === plan.name;
-                    const isFree = plan.monthlyPrice === 0 && plan.yearlyPrice === 0;
-                    const price = (billingCycle === 'monthly' || isFree) ? plan.monthlyPrice : Math.round(plan.yearlyPrice / 12);
-                    const credits = (billingCycle === 'yearly' && !isFree) ? plan.credits * 12 : plan.credits;
-                    const dailyLimit = (billingCycle === 'yearly' && !isFree) ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
+                    const isFree = plan.monthlyPrice === 0;
+
+                    // Only show yearly if selected, not free, and a yearly price exists
+                    const isYearlySelected = billingCycle === 'yearly' && !isFree && (plan.yearlyPrice || 0) > 0;
+                    const price = isYearlySelected ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice;
+                    const credits = isYearlySelected ? plan.credits * 12 : plan.credits;
+                    const dailyLimit = isYearlySelected ? plan.dailyLimitYearly : plan.dailyLimitMonthly;
 
                     return (
                         <div key={plan.id} className={`relative bg-white rounded-[2.5rem] p-8 border ${plan.isPopular ? 'border-orange-200 shadow-xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-transform duration-300 flex flex-col`}>
@@ -130,17 +133,22 @@ export const PricingPage: React.FC = () => {
                                 <h3 className={`text-2xl font-bold ${plan.isPopular ? 'text-orange-600' : 'text-slate-900'}`}>{plan.name}</h3>
                                 <p className="text-slate-500 text-sm mt-2 font-medium">
                                     {plan.name === 'Starter' ? 'For individuals exploring AI replies.' :
-                                        plan.name === 'Pro' ? 'Perfect for indie hackers and solo founders.' :
-                                            plan.name === 'Business' ? 'For serious growth and small teams.' : 'Custom plan for enterprise needs.'}
+                                        plan.name === 'Professional' ? 'Perfect for indie hackers and solo founders.' :
+                                            plan.name === 'Agency' ? 'For serious growth and small teams.' : 'Custom plan for enterprise needs.'}
                                 </p>
                             </div>
 
+
                             <div className="mb-8 flex items-baseline gap-1">
-                                <span className="text-5xl font-extrabold text-slate-900">
-                                    ${price}
-                                </span>
-                                <span className="text-slate-400 font-medium">/mo</span>
-                                {billingCycle === 'yearly' && plan.yearlyPrice > 0 && (
+                                {isFree ? (
+                                    <span className="text-5xl font-extrabold text-slate-900">Free</span>
+                                ) : (
+                                    <>
+                                        <span className="text-5xl font-extrabold text-slate-900">${price}</span>
+                                        <span className="text-slate-400 font-medium">/mo</span>
+                                    </>
+                                )}
+                                {isYearlySelected && (
                                     <span className="text-xs text-green-600 font-bold ml-2 bg-green-50 px-2 py-1 rounded-full">Billed ${plan.yearlyPrice}/yr</span>
                                 )}
                             </div>
@@ -150,8 +158,10 @@ export const PricingPage: React.FC = () => {
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                         <Zap size={12} strokeWidth={4} />
                                     </div>
-                                    {credits} Credits {billingCycle === 'yearly' && !isFree ? 'Upfront' : '/ Month'}
+                                    {credits} Credits {isYearlySelected ? 'Upfront' : '/ Month'}
                                 </li>
+
+
                                 <li className="flex items-center gap-3 text-slate-700 font-bold text-sm">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
                                         <Zap size={12} strokeWidth={4} />

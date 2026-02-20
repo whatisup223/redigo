@@ -248,7 +248,10 @@ let plans = savedData.plans || [
     credits: 100,
     dailyLimitMonthly: 5,
     dailyLimitYearly: 5,
-    features: ['20 AI Actions/mo', 'Basic Reddit Analytics', '1 Connected Account', 'Community Support'],
+    maxAccounts: 1,
+    maxBrands: 1,
+    allowOverride: false,
+    features: ['100 AI actions/mo', 'Basic Reddit Analytics', '1 Connected Account', '1 Brand Profile', 'Community Support'],
     isPopular: false,
     isCustom: true
   },
@@ -256,11 +259,14 @@ let plans = savedData.plans || [
     id: 'pro',
     name: 'Professional',
     monthlyPrice: 29,
-    yearlyPrice: 290,
-    credits: 150,
+    yearlyPrice: 279, // ~20% discount (29 * 12 * 0.8 = 278.4)
+    credits: 300,
     dailyLimitMonthly: 20,
     dailyLimitYearly: 50,
-    features: ['150 AI Actions/mo', 'Advanced Post Scheduling', '3 Connected Accounts', 'Priority Support', 'Image Generation'],
+    maxAccounts: 3,
+    maxBrands: 1,
+    allowOverride: true,
+    features: ['300 AI actions/mo', 'Advanced Post Scheduling', '3 Connected Accounts', '1 Brand Profile (with Override)', 'Priority Support', 'Image Generation'],
     isPopular: true,
     highlightText: 'Most Popular',
     isCustom: true
@@ -269,15 +275,19 @@ let plans = savedData.plans || [
     id: 'agency',
     name: 'Agency',
     monthlyPrice: 99,
-    yearlyPrice: 990,
-    credits: 600,
+    yearlyPrice: 950, // ~20% discount (99 * 12 * 0.8 = 950.4)
+    credits: 1000,
     dailyLimitMonthly: 100,
     dailyLimitYearly: 300,
-    features: ['600 AI Actions/mo', 'Unlimited Accounts', 'Team Collaboration', 'Dedicated Manager', 'API Access', 'White-label Reports'],
+    maxAccounts: -1, // Unlimited
+    maxBrands: -1, // Unlimited
+    allowOverride: true,
+    features: ['1000 AI actions/mo', 'Unlimited Accounts', 'Unlimited Brand Profiles', 'Team Collaboration', 'Dedicated Manager', 'API Access'],
     isPopular: false,
     isCustom: true
   }
 ];
+
 
 // Superuser enforcement - info@marketation.online is the ONLY admin for now
 // Superuser enforcement - info@marketation.online is the ONLY admin for now
