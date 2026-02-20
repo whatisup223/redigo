@@ -345,8 +345,8 @@ export const ContentArchitect: React.FC = () => {
             setIncludeImage(true); // Force UI to show image section
         } else if (mode === 'both') {
             if (step === 1) {
-                // Initial generation: respect the user's toggle
-                isImageRequested = includeImage;
+                // Initial generation: respect the user's toggle AND plan permissions
+                isImageRequested = includeImage && canGenerateImages;
             } else {
                 // Full Refresh from modal: user explicitly chose image+text
                 isImageRequested = true;
@@ -562,37 +562,39 @@ export const ContentArchitect: React.FC = () => {
                             </button>
 
                             {/* Option: Image Only */}
-                            <button
-                                onClick={() => setRegenMode('image')}
-                                className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${regenMode === 'image' ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${regenMode === 'image' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
-                                        <ImageIcon size={18} />
+                            {canGenerateImages && (
+                                <button
+                                    onClick={() => setRegenMode('image')}
+                                    className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${regenMode === 'image' ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${regenMode === 'image' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                            <ImageIcon size={18} />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-900">Image Only</p>
+                                            <p className="text-xs text-slate-500 font-medium leading-relaxed">New AI visual context</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-bold text-slate-900">Image Only</p>
-                                        <p className="text-xs text-slate-500 font-medium leading-relaxed">New AI visual context</p>
-                                    </div>
-                                </div>
-                                <span className={`font-black text-xs ${regenMode === 'image' ? 'text-orange-600' : 'text-slate-400'}`}>{costs.image} PTS</span>
-                            </button>
+                                    <span className={`font-black text-xs ${regenMode === 'image' ? 'text-orange-600' : 'text-slate-400'}`}>{costs.image} PTS</span>
+                                </button>
+                            )}
 
                             {/* Option: Both */}
                             <button
-                                onClick={() => setRegenMode('both')}
-                                className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${regenMode === 'both' ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
+                                onClick={() => setRegenMode(canGenerateImages ? 'both' : 'text')}
+                                className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-center justify-between ${(regenMode === 'both' || (regenMode === 'text' && !canGenerateImages)) ? 'border-orange-500 bg-orange-50/50 shadow-md' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${regenMode === 'both' ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
-                                        <Sparkles size={18} />
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${(regenMode === 'both' || (regenMode === 'text' && !canGenerateImages)) ? 'bg-orange-600 text-white' : 'bg-white text-slate-400 border border-slate-200'}`}>
+                                        {canGenerateImages ? <Sparkles size={18} /> : <PenTool size={18} />}
                                     </div>
                                     <div>
-                                        <p className="font-bold text-slate-900">Full Refresh</p>
-                                        <p className="text-xs text-slate-500 font-medium leading-relaxed">New post + New image</p>
+                                        <p className="font-bold text-slate-900">{canGenerateImages ? 'Full Refresh' : 'Text Refresh'}</p>
+                                        <p className="text-xs text-slate-500 font-medium leading-relaxed">{canGenerateImages ? 'New post + New image' : 'Refresh headline & body'}</p>
                                     </div>
                                 </div>
-                                <span className={`font-black text-xs ${regenMode === 'both' ? 'text-orange-600' : 'text-slate-400'}`}>{Number(costs.post) + Number(costs.image)} PTS</span>
+                                <span className={`font-black text-xs ${(regenMode === 'both' || (regenMode === 'text' && !canGenerateImages)) ? 'text-orange-600' : 'text-slate-400'}`}>{canGenerateImages ? (Number(costs.post) + Number(costs.image)) : costs.post} PTS</span>
                             </button>
                         </div>
 
@@ -1274,7 +1276,7 @@ export const ContentArchitect: React.FC = () => {
                                         />
                                     </div>
 
-                                    {includeImage && (
+                                    {includeImage && canGenerateImages && (
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">

@@ -1021,7 +1021,7 @@ export const Settings: React.FC = () => {
                 <div className="space-y-6">
                     <section className="space-y-6">
                         {/* Total Spent Banner */}
-                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 rounded-[2rem] shadow-xl text-white relative overflow-hidden flex items-center justify-between">
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 md:p-8 rounded-[2rem] shadow-xl text-white relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
                             <div className="relative z-10 flex items-center gap-4">
                                 <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
                                     <RefreshCw className="text-orange-400" size={24} />
@@ -1031,8 +1031,8 @@ export const Settings: React.FC = () => {
                                     <p className="text-white/60 text-sm">Lifetime consumption across all features</p>
                                 </div>
                             </div>
-                            <div className="relative z-10 flex flex-col items-end gap-2">
-                                <div className="text-right">
+                            <div className="relative z-10 flex flex-col items-start md:items-end gap-5 w-full md:w-auto">
+                                <div className="text-left md:text-right">
                                     <p className="text-4xl font-black text-white tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
                                         {user.usageStats?.totalSpent || 0}
                                     </p>
@@ -1049,7 +1049,7 @@ export const Settings: React.FC = () => {
                                     const currentUsage = user.dailyUsagePoints || 0;
 
                                     return dailyLimit > 0 && (
-                                        <div className="w-56 space-y-2 flex flex-col items-end">
+                                        <div className="w-full md:w-60 space-y-2.5 flex flex-col items-start md:items-end border-t border-white/10 pt-4 md:border-t-0 md:pt-0">
                                             <div className="flex justify-between w-full text-[10px] font-black uppercase tracking-widest text-white/50">
                                                 <div className="flex items-center gap-1.5">
                                                     <Zap size={10} className="text-orange-400" />
