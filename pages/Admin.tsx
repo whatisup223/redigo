@@ -170,6 +170,8 @@ export const Admin: React.FC = () => {
             closed: 0
         }
     });
+    const [systemLogs, setSystemLogs] = useState<any[]>([]);
+
 
     const [plans, setPlans] = useState<Plan[]>([]);
 
@@ -221,13 +223,14 @@ export const Admin: React.FC = () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
-            const [statsRes, usersRes, aiRes, stripeRes, redditRes, plansRes] = await Promise.all([
+            const [statsRes, usersRes, aiRes, stripeRes, redditRes, plansRes, logsRes] = await Promise.all([
                 fetch('/api/admin/stats', { headers }),
                 fetch('/api/admin/users', { headers }),
                 fetch('/api/admin/ai-settings', { headers }),
                 fetch('/api/admin/stripe-settings', { headers }),
                 fetch('/api/admin/reddit-settings', { headers }),
-                fetch('/api/plans', { headers })
+                fetch('/api/plans', { headers }),
+                fetch('/api/admin/logs', { headers })
             ]);
 
             if (statsRes.ok) setStats(await statsRes.json());
@@ -236,12 +239,34 @@ export const Admin: React.FC = () => {
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
             if (redditRes.ok) setRedditSettings(await redditRes.json());
             if (plansRes.ok) setPlans(await plansRes.json());
+            if (logsRes.ok) setSystemLogs(await logsRes.json());
         } catch (error) {
             console.error("Failed to fetch admin data", error);
         } finally {
             setLoading(false);
         }
     };
+
+    // Poll logs when tab is active
+    useEffect(() => {
+        if (activeTab !== 'logs') return;
+
+        const fetchLogs = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/admin/logs', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) {
+                    setSystemLogs(await res.json());
+                }
+            } catch (e) {
+                console.error("Error polling logs", e);
+            }
+        };
+
+        fetchLogs(); // initial fetch
+        const interval = setInterval(fetchLogs, 3000); // Poll every 3s
+        return () => clearInterval(interval);
+    }, [activeTab]);
 
     const handleUpdateUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1213,17 +1238,37 @@ export const Admin: React.FC = () => {
 
                         {/* Logs Tab */}
                         {activeTab === 'logs' && (
-                            <div className="bg-slate-900 text-slate-300 p-8 rounded-[2.5rem] font-mono text-sm leading-relaxed shadow-2xl h-[600px] overflow-y-auto custom-scrollbar">
-                                <div className="flex items-center gap-2 text-green-400 mb-2">
-                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                                    <span>System Online</span>
+                            <div className="bg-slate-900 text-slate-300 p-8 rounded-[2.5rem] font-mono text-xs md:text-sm leading-relaxed shadow-2xl h-[600px] overflow-y-auto custom-scrollbar flex flex-col-reverse">
+                                <div>
+                                    {systemLogs.length === 0 ? (
+                                        <div className="text-center text-slate-500 py-10 italic">No system logs available yet...</div>
+                                    ) : (
+                                        systemLogs.map((log) => {
+                                            let colorClass = 'text-slate-300';
+                                            if (log.level === 'WARN') colorClass = 'text-orange-400';
+                                            if (log.level === 'ERROR') colorClass = 'text-red-400 font-bold';
+                                            if (log.level === 'SUCCESS') colorClass = 'text-emerald-400 font-bold';
+
+                                            return (
+                                                <div key={log.id} className="mb-1 hover:bg-slate-800/50 p-1 rounded -mx-1 px-2 transition-colors break-words">
+                                                    <span className="text-slate-500 mr-2">[{new Date(log.timestamp).toLocaleString()}]</span>
+                                                    <span className={`uppercase w-16 inline-block font-bold text-[10px] tracking-wider ${colorClass}`}>{log.level}</span>
+                                                    <span className={colorClass}>{log.message}</span>
+                                                    {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                                        <span className="text-slate-600 ml-2 text-xs">
+                                                            {JSON.stringify(log.metadata)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                    <div className="flex items-center gap-2 text-green-400 mb-6 pb-4 border-b border-slate-800/50">
+                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                        <span className="text-xs font-bold uppercase tracking-widest">Live System Logs</span>
+                                        <span className="ml-auto text-xs text-slate-600">Auto-refreshing (3s)</span>
+                                    </div>
                                 </div>
-                                <p>[2026-02-18 04:22:12] INFO: Server started on port 3000</p>
-                                <p>[2026-02-18 04:22:15] INFO: Database connection established</p>
-                                <p className="text-orange-400">[2026-02-18 04:25:30] WARN: API latency spike detected (1200ms)</p>
-                                <p>[2026-02-18 04:26:01] INFO: User 'Jane Doe' logged in</p>
-                                <p>[2026-02-18 04:30:45] INFO: AI Generation request handled (Tokens: 145)</p>
-                                {/* ... more mock logs */}
                             </div>
                         )}
 

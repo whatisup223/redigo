@@ -48,14 +48,17 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
     if (stripeSettings.webhookSecret && stripe && sig) {
       event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
     } else {
+      addSystemLog('WARN', '[Webhook] Received without verification (Dev or Missing Secret)');
       console.log('[Webhook] Received without verification (Dev or Missing Secret)');
       event = JSON.parse(request.body.toString());
     }
   } catch (err) {
+    addSystemLog('ERROR', `[Webhook] Signature verification failed: ${err.message}`);
     console.error('[Webhook] Signature verification failed.', err.message);
     return response.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  addSystemLog('INFO', `[Webhook] Event: ${event.type}`);
   console.log(`[Webhook] Event: ${event.type}`);
 
   if (event.type === 'checkout.session.completed') {
@@ -69,6 +72,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
     const stripeCustomerEmail = session.customer_details?.email;
     const emailToSearch = userEmail || stripeCustomerEmail;
 
+    addSystemLog('INFO', `[Webhook] Processing: ${emailToSearch} | Plan: ${plan}`);
     console.log(`[Webhook] Processing: ${emailToSearch} | Plan: ${plan}`);
 
     if (emailToSearch && plan) {
@@ -88,6 +92,8 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
         localUsers[userIndex].subscriptionEnd = oneMonthLater.toISOString();
 
         if (!localUsers[userIndex].transactions) localUsers[userIndex].transactions = [];
+        const newBalance = currentCredits + creditsToAdd;
+
         localUsers[userIndex].transactions.push({
           id: session.id || `tx_stripe_${Date.now()}`,
           date: new Date().toISOString(),
@@ -95,17 +101,23 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
           currency: session.currency || 'USD',
           type: 'stripe_payment',
           description: `Payment for ${plan} plan successful.`,
+          subDescription: `Previous: ${currentCredits} + New: ${creditsToAdd} = ${newBalance} Credits`,
           creditsAdded: creditsToAdd,
+          previousBalance: currentCredits,
+          finalBalance: newBalance,
           planName: plan
         });
 
         users = localUsers;
         saveSettings({ users: localUsers });
+        addSystemLog('SUCCESS', `[Webhook] User ${emailToSearch} upgraded to ${plan}`);
         console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
       } else {
+        addSystemLog('ERROR', `[Webhook] User ${emailToSearch} not found.`);
         console.warn(`[Webhook] ERROR: User ${emailToSearch} not found.`);
       }
     } else {
+      addSystemLog('ERROR', `[Webhook] Missing email or plan information in session.`);
       console.warn(`[Webhook] ERROR: Missing email or plan information in session.`);
     }
   }
@@ -117,12 +129,92 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
 app.use(cors());
 app.use(express.json());
 
-// Request Logging
+
+// --- System Logging ---
+const LOGS_FILE = './logs.storage.json';
+let systemLogs = [];
+
+// Load logs on startup
+if (fs.existsSync(LOGS_FILE)) {
+  try {
+    systemLogs = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
+  } catch (e) {
+    console.error('Error loading logs:', e);
+    systemLogs = [];
+  }
+}
+
+const saveLogs = () => {
+  // debounce or just save
+  try {
+    fs.writeFileSync(LOGS_FILE, JSON.stringify(systemLogs, null, 2));
+  } catch (e) {
+    console.error('Error saving logs:', e);
+  }
+};
+
+const addSystemLog = (level, message, metadata = {}) => {
+  const logEntry = {
+    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+    timestamp: new Date().toISOString(),
+    level: level.toUpperCase(),
+    message,
+    metadata
+  };
+
+  // Prepend to array
+  systemLogs.unshift(logEntry);
+
+  // Keep last 2000 logs
+  if (systemLogs.length > 2000) {
+    systemLogs = systemLogs.slice(0, 2000);
+  }
+
+  saveLogs();
+  return logEntry;
+};
+
+// Request Logging Middleware
 app.use((req, res, next) => {
+  const start = Date.now();
   const path = req.path.replace(/\/$/, '');
-  console.log(`[${new Date().toISOString()}] ${req.method} ${path}`);
+
+  // Log request start
+  // console.log(`[${new Date().toISOString()}] ${req.method} ${path}`);
+
+  // Capture response finish
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    let logLevel = 'INFO';
+    if (res.statusCode >= 400) logLevel = 'WARN';
+    if (res.statusCode >= 500) logLevel = 'ERROR';
+
+    // Don't flood logs with health checks or static assets if any
+    if (path === '/api/health') return;
+
+    let userEmail = 'Guest';
+    if (req.body?.email) userEmail = req.body.email; // Try to capture email from body if present
+
+    // Attempt to parse user from token if available (simple check)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer mock-user-token-')) {
+      const uid = authHeader.replace('Bearer mock-user-token-', '');
+      const u = users.find(user => user.id == uid);
+      if (u) userEmail = u.email;
+    } else if (authHeader === 'Bearer mock-user-token-123') {
+      userEmail = 'Admin';
+    }
+
+    addSystemLog(logLevel, `${req.method} ${path}`, {
+      statusCode: res.statusCode,
+      duration: `${duration}ms`,
+      ip: req.ip,
+      user: userEmail
+    });
+  });
+
   if (req.method === 'POST' && !path.includes('/api/webhook')) {
-    console.log('Body:', JSON.stringify(req.body));
+    // console.log('Body:', JSON.stringify(req.body));
   }
   next();
 });
@@ -130,6 +222,7 @@ app.use((req, res, next) => {
 // JSON Error Handler
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    addSystemLog('ERROR', 'Invalid JSON payload received', { ip: req.ip });
     return res.status(400).json({ error: 'Invalid JSON payload' });
   }
   next();
@@ -252,6 +345,7 @@ app.post('/api/auth/login', (req, res) => {
   if (user) {
     // Check if user is banned or suspended
     if (user.status === 'Banned' || user.status === 'Suspended') {
+      addSystemLog('WARN', `[LOGIN] Blocked ${user.status} user: ${user.email}`);
       console.log(`[LOGIN] Blocked ${user.status} user: ${user.email}`);
       return res.status(403).json({
         error: `Your account has been ${user.status.toLowerCase()}.`,
@@ -260,6 +354,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
+      addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading.`);
       console.log(`[Subscription] User ${user.email} subscription expired. Downgrading.`);
       user.plan = 'Starter';
       const freePlan = plans.find(p => p.id === 'starter');
@@ -269,11 +364,14 @@ app.post('/api/auth/login', (req, res) => {
       saveSettings({ users });
     }
 
+    addSystemLog('INFO', `User logged in: ${user.email}`, { userId: user.id, role: user.role });
+
     // In a real app, generate a JWT token here
     const { password, ...userWithoutPassword } = user;
     const token = user.role === 'admin' ? 'mock-jwt-token-123' : `mock-user-token-${user.id}`;
     res.json({ user: userWithoutPassword, token });
   } else {
+    addSystemLog('WARN', `Failed login attempt for: ${email}`);
     res.status(401).json({ error: 'Invalid email or password' });
   }
 });
@@ -284,12 +382,14 @@ app.post('/api/auth/signup', (req, res) => {
   const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
   if (existingUser) {
     if (existingUser.status === 'Banned' || existingUser.status === 'Suspended') {
+      addSystemLog('WARN', `[SIGNUP] Blocked signup attempt for banned email: ${email}`);
       console.log(`[SIGNUP] Blocked ${existingUser.status} user: ${existingUser.email}`);
       return res.status(403).json({
         error: `Your account has been ${existingUser.status.toLowerCase()}.`,
         reason: existingUser.statusMessage || 'Contact support for details.'
       });
     }
+    addSystemLog('WARN', `Signup failed: Email already exists (${email})`);
     return res.status(400).json({ error: 'User already exists' });
   }
 
@@ -307,6 +407,8 @@ app.post('/api/auth/signup', (req, res) => {
 
   users.push(newUser);
   saveSettings({ users }); // Persist new user
+  addSystemLog('SUCCESS', `New user registered: ${email}`, { userId: newUser.id });
+
   const { password: _, ...userWithoutPassword } = newUser;
   res.status(201).json({ user: userWithoutPassword, token: `mock-user-token-${newUser.id}` });
 });
@@ -340,6 +442,7 @@ app.post('/api/user/complete-onboarding', (req, res) => {
     // We already gave 100 at signup, so we just mark it as complete
     users[index].hasCompletedOnboarding = true;
     saveSettings({ users });
+    addSystemLog('INFO', `User completed onboarding: ${users[index].email}`);
     res.json({
       success: true,
       hasCompletedOnboarding: true,
@@ -368,6 +471,7 @@ app.post('/api/user/brand-profile', (req, res) => {
     user.hasCompletedOnboarding = true; // Mark as complete
 
     saveSettings({ users });
+    addSystemLog('INFO', `Brand profile updated for: ${user.email}`, { bonusAwarded });
     res.json({ success: true, credits: user.credits, bonusAwarded });
   } else {
     res.status(404).json({ error: 'User not found' });
@@ -453,6 +557,7 @@ app.post('/api/plans', (req, res) => {
 
   plans.push(newPlan);
   saveSettings({ plans });
+  addSystemLog('INFO', `New plan created: ${newPlan.name} (${newPlan.id})`);
   res.status(201).json(newPlan);
 });
 
@@ -479,6 +584,7 @@ app.put('/api/plans/:id', (req, res) => {
   };
 
   saveSettings({ plans });
+  addSystemLog('INFO', `Plan updated: ${plans[planIndex].name} (${id})`);
   res.json(plans[planIndex]);
 });
 
@@ -496,8 +602,10 @@ app.delete('/api/plans/:id', (req, res) => {
     return res.status(400).json({ error: 'Cannot delete plan with active users' });
   }
 
+  const deletedPlanName = plans[planIndex].name;
   plans.splice(planIndex, 1);
   saveSettings({ plans });
+  addSystemLog('WARN', `Plan deleted: ${deletedPlanName} (${id})`);
   res.json({ success: true, message: 'Plan deleted' });
 });
 
@@ -523,6 +631,7 @@ app.post('/api/user/subscribe', async (req, res) => {
     user.subscriptionEnd = null; // Free plans might not expire or expire in a month?
 
     saveSettings({ users });
+    addSystemLog('INFO', `User activated free plan: ${user.email} (${plan.name})`);
     return res.json({ success: true, user, message: 'Free plan activated' });
   }
 
@@ -547,6 +656,7 @@ app.post('/api/user/subscribe', async (req, res) => {
     user.subscriptionEnd = end.toISOString();
 
     saveSettings({ users });
+    addSystemLog('WARN', `[TEST MODE] User activated plan: ${user.email} -> ${plan.name}`);
     return res.json({ success: true, user, message: 'Plan activated (Test Mode)' });
     // --------------------------------------
   }
@@ -556,12 +666,17 @@ app.post('/api/user/subscribe', async (req, res) => {
     const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
+    addSystemLog('INFO', `User initiated checkout: ${user.email} for ${plan.name} (${billingCycle})`);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'usd',
-          product_data: { name: `${plan.name} Plan (${billingCycle})` },
+          product_data: {
+            name: `${plan.name} Plan (${billingCycle})`,
+            description: `Includes ${plan.credits} new credits. Your existing ${user.credits || 0} credits will be carried over (Total: ${(user.credits || 0) + plan.credits}).`
+          },
           unit_amount: price * 100, // Cents
         },
         quantity: 1,
@@ -571,7 +686,8 @@ app.post('/api/user/subscribe', async (req, res) => {
       metadata: {
         userEmail: user.email,
         plan: plan.name, // Pass ID or Name
-        credits: plan.credits.toString()
+        credits: plan.credits.toString(),
+        previousCreditsSnap: (user.credits || 0).toString()
       },
       success_url: `${baseUrl}/settings?success=true&plan=${plan.name}`,
       cancel_url: `${baseUrl}/pricing?canceled=true`,
@@ -661,6 +777,11 @@ app.get('/api/admin/stats', adminAuth, (req, res) => {
   });
 });
 
+// Admin Logs
+app.get('/api/admin/logs', adminAuth, (req, res) => {
+  res.json(systemLogs);
+});
+
 // User Management
 app.get('/api/admin/users', adminAuth, (req, res) => {
   res.json(users);
@@ -670,6 +791,7 @@ app.post('/api/admin/users', adminAuth, (req, res) => {
   const newUser = { id: users.length + 1, ...req.body };
   users.push(newUser);
   saveSettings({ users });
+  addSystemLog('INFO', `[Admin] Created new user: ${newUser.email}`, { admin: 'Superuser' });
   res.status(201).json(newUser);
 });
 
@@ -738,13 +860,22 @@ app.put('/api/admin/users/:id', adminAuth, (req, res) => {
         isAdjustment: true
       });
     }
-
     // Clean up helper fields
     delete updateData.extraCreditsToAdd;
     delete updateData.creditAdjustmentType;
 
     users[index] = { ...users[index], ...updateData };
     saveSettings({ users });
+
+    // Log specific sensitive changes
+    if (req.body.status && req.body.status !== 'Active') {
+      addSystemLog('WARN', `[Admin] User ${users[index].email} status changed to ${req.body.status}`);
+    } else if (req.body.credits !== undefined) {
+      addSystemLog('INFO', `[Admin] Adjusted credits for ${users[index].email} (New Balance: ${req.body.credits})`);
+    } else {
+      addSystemLog('INFO', `[Admin] Updated user profile: ${users[index].email}`);
+    }
+
     res.json(users[index]);
   } else {
     res.status(404).json({ error: 'User not found' });
@@ -1117,6 +1248,8 @@ app.post('/api/user/reddit/disconnect', (req, res) => {
     saveSettings({ userRedditTokens });
   }
 
+  addSystemLog('INFO', `User disconnected Reddit account: ${username}`, { userId });
+
   res.json({ success: true });
 });
 
@@ -1217,6 +1350,7 @@ app.post('/api/generate', async (req, res) => {
       user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
       console.log(`[USAGE] user=${userId} type=${type} cost=${cost} => stats:`, JSON.stringify({ posts: user.usageStats.posts, comments: user.usageStats.comments, totalSpent: user.usageStats.totalSpent }));
       saveSettings({ users });
+      addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits });
     }
 
     res.json({ text, credits: user.credits });
@@ -1275,6 +1409,7 @@ app.post('/api/generate-image', async (req, res) => {
       user.usageStats.history = user.usageStats.history || [];
       user.usageStats.history.push({ date: new Date().toISOString(), type: 'image', cost });
       saveSettings({ users });
+      addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: user.credits });
     }
 
     res.json({ url: data.data[0].url, credits: user.credits });
@@ -1358,8 +1493,11 @@ app.post('/api/reddit/reply', async (req, res) => {
       users[userIndex].credits = (users[userIndex].credits || 3) - 1;
     }
 
+    addSystemLog('SUCCESS', `Reddit Reply sent by User ${userId}`, { subreddit, postTitle, creditsRemaining: users[userIndex]?.credits });
+
     res.json({ success: true, entry });
   } catch (error) {
+    addSystemLog('ERROR', `Reddit Reply Failed for User ${userId}: ${error.message}`);
     console.error('Reddit Reply Posting Error:', error);
     res.status(500).json({ error: error.message });
   }
@@ -1415,9 +1553,11 @@ app.post('/api/reddit/post', async (req, res) => {
     }
 
     const redditResponse = await response.json();
+    addSystemLog('SUCCESS', `Reddit Post submitted by User ${userId}: ${title}`, { subreddit });
     res.json({ success: true, redditResponse });
   } catch (error) {
     console.error('Reddit Post Submission Error:', error);
+    addSystemLog('ERROR', `Reddit Post Failed for User ${userId}: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
 });
