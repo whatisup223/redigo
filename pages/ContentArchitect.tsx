@@ -209,9 +209,13 @@ export const ContentArchitect: React.FC = () => {
                     const res = await fetch(`/api/user/latest-image?userId=${user.id}`);
                     const latestImage = await res.json();
 
-                    // Only use it if the prompt matches (to avoid using an older image)
-                    if (latestImage && latestImage.url && latestImage.prompt === draft.imagePrompt) {
+                    // Robust comparison: trim and normalize prompts
+                    const draftPrompt = (draft.imagePrompt || '').trim().toLowerCase();
+                    const serverPrompt = (latestImage?.prompt || '').trim().toLowerCase();
+
+                    if (latestImage && latestImage.url && serverPrompt === draftPrompt) {
                         setPostData(prev => ({ ...prev, imageUrl: latestImage.url }));
+                        setImageLoaded(false); // Reset image load state for new URL
                         showToast('Image recovered from server!', 'success');
                     }
                 } catch (e) {
@@ -285,6 +289,7 @@ export const ContentArchitect: React.FC = () => {
             }
         }
 
+        setIsGeneratingImage(true);
         try {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
