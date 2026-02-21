@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting } from './models.js';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost } from './models.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,10 +62,39 @@ async function migrateData() {
             console.log('✅ Tickets migrated.');
         }
 
-        // 5. Migrate other top-level keys into a "Settings" collection (stripe, ai, reddit env vars etc)
+        // 5. Migrate Reddit Replies
+        if (data.replies && data.replies.length > 0) {
+            console.log(`💬 Found ${data.replies.length} reddit replies. Migrating...`);
+            await RedditReply.deleteMany({});
+            await RedditReply.insertMany(data.replies.map(r => ({ ...r, _id: undefined, deployedAt: r.deployedAt ? new Date(r.deployedAt) : new Date() })));
+            console.log('✅ Reddit replies migrated.');
+        }
+
+        // 6. Migrate Reddit Posts
+        if (data.posts && data.posts.length > 0) {
+            console.log(`📝 Found ${data.posts.length} reddit posts. Migrating...`);
+            await RedditPost.deleteMany({});
+            await RedditPost.insertMany(data.posts.map(p => ({ ...p, _id: undefined, deployedAt: p.deployedAt ? new Date(p.deployedAt) : new Date() })));
+            console.log('✅ Reddit posts migrated.');
+        }
+
+        // 7. Migrate Brand Profiles
+        if (data.brandProfiles && Object.keys(data.brandProfiles).length > 0) {
+            console.log(`🏢 Found brand profiles. Migrating...`);
+            await BrandProfile.deleteMany({});
+            const brandArr = Object.entries(data.brandProfiles).map(([uid, profile]) => ({
+                ...profile,
+                userId: uid,
+                _id: undefined
+            }));
+            await BrandProfile.insertMany(brandArr);
+            console.log('✅ Brand profiles migrated.');
+        }
+
+        // 8. Migrate other top-level keys into a "Settings" collection (stripe, ai, reddit env vars etc)
         const settingsObj = {};
         for (const key of Object.keys(data)) {
-            if (!['users', 'trackingLinks', 'plans', 'tickets'].includes(key)) {
+            if (!['users', 'trackingLinks', 'plans', 'tickets', 'replies', 'posts', 'brandProfiles'].includes(key)) {
                 settingsObj[key] = data[key];
             }
         }

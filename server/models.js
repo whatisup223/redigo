@@ -82,6 +82,41 @@ const TicketSchema = new mongoose.Schema({
     replies: [mongoose.Schema.Types.Mixed]
 });
 
+const RedditReplySchema = new mongoose.Schema({
+    id: String,
+    userId: String,
+    postId: String,
+    redditCommentId: String,
+    postTitle: String,
+    postUrl: String,
+    postContent: String,
+    subreddit: String,
+    comment: String,
+    productMention: String,
+    redditUsername: String,
+    deployedAt: Date,
+    status: String,
+    ups: { type: Number, default: 0 },
+    replies: { type: Number, default: 0 },
+    sentiment: String
+}, { strict: false });
+
+const RedditPostSchema = new mongoose.Schema({
+    id: String,
+    userId: String,
+    subreddit: String,
+    postTitle: String,
+    postContent: String,
+    postUrl: String,
+    redditUsername: String,
+    redditCommentId: String,
+    deployedAt: Date,
+    status: String,
+    ups: { type: Number, default: 0 },
+    replies: { type: Number, default: 0 },
+    sentiment: String
+}, { strict: false });
+
 const SettingsSchema = new mongoose.Schema({
     key: { type: String, unique: true },
     value: mongoose.Schema.Types.Mixed
@@ -93,3 +128,5 @@ export const BrandProfile = mongoose.model('BrandProfile', BrandProfileSchema);
 export const Plan = mongoose.model('Plan', PlanSchema);
 export const Ticket = mongoose.model('Ticket', TicketSchema);
 export const Setting = mongoose.model('Setting', SettingsSchema);
+export const RedditReply = mongoose.model('RedditReply', RedditReplySchema);
+export const RedditPost = mongoose.model('RedditPost', RedditPostSchema);

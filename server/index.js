@@ -14,7 +14,12 @@ dotenv.config();
 
 // MongoDB Integration
 import mongoose from 'mongoose';
-import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting } from './models.js';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost } from './models.js';
+
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 
 // Connect to MongoDB
 if (process.env.MONGO_URI) {
@@ -23,44 +28,33 @@ if (process.env.MONGO_URI) {
     .catch(err => console.error('❌ Failed to connect to MongoDB:', err));
 }
 
-const SETTINGS_FILE = path.join(__dirname, '../settings.storage.json');
-
-const loadSettings = () => {
-  if (fs.existsSync(SETTINGS_FILE)) {
-    try {
-      return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    } catch (e) {
-      console.error('Error loading settings:', e);
-    }
-  }
-  return {};
-};
-
-// In-memory settings cache to avoid blocking the event loop on every save
 let settingsCache = {};
+const savedData = {};
 
-const initSettingsCache = () => {
-  settingsCache = loadSettings();
-};
+try {
+  if (process.env.MONGO_URI) {
+    // Top-level await is safe in ES modules
+    const allSettings = await Setting.find({});
+    allSettings.forEach(s => {
+      savedData[s.key] = s.value;
+      settingsCache[s.key] = s.value;
+    });
+    console.log(`✅ Loaded ${allSettings.length} settings from MongoDB into cache`);
+  }
+} catch (e) {
+  console.error('Failed to load settings from DB.', e);
+}
+
+const loadSettings = () => settingsCache;
 
 const saveSettings = (data) => {
-  // Merge into in-memory cache immediately (non-blocking)
   if (data) {
     Object.assign(settingsCache, data);
-  }
-
-  // Write to disk synchronously for critical data durability
-  try {
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2));
-    // console.log('[System] Settings saved successfully');
-  } catch (e) {
-    console.error('[CRITICAL] Failed to save settings.storage.json:', e);
+    for (const [key, value] of Object.entries(data)) {
+      Setting.findOneAndUpdate({ key }, { value }, { upsert: true }).exec().catch(err => console.error('Failed to save setting:', key, err));
+    }
   }
 };
-
-// Initialize cache from disk
-initSettingsCache();
-const savedData = settingsCache;
 
 const app = express();
 app.set('trust proxy', true); // Trust reverse proxy (EasyPanel/Nginx)
@@ -94,10 +88,6 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
 
-    // RELOAD USERS FROM DISK
-    const freshData = loadSettings();
-    const localUsers = freshData.users || [];
-
     const { userEmail, plan, credits, billingCycle } = session.metadata || {};
     const stripeCustomerEmail = session.customer_details?.email;
     const emailToSearch = userEmail || stripeCustomerEmail;
@@ -106,54 +96,58 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
     console.log(`[Webhook] Processing: ${emailToSearch} | Plan: ${plan} | Cycle: ${billingCycle}`);
 
     if (emailToSearch && plan) {
-      const userIndex = localUsers.findIndex(u => u.email.toLowerCase() === emailToSearch.toLowerCase());
+      try {
+        const dbUser = await User.findOne({ email: new RegExp('^' + emailToSearch + '$', 'i') });
 
-      if (userIndex !== -1) {
-        let creditsToAdd = credits ? parseInt(credits) : getPlanCredits(plan);
+        if (dbUser) {
+          let creditsToAdd = credits ? parseInt(credits) : await getPlanCredits(plan);
 
-        // UPFRONT CREDITS FOR YEARLY
-        if (billingCycle === 'yearly') {
-          creditsToAdd = creditsToAdd * 12;
-          addSystemLog('INFO', `[Webhook] Yearly billing detected. Multiplying credits by 12: ${creditsToAdd}`);
+          // UPFRONT CREDITS FOR YEARLY
+          if (billingCycle === 'yearly') {
+            creditsToAdd = creditsToAdd * 12;
+            addSystemLog('INFO', `[Webhook] Yearly billing detected. Multiplying credits by 12: ${creditsToAdd}`);
+          }
+
+          const currentCredits = dbUser.credits || 0;
+          const now = new Date();
+          const expirationDate = new Date(now);
+          if (billingCycle === 'yearly') expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+          else expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+          dbUser.plan = plan;
+          dbUser.billingCycle = billingCycle || 'monthly';
+          dbUser.status = 'Active';
+          dbUser.credits = currentCredits + creditsToAdd;
+          dbUser.subscriptionStart = now.toISOString();
+          dbUser.subscriptionEnd = expirationDate.toISOString();
+
+          if (!dbUser.transactions) dbUser.transactions = [];
+          const newBalance = currentCredits + creditsToAdd;
+
+          dbUser.transactions.push({
+            id: session.id || `tx_stripe_${Date.now()}`,
+            date: new Date().toISOString(),
+            amount: (session.amount_total || 0) / 100,
+            currency: session.currency || 'USD',
+            type: 'stripe_payment',
+            description: `Payment for ${plan} (${billingCycle}) plan successful.`,
+            subDescription: `Previous: ${currentCredits} + New: ${creditsToAdd} = ${newBalance} Credits`,
+            creditsAdded: creditsToAdd,
+            previousBalance: currentCredits,
+            finalBalance: newBalance,
+            planName: plan
+          });
+
+          await dbUser.save();
+          addSystemLog('SUCCESS', `[Webhook] User ${emailToSearch} upgraded to ${plan}`);
+          console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
+        } else {
+          addSystemLog('ERROR', `[Webhook] User ${emailToSearch} not found.`);
+          console.warn(`[Webhook] ERROR: User ${emailToSearch} not found.`);
         }
-
-        const currentCredits = localUsers[userIndex].credits || 0;
-        const now = new Date();
-        const expirationDate = new Date(now);
-        if (billingCycle === 'yearly') expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-        else expirationDate.setMonth(expirationDate.getMonth() + 1);
-
-        localUsers[userIndex].plan = plan;
-        localUsers[userIndex].billingCycle = billingCycle || 'monthly';
-        localUsers[userIndex].status = 'Active';
-        localUsers[userIndex].credits = currentCredits + creditsToAdd;
-        localUsers[userIndex].subscriptionStart = now.toISOString();
-        localUsers[userIndex].subscriptionEnd = expirationDate.toISOString();
-
-        if (!localUsers[userIndex].transactions) localUsers[userIndex].transactions = [];
-        const newBalance = currentCredits + creditsToAdd;
-
-        localUsers[userIndex].transactions.push({
-          id: session.id || `tx_stripe_${Date.now()}`,
-          date: new Date().toISOString(),
-          amount: (session.amount_total || 0) / 100,
-          currency: session.currency || 'USD',
-          type: 'stripe_payment',
-          description: `Payment for ${plan} (${billingCycle}) plan successful.`,
-          subDescription: `Previous: ${currentCredits} + New: ${creditsToAdd} = ${newBalance} Credits`,
-          creditsAdded: creditsToAdd,
-          previousBalance: currentCredits,
-          finalBalance: newBalance,
-          planName: plan
-        });
-
-        users = localUsers;
-        saveSettings({ users: localUsers });
-        addSystemLog('SUCCESS', `[Webhook] User ${emailToSearch} upgraded to ${plan}`);
-        console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
-      } else {
-        addSystemLog('ERROR', `[Webhook] User ${emailToSearch} not found.`);
-        console.warn(`[Webhook] ERROR: User ${emailToSearch} not found.`);
+      } catch (err) {
+        addSystemLog('ERROR', `[Webhook] DB Error modifying user ${emailToSearch}: ${err.message}`);
+        console.error(`[Webhook] DB Error:`, err);
       }
     } else {
       addSystemLog('ERROR', `[Webhook] Missing email or plan information in session.`);
@@ -233,24 +227,11 @@ app.use((req, res, next) => {
     // Don't flood logs with health checks or static assets if any
     if (path === '/api/health') return;
 
-    let userEmail = 'Guest';
-    if (req.body?.email) userEmail = req.body.email; // Try to capture email from body if present
-
-    // Attempt to parse user from token if available (simple check)
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer mock-user-token-')) {
-      const uid = authHeader.replace('Bearer mock-user-token-', '');
-      const u = users.find(user => user.id == uid);
-      if (u) userEmail = u.email;
-    } else if (authHeader === 'Bearer mock-user-token-123') {
-      userEmail = 'Admin';
-    }
-
     addSystemLog(logLevel, `${req.method} ${path}`, {
       statusCode: res.statusCode,
       duration: `${duration}ms`,
       ip: req.ip,
-      user: userEmail
+      user: req.userEmail || 'Guest'
     });
   });
 
@@ -269,280 +250,217 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Mock Database
-let users = savedData.users || [];
-let plans = savedData.plans || [
-  {
-    id: 'starter',
-    name: 'Starter',
-    description: 'For individuals exploring AI replies.',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    credits: 100,
-    dailyLimitMonthly: 5,
-    dailyLimitYearly: 5,
-    maxAccounts: 1,
-    maxBrands: 1,
-    allowOverride: false,
-    allowImages: false, // Feature Flag
-    allowTracking: false, // Feature Flag
-    features: ['100 AI actions/mo', 'Basic Reddit Analytics', '1 Connected Account', '1 Brand Profile', 'Community Support'],
-    isPopular: false,
-    isCustom: true
-  },
-  {
-    id: 'pro',
-    name: 'Professional',
-    description: 'Perfect for indie hackers and solo founders.',
-    monthlyPrice: 29,
-    yearlyPrice: 276,
-    credits: 300,
-    dailyLimitMonthly: 20,
-    dailyLimitYearly: 50,
-    maxAccounts: 3,
-    maxBrands: 1,
-    allowOverride: true,
-    allowImages: true, // Feature Flag
-    allowTracking: true, // Feature Flag
-    features: ['300 AI actions/mo', 'Advanced Post Scheduling', '3 Connected Accounts', '1 Brand Profile (with Override)', 'Priority Support', 'Image Generation'],
-    isPopular: true,
-    highlightText: 'Most Popular',
-    isCustom: true
-  },
-  {
-    id: 'agency',
-    name: 'Agency',
-    description: 'For serious growth and small teams.',
-    monthlyPrice: 99,
-    yearlyPrice: 948,
-    credits: 1000,
-    dailyLimitMonthly: 100,
-    dailyLimitYearly: 300,
-    maxAccounts: -1,
-    maxBrands: -1,
-    allowOverride: true,
-    allowImages: true, // Feature Flag
-    allowTracking: true, // Feature Flag
-    features: ['1000 AI actions/mo', 'Unlimited Accounts', 'Unlimited Brand Profiles', 'Team Collaboration', 'Dedicated Manager', 'API Access'],
-    isPopular: false,
-    isCustom: true
-  }
-];
-
-// Mock Tracking Database
-
-// Tracking Links - Force it to be an array in settingsCache for 1:1 reference
-if (!settingsCache.trackingLinks) settingsCache.trackingLinks = [];
-const getTrackingLinks = () => settingsCache.trackingLinks;
+// Data Models are now managed by MongoDB schemas in models.js
 
 
 // ─── Tracking Redirector ──────────────────────────────────────────────────
-// Robust route to handle both with and without trailing slash
-app.get(['/t/:id', '/t/:id/'], (req, res) => {
-  const { id } = req.params;
+app.get(['/t/:id', '/t/:id/'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanId = id.replace(/\/$/, '').toLowerCase();
 
-  // Reload trackingLinks from disk to prevent 404 if link was created in another process
-  const freshSettings = loadSettings();
-  if (freshSettings.trackingLinks) {
-    settingsCache.trackingLinks = freshSettings.trackingLinks;
-  }
+    const link = await TrackingLink.findOne({ id: new RegExp('^' + cleanId + '$', 'i') });
 
-  if (!settingsCache.trackingLinks) settingsCache.trackingLinks = [];
+    if (!link) {
+      console.warn(`[TRACKING] 404 - Link not found: ${cleanId}`);
+      addSystemLog('WARN', `Tracking link not found: ${cleanId}`, {
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+        requestedUrl: req.originalUrl
+      });
+      return res.status(404).send("Tracking link not found");
+    }
 
-  // Case-insensitive lookup and cleanup (remove trailing slash from param if any)
-  const cleanId = id.replace(/\/$/, '').toLowerCase();
+    link.clicks = (Number(link.clicks) || 0) + 1;
+    const now = new Date().toISOString();
 
-  // Directly find in the cache
-  const link = (settingsCache.trackingLinks || []).find(l => l.id.toLowerCase() === cleanId);
-
-  if (!link) {
-    console.warn(`[TRACKING] 404 - Link not found: ${cleanId}`);
-    addSystemLog('WARN', `Tracking link not found: ${cleanId}`, {
-      ip: req.ip,
-      userAgent: req.headers['user-agent'],
-      requestedUrl: req.originalUrl
+    if (!link.clickDetails) link.clickDetails = [];
+    link.clickDetails.push({
+      timestamp: now,
+      userAgent: req.headers['user-agent'] || 'unknown',
+      referer: req.headers['referer'] || 'direct',
+      ip: req.headers['x-forwarded-for'] || req.ip || 'unknown'
     });
-    return res.status(404).send("Tracking link not found");
+    link.lastClickedAt = now;
+
+    if (link.clickDetails.length > 10000) {
+      link.clickDetails = link.clickDetails.slice(-10000);
+    }
+
+    link.markModified('clickDetails');
+    await link.save();
+
+    addSystemLog('INFO', `Tracking Click: ${cleanId} [Total: ${link.clicks}]`, {
+      id: cleanId,
+      url: link.originalUrl,
+      userId: link.userId,
+      subreddit: link.subreddit
+    });
+    console.log(`[TRACKING DATA] Click Recorded: ${cleanId} | New Total: ${link.clicks} | User: ${link.userId}`);
+
+    res.redirect(302, link.originalUrl);
+  } catch (e) {
+    res.status(500).send("Error");
   }
-
-  // Update Stats in Memory FIRST
-  link.clicks = (Number(link.clicks) || 0) + 1;
-  const now = new Date().toISOString();
-
-  if (!link.clickDetails) link.clickDetails = [];
-  link.clickDetails.push({
-    timestamp: now,
-    userAgent: req.headers['user-agent'] || 'unknown',
-    referer: req.headers['referer'] || 'direct',
-    ip: req.headers['x-forwarded-for'] || req.ip || 'unknown'
-  });
-  link.lastClickedAt = now;
-
-  // Limit click history to 10000 entries to preserve chart data without blowing up file size
-  if (link.clickDetails.length > 10000) {
-    link.clickDetails = link.clickDetails.slice(-10000);
-  }
-
-  // Persist to disk
-  saveSettings({ trackingLinks: settingsCache.trackingLinks });
-
-  addSystemLog('INFO', `Tracking Click: ${cleanId} [Total: ${link.clicks}]`, {
-    id: cleanId,
-    url: link.originalUrl,
-    userId: link.userId,
-    subreddit: link.subreddit
-  });
-  console.log(`[TRACKING DATA] Click Recorded: ${cleanId} | New Total: ${link.clicks} | User: ${link.userId}`);
-
-  // 302 Redirect is better for analytics
-  res.redirect(302, link.originalUrl);
 });
 
 // ─── Create Tracking Link ──────────────────────────────────────────────────
-app.post('/api/tracking/create', (req, res) => {
-  const { userId, originalUrl, subreddit, postId, type } = req.body;
-  if (!userId || !originalUrl) return res.status(400).json({ error: 'Missing required fields' });
+app.post('/api/tracking/create', async (req, res) => {
+  try {
+    const { userId, originalUrl, subreddit, postId, type } = req.body;
+    if (!userId || !originalUrl) return res.status(400).json({ error: 'Missing required fields' });
 
-  const user = users.find(u => u.id == userId);
-  if (!user) return res.status(404).json({ error: 'User not found' });
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const userPlan = plans.find(p => p.id === user.plan || p.name === user.plan);
+    const userPlan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
 
-  // PLAN PERMISSION CHECK
-  if (user.role !== 'admin' && userPlan && userPlan.allowTracking === false) {
-    return res.status(403).json({ error: 'Link tracking is not included in your current plan.' });
+    if (user.role !== 'admin' && userPlan && userPlan.allowTracking === false) {
+      return res.status(403).json({ error: 'Link tracking is not included in your current plan.' });
+    }
+
+    let baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+    if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+
+    const id = Math.random().toString(36).substring(2, 8);
+    const trackingUrl = `${baseUrl}/t/${id}`;
+
+    const newLink = new TrackingLink({
+      id,
+      userId: userId.toString(),
+      originalUrl,
+      trackingUrl,
+      subreddit,
+      postId,
+      type,
+      createdAt: new Date().toISOString(),
+      clicks: 0,
+      clickDetails: []
+    });
+
+    await newLink.save();
+    console.log(`[TRACKING] Created Link: ${id} | User: ${userId} | Target: ${originalUrl}`);
+    res.json({ id, trackingUrl });
+  } catch (e) {
+    console.error('Create tracking tracking link error: ', e);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  let baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-
-  // SANITIZATION: Remove trailing slash if exists to prevent double slashes in URL
-  if (baseUrl.endsWith('/')) {
-    baseUrl = baseUrl.slice(0, -1);
-  }
-
-  // Ensure protocol if missing in env var
-  if (!baseUrl.startsWith('http')) {
-    baseUrl = `https://${baseUrl}`;
-  }
-
-  const id = Math.random().toString(36).substring(2, 8);
-  const trackingUrl = `${baseUrl}/t/${id}`;
-
-  const newLink = {
-    id,
-    userId: userId.toString(), // Store as string for consistency
-    originalUrl,
-    subreddit,
-    postId,
-    type,
-    createdAt: new Date().toISOString(),
-    clicks: 0,
-    clickDetails: []
-  };
-
-  // Reload from disk to prevent concurrency overriding
-  const freshSettings = loadSettings();
-  if (freshSettings.trackingLinks) {
-    settingsCache.trackingLinks = freshSettings.trackingLinks;
-  }
-
-  // Immutable update to cache
-  const currentLinks = settingsCache.trackingLinks || [];
-  settingsCache.trackingLinks = [...currentLinks, newLink];
-
-  // Save immediately
-  saveSettings();
-
-  console.log(`[TRACKING] Created Link: ${id} | User: ${userId} | Target: ${originalUrl}`);
-  res.json({ id, trackingUrl });
 });
 
-app.get('/api/tracking/user/:userId', (req, res) => {
-  const { userId } = req.params;
-
-  // Reload from disk to prevent returning stale data (sync delay)
-  const freshData = loadSettings();
-  if (freshData.trackingLinks) {
-    settingsCache.trackingLinks = freshData.trackingLinks;
+app.get('/api/tracking/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userLinks = await TrackingLink.find({ userId: userId.toString() }).sort({ createdAt: -1 });
+    res.json(userLinks);
+  } catch (e) {
+    console.error('Fetch user tracking link error:', e);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  const links = settingsCache.trackingLinks || [];
-
-  // Strict String Comparison
-  const userLinks = links.filter(l =>
-    l.userId && l.userId.toString() === userId.toString()
-  );
-
-  // Sort by newest first
-  userLinks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  console.log(`[Analytics] Serving ${userLinks.length} links for user ${userId} (Total system links: ${links.length})`);
-  res.json(userLinks);
 });
 
 
-// Superuser enforcement - info@marketation.online is the ONLY admin for now
-// Superuser enforcement - info@marketation.online is the ONLY admin for now
-const superuser = {
-  id: 1,
-  name: 'Admin',
-  email: process.env.ADMIN_EMAIL,
-  password: process.env.ADMIN_PASSWORD,
-  role: 'admin',
-  plan: 'Professional',
-  status: 'Active',
-  credits: 999999,
-  hasCompletedOnboarding: true
+// Superuser enforcement
+const setupAdmin = async () => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminEmail || !adminPassword) return;
+
+    let adminUser = await User.findOne({ email: adminEmail });
+    if (!adminUser) {
+      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+      adminUser = new User({
+        id: '1',
+        name: 'Admin',
+        email: adminEmail,
+        password: hashedPassword,
+        role: 'admin',
+        plan: 'Professional',
+        status: 'Active',
+        credits: 999999,
+        hasCompletedOnboarding: true
+      });
+      await adminUser.save();
+      console.log(`--- ADMIN ACCOUNT CREATED: ${adminEmail} ---`);
+    } else {
+      if (adminUser.role !== 'admin') {
+        adminUser.role = 'admin';
+        adminUser.hasCompletedOnboarding = true;
+        await adminUser.save();
+      }
+      console.log(`--- ADMIN ACCOUNT READY: ${adminEmail} ---`);
+    }
+  } catch (e) {
+    console.error('Error setting up admin account:', e);
+  }
 };
+setupAdmin();
 
-const adminIndex = users.findIndex(u => u.email === superuser.email);
-if (adminIndex !== -1) {
-  users[adminIndex].role = 'admin';
-  users[adminIndex].hasCompletedOnboarding = true;
-} else {
-  users = [superuser, ...users];
-}
-saveSettings({ users });
-console.log(`--- ADMIN ACCOUNT READY: ${superuser.email} ---`);
-
-let tickets = savedData.tickets || [];
-let sentReplies = savedData.replies || [];
-let sentPosts = savedData.posts || [];
+// ─── Middleware & Logic ───
 
 // General Auth Middleware to enforce Bans/Suspensions on every request
-const generalAuth = (req, res, next) => {
+const generalAuth = async (req, res, next) => {
   const path = req.path.replace(/\/$/, '');
-  // Try to extract user from token or ID
-  const authHeader = req.headers.authorization;
-  let userId = req.body?.userId || req.query?.userId || req.params?.id;
-
-  if (!userId && authHeader && authHeader.startsWith('Bearer mock-user-token-')) {
-    userId = authHeader.replace('Bearer mock-user-token-', '');
-  }
 
   // Exempt public routes explicitly
   const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/forgot-password', '/api/health', '/api/webhook'];
-
   if (publicRoutes.includes(path)) return next();
+
+  // Try to extract user from token or ID
+  const authHeader = req.headers.authorization;
+  let userId = req.body?.userId || req.query?.userId || req.params?.id;
+  let decodedUser = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    if (token === 'mock-jwt-token-123') {
+      decodedUser = { role: 'admin' };
+    } else if (token.startsWith('mock-user-token-')) {
+      userId = token.replace('mock-user-token-', '');
+    } else {
+      try {
+        decodedUser = jwt.verify(token, JWT_SECRET);
+        if (!userId) userId = decodedUser.id;
+      } catch (e) {
+        // Fallback to existing userId or continue to let specific routes handle if auth is truly needed
+      }
+    }
+  }
 
   // If we have a userId, check status
   if (userId) {
-    const user = users.find(u => u.id == userId);
-    if (user && (user.status === 'Banned' || user.status === 'Suspended')) {
-      console.log(`[AUTH] Blocked ${user.status} user: ${user.email}`);
-      return res.status(403).json({
-        error: `Your account has been ${user.status.toLowerCase()}.`,
-        reason: user.statusMessage || 'Contact support for details.'
-      });
+    try {
+      const user = await User.findOne({ id: userId.toString() });
+      if (user) {
+        req.userEmail = user.email;
+        if (user.status === 'Banned' || user.status === 'Suspended') {
+          console.log(`[AUTH] Blocked ${user.status} user: ${user.email}`);
+          return res.status(403).json({
+            error: `Your account has been ${user.status.toLowerCase()}.`,
+            reason: user.statusMessage || 'Contact support for details.'
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error in generalAuth:', e);
     }
-  } else if (authHeader === 'Bearer mock-jwt-token-123') {
+  } else if (decodedUser?.role === 'admin' || authHeader === 'Bearer mock-jwt-token-123') {
     // Admin token - check if admin is banned
-    const adminUser = users.find(u => u.role === 'admin');
-    if (adminUser && (adminUser.status === 'Banned' || adminUser.status === 'Suspended')) {
-      return res.status(403).json({
-        error: `Your account has been ${adminUser.status.toLowerCase()}.`,
-        reason: adminUser.statusMessage || ''
-      });
+    try {
+      const adminId = decodedUser?.id;
+      const adminUser = adminId ? await User.findOne({ id: adminId.toString() }) : await User.findOne({ role: 'admin' });
+      if (adminUser) {
+        req.userEmail = adminUser.email;
+        if (adminUser.status === 'Banned' || adminUser.status === 'Suspended') {
+          return res.status(403).json({
+            error: `Your account has been ${adminUser.status.toLowerCase()}.`,
+            reason: adminUser.statusMessage || ''
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error in generalAuth (Admin check):', e);
     }
   }
 
@@ -555,13 +473,30 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-// Authentication Endpoints
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i'), password });
+    const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
 
     if (user) {
+      let isMatch = false;
+      if (user.password.startsWith('$2')) {
+        // It's a bcrypt hash
+        isMatch = await bcrypt.compare(password, user.password);
+      } else {
+        // Plain text legacy fallback
+        isMatch = (user.password === password);
+        if (isMatch) {
+          user.password = await bcrypt.hash(password, 10);
+          await user.save();
+        }
+      }
+
+      if (!isMatch) {
+        addSystemLog('WARN', `Failed login attempt (wrong password) for: ${email}`);
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
       // Check if user is banned or suspended
       if (user.status === 'Banned' || user.status === 'Suspended') {
         addSystemLog('WARN', `[LOGIN] Blocked ${user.status} user: ${user.email}`);
@@ -597,12 +532,13 @@ app.post('/api/auth/login', async (req, res) => {
 
       addSystemLog('INFO', `User logged in: ${user.email}`, { userId: user.id || user._id, role: user.role });
 
-      // In a real app, generate a JWT token here
       const userObj = user.toObject();
       delete userObj.password;
-      const token = user.role === 'admin' ? 'mock-jwt-token-123' : `mock-user-token-${user.id || user._id}`;
-      // Send the id explicitely to match frontend expectations
       userObj.id = user.id || user._id.toString();
+
+      // Implement real JWT
+      const payload = { id: userObj.id, email: userObj.email, role: userObj.role };
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 
       res.json({ user: userObj, token });
     } else {
@@ -633,11 +569,14 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const tempId = Math.random().toString(36).substring(2, 9);
+
     const newUser = new User({
-      id: Math.random().toString(36).substring(2, 9), // Temp ID string
+      id: tempId,
       name,
       email,
-      password, // In a real app, hash this!
+      password: hashedPassword,
       role: 'user',
       plan: 'Starter',
       billingCycle: 'monthly',
@@ -661,7 +600,11 @@ app.post('/api/auth/signup', async (req, res) => {
     delete userObj.password;
     userObj.id = newUser.id || newUser._id.toString();
 
-    res.status(201).json({ user: userObj, token: `mock-user-token-${userObj.id}` });
+    // Implement real JWT
+    const payload = { id: userObj.id, email: userObj.email, role: userObj.role };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({ user: userObj, token });
   } catch (err) {
     console.error('Signup error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -718,50 +661,55 @@ app.post('/api/user/complete-onboarding', async (req, res) => {
   }
 });
 
-app.post('/api/user/brand-profile', (req, res) => {
-  const { userId, ...brandData } = req.body;
+app.post('/api/user/brand-profile', async (req, res) => {
+  try {
+    const { userId, ...brandData } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
 
-  if (!userId) return res.status(400).json({ error: 'userId required' });
+    const user = await User.findOne({ id: userId.toString() });
 
-  const index = users.findIndex(u => u.id == userId);
+    if (user) {
+      let bonusAwarded = false;
+      const isProfileEmpty = !user.brandProfile || Object.keys(user.brandProfile).length === 0;
 
-  if (index !== -1) {
-    const user = users[index];
-
-    // Check if this is the first time completing onboarding to award bonus
-    let bonusAwarded = false;
-    const isProfileEmpty = !user.brandProfile || Object.keys(user.brandProfile).length === 0;
-
-    if (!user.hasCompletedOnboarding || (user.credits <= 100 && isProfileEmpty)) {
-      // Award 100 bonus credits for setting up the first brand profile
-      if (!user.hasCompletedOnboarding) {
-        user.credits = (user.credits || 0) + 100;
-        bonusAwarded = true;
+      if (!user.hasCompletedOnboarding || (user.credits <= 100 && isProfileEmpty)) {
+        if (!user.hasCompletedOnboarding) {
+          user.credits = (user.credits || 0) + 100;
+          bonusAwarded = true;
+        }
       }
+
+      user.brandProfile = brandData;
+      user.hasCompletedOnboarding = true;
+
+      // Ensure tracking in BrandProfile collection for completeness, though User embedded is main
+      await BrandProfile.findOneAndUpdate(
+        { userId: userId.toString() },
+        { ...brandData, userId: userId.toString() },
+        { upsert: true, new: true }
+      );
+
+      await user.save();
+
+      console.log(`[BRAND] Profile updated for user ${userId} (${user.email}). Bonus: ${bonusAwarded}`);
+      addSystemLog('INFO', `Brand profile updated for: ${user.email}`, {
+        userId,
+        brandName: brandData.brandName,
+        bonusAwarded
+      });
+
+      res.json({
+        success: true,
+        credits: user.credits,
+        bonusAwarded,
+        brandProfile: user.brandProfile
+      });
+    } else {
+      res.status(404).json({ error: 'User not found' });
     }
-
-    // Update BOTH storage locations for consistency
-    user.brandProfile = brandData;
-    brandProfiles[userId] = brandData;
-    user.hasCompletedOnboarding = true; // Mark as complete
-
-    saveSettings({ users, brandProfiles });
-
-    console.log(`[BRAND] Profile updated for user ${userId} (${user.email}). Bonus: ${bonusAwarded}`);
-    addSystemLog('INFO', `Brand profile updated for: ${user.email}`, {
-      userId,
-      brandName: brandData.brandName,
-      bonusAwarded
-    });
-
-    res.json({
-      success: true,
-      credits: user.credits,
-      bonusAwarded,
-      brandProfile: user.brandProfile
-    });
-  } else {
-    res.status(404).json({ error: 'User not found' });
+  } catch (err) {
+    console.error('Brand profile error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -816,8 +764,9 @@ let redditSettings = savedData.reddit || {
   userAgent: 'RedditgoApp/1.0'
 };
 
-// Store user Reddit tokens (In-memory for now, should be in DB)
-let userRedditTokens = savedData.userRedditTokens || {};
+// Store user Reddit tokens (Initialized from DB/Cache)
+if (!settingsCache.userRedditTokens) settingsCache.userRedditTokens = {};
+const userRedditTokens = settingsCache.userRedditTokens;
 
 // Plans API Endpoints
 // Public configuration for UI
@@ -827,189 +776,201 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.get('/api/plans', (req, res) => {
-  const freshSettings = loadSettings();
-  if (freshSettings.plans) {
-    plans = freshSettings.plans;
+app.get('/api/plans', async (req, res) => {
+  try {
+    const plansDb = await Plan.find({});
+    res.json(plansDb);
+  } catch (err) {
+    console.error('Error fetching plans:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  res.json(plans);
 });
 
-app.post('/api/plans', (req, res) => {
-  const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
+app.post('/api/plans', async (req, res) => {
+  try {
+    const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
 
-  if (!id || !name || monthlyPrice === undefined || yearlyPrice === undefined || credits === undefined) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    if (!id || !name || monthlyPrice === undefined || yearlyPrice === undefined || credits === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const existingPlan = await Plan.findOne({ id });
+    if (existingPlan) {
+      return res.status(400).json({ error: 'Plan ID already exists' });
+    }
+
+    const newPlanDb = new Plan({
+      id,
+      name,
+      monthlyPrice: parseFloat(monthlyPrice),
+      yearlyPrice: parseFloat(yearlyPrice),
+      credits: parseInt(credits),
+      dailyLimitMonthly: parseInt(dailyLimitMonthly) || 0,
+      dailyLimitYearly: parseInt(dailyLimitYearly) || 0,
+      features: features || [],
+      isPopular: !!isPopular,
+      highlightText: highlightText || '',
+      allowImages: Boolean(allowImages || false),
+      allowTracking: Boolean(allowTracking || false),
+      isCustom: true
+    });
+
+    await newPlanDb.save();
+    addSystemLog('INFO', `New plan created: ${newPlanDb.name} (${newPlanDb.id})`);
+    res.status(201).json(newPlanDb);
+  } catch (err) {
+    console.error('Error creating plan:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  if (plans.find(p => p.id === id)) {
-    return res.status(400).json({ error: 'Plan ID already exists' });
-  }
-
-  const newPlan = {
-    id,
-    name,
-    monthlyPrice: parseFloat(monthlyPrice),
-    yearlyPrice: parseFloat(yearlyPrice),
-    credits: parseInt(credits),
-    dailyLimitMonthly: parseInt(dailyLimitMonthly) || 0,
-    dailyLimitYearly: parseInt(dailyLimitYearly) || 0,
-    features: features || [],
-    isPopular: !!isPopular,
-    highlightText: highlightText || '',
-    allowImages: Boolean(allowImages || false),
-    allowTracking: Boolean(allowTracking || false),
-    isCustom: true // Mark as custom created plan
-  };
-
-  plans.push(newPlan);
-  saveSettings({ plans });
-  addSystemLog('INFO', `New plan created: ${newPlan.name} (${newPlan.id})`);
-  res.status(201).json(newPlan);
 });
 
-app.put('/api/plans/:id', (req, res) => {
-  const { id } = req.params;
-  const planIndex = plans.findIndex(p => p.id === id);
+app.put('/api/plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const planDb = await Plan.findOne({ id });
 
-  if (planIndex === -1) {
-    return res.status(404).json({ error: 'Plan not found' });
+    if (!planDb) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
+
+    planDb.name = name || planDb.name;
+    if (monthlyPrice !== undefined) planDb.monthlyPrice = parseFloat(monthlyPrice);
+    if (yearlyPrice !== undefined) planDb.yearlyPrice = parseFloat(yearlyPrice);
+    if (credits !== undefined) planDb.credits = parseInt(credits);
+    if (dailyLimitMonthly !== undefined) planDb.dailyLimitMonthly = parseInt(dailyLimitMonthly);
+    if (dailyLimitYearly !== undefined) planDb.dailyLimitYearly = parseInt(dailyLimitYearly);
+    if (features) planDb.features = features;
+    if (isPopular !== undefined) planDb.isPopular = Boolean(isPopular);
+    if (highlightText !== undefined) planDb.highlightText = String(highlightText);
+    if (allowImages !== undefined) planDb.allowImages = Boolean(allowImages);
+    if (allowTracking !== undefined) planDb.allowTracking = Boolean(allowTracking);
+    planDb.isCustom = true;
+
+    await planDb.save();
+    addSystemLog('INFO', `Plan updated: ${planDb.name} (${id})`);
+    res.json(planDb);
+  } catch (err) {
+    console.error('Error updating plan:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
-
-  plans[planIndex] = {
-    ...plans[planIndex],
-    name: name || plans[planIndex].name,
-    monthlyPrice: monthlyPrice !== undefined ? parseFloat(monthlyPrice) : plans[planIndex].monthlyPrice,
-    yearlyPrice: yearlyPrice !== undefined ? parseFloat(yearlyPrice) : plans[planIndex].yearlyPrice,
-    credits: credits !== undefined ? parseInt(credits) : plans[planIndex].credits,
-    dailyLimitMonthly: dailyLimitMonthly !== undefined ? parseInt(dailyLimitMonthly) : plans[planIndex].dailyLimitMonthly,
-    dailyLimitYearly: dailyLimitYearly !== undefined ? parseInt(dailyLimitYearly) : plans[planIndex].dailyLimitYearly,
-    features: features || plans[planIndex].features,
-    isPopular: isPopular !== undefined ? Boolean(isPopular) : plans[planIndex].isPopular,
-    highlightText: highlightText !== undefined ? String(highlightText) : plans[planIndex].highlightText,
-    allowImages: allowImages !== undefined ? Boolean(allowImages) : (plans[planIndex].allowImages || false),
-    allowTracking: allowTracking !== undefined ? Boolean(allowTracking) : (plans[planIndex].allowTracking || false),
-    isCustom: true
-  };
-
-  saveSettings({ plans });
-  addSystemLog('INFO', `Plan updated: ${plans[planIndex].name} (${id})`);
-  res.json(plans[planIndex]);
 });
 
-app.delete('/api/plans/:id', (req, res) => {
-  const { id } = req.params;
-  const planIndex = plans.findIndex(p => p.id === id);
+app.delete('/api/plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const planDb = await Plan.findOne({ id });
 
-  if (planIndex === -1) {
-    return res.status(404).json({ error: 'Plan not found' });
+    if (!planDb) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    // Check if any users are on this plan
+    const usersOnPlan = await User.find({ plan: { $regex: new RegExp('^' + planDb.name + '$', 'i') } });
+    if (usersOnPlan.length > 0) {
+      return res.status(400).json({ error: 'Cannot delete plan with active users' });
+    }
+
+    const deletedPlanName = planDb.name;
+    await Plan.deleteOne({ id });
+    addSystemLog('WARN', `Plan deleted: ${deletedPlanName} (${id})`);
+    res.json({ success: true, message: 'Plan deleted' });
+  } catch (err) {
+    console.error('Error deleting plan:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  // Check if any users are on this plan (optional safety check)
-  const usersOnPlan = users.filter(u => u.plan.toLowerCase() === plans[planIndex].name.toLowerCase());
-  if (usersOnPlan.length > 0) {
-    return res.status(400).json({ error: 'Cannot delete plan with active users' });
-  }
-
-  const deletedPlanName = plans[planIndex].name;
-  plans.splice(planIndex, 1);
-  saveSettings({ plans });
-  addSystemLog('WARN', `Plan deleted: ${deletedPlanName} (${id})`);
-  res.json({ success: true, message: 'Plan deleted' });
 });
 
 app.post('/api/user/subscribe', async (req, res) => {
-  const { userId, planId, billingCycle } = req.body;
-
-  const user = users.find(u => u.id == userId);
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  const plan = plans.find(p => p.id === planId);
-  if (!plan) {
-    return res.status(404).json({ error: 'Plan not found' });
-  }
-
-  // If plan is free, activate immediately
-  if (plan.monthlyPrice === 0 && plan.yearlyPrice === 0) {
-    user.plan = plan.name;
-    user.credits = plan.credits;
-    user.status = 'Active';
-    user.subscriptionStart = new Date().toISOString();
-    user.subscriptionEnd = null; // Free plans might not expire or expire in a month?
-
-    saveSettings({ users });
-    addSystemLog('INFO', `User activated free plan: ${user.email} (${plan.name})`);
-    return res.json({ success: true, user, message: 'Free plan activated' });
-  }
-
-  // If paid plan, create Stripe Session
-  const stripe = getStripe();
-  if (!stripe) {
-    // Fallback for dev without Stripe keys: Instant Activate (remove in prod)
-    console.warn('[Stripe] Keys missing. Activating plan instantly for testing.');
-
-    // -- COPY OF INSTANT ACTIVATION LOGIC --
-    user.plan = plan.name;
-    const currentCredits = user.credits || 0;
-    user.credits = currentCredits + plan.credits; // Accumulate
-    user.status = 'Active';
-
-    const now = new Date();
-    const end = new Date(now);
-    if (billingCycle === 'yearly') end.setFullYear(end.getFullYear() + 1);
-    else end.setMonth(end.getMonth() + 1);
-
-    user.subscriptionStart = now.toISOString();
-    user.subscriptionEnd = end.toISOString();
-
-    saveSettings({ users });
-    addSystemLog('WARN', `[TEST MODE] User activated plan: ${user.email} -> ${plan.name}`);
-    return res.json({ success: true, user, message: 'Plan activated (Test Mode)' });
-    // --------------------------------------
-  }
-
-  // Create Stripe Session
   try {
-    const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const { userId, planId, billingCycle } = req.body;
 
-    addSystemLog('INFO', `User initiated checkout: ${user.email} for ${plan.name} (${billingCycle})`);
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `${plan.name} Plan (${billingCycle})`,
-            description: `Includes ${plan.credits} new credits. Your existing ${user.credits || 0} credits will be carried over (Total: ${(user.credits || 0) + plan.credits}).`
+    const plan = await Plan.findOne({ id: planId });
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    // If plan is free, activate immediately
+    if (plan.monthlyPrice === 0 && plan.yearlyPrice === 0) {
+      user.plan = plan.name;
+      user.credits = plan.credits;
+      user.status = 'Active';
+      user.subscriptionStart = new Date().toISOString();
+      user.subscriptionEnd = null;
+
+      await user.save();
+      addSystemLog('INFO', `User activated free plan: ${user.email} (${plan.name})`);
+      return res.json({ success: true, user, message: 'Free plan activated' });
+    }
+
+    // If paid plan, create Stripe Session
+    const stripe = getStripe();
+    if (!stripe) {
+      console.warn('[Stripe] Keys missing. Activating plan instantly for testing.');
+      user.plan = plan.name;
+      const currentCredits = user.credits || 0;
+      user.credits = currentCredits + plan.credits;
+      user.status = 'Active';
+
+      const now = new Date();
+      const end = new Date(now);
+      if (billingCycle === 'yearly') end.setFullYear(end.getFullYear() + 1);
+      else end.setMonth(end.getMonth() + 1);
+
+      user.subscriptionStart = now.toISOString();
+      user.subscriptionEnd = end.toISOString();
+
+      await user.save();
+      addSystemLog('WARN', `[TEST MODE] User activated plan: ${user.email} -> ${plan.name}`);
+      return res.json({ success: true, user, message: 'Plan activated (Test Mode)' });
+    }
+
+    try {
+      const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+      addSystemLog('INFO', `User initiated checkout: ${user.email} for ${plan.name} (${billingCycle})`);
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${plan.name} Plan (${billingCycle})`,
+              description: `Includes ${plan.credits} new credits. Your existing ${user.credits || 0} credits will be carried over (Total: ${(user.credits || 0) + plan.credits}).`
+            },
+            unit_amount: price * 100, // Cents
           },
-          unit_amount: price * 100, // Cents
+          quantity: 1,
+        }],
+        mode: 'payment',
+        customer_email: user.email,
+        metadata: {
+          userEmail: user.email,
+          plan: plan.name,
+          billingCycle: billingCycle,
+          credits: plan.credits.toString(),
+          previousCreditsSnap: (user.credits || 0).toString()
         },
-        quantity: 1,
-      }],
-      mode: 'payment', // One-time payment for now, or 'subscription' if using Stripe Products
-      customer_email: user.email,
-      metadata: {
-        userEmail: user.email,
-        plan: plan.name, // Pass ID or Name
-        billingCycle: billingCycle,
-        credits: plan.credits.toString(),
-        previousCreditsSnap: (user.credits || 0).toString()
-      },
-      success_url: `${baseUrl}/settings?success=true&plan=${plan.name}`,
-      cancel_url: `${baseUrl}/pricing?canceled=true`,
-    });
+        success_url: `${baseUrl}/settings?success=true&plan=${plan.name}`,
+        cancel_url: `${baseUrl}/pricing?canceled=true`,
+      });
 
-    return res.json({ checkoutUrl: session.url });
-
-  } catch (error) {
-    console.error('[Stripe Error]', error);
-    return res.status(500).json({ error: 'Payment initialization failed' });
+      return res.json({ checkoutUrl: session.url });
+    } catch (error) {
+      console.error('[Stripe Error]', error);
+      return res.status(500).json({ error: 'Payment initialization failed' });
+    }
+  } catch (err) {
+    console.error('Subscription error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1029,19 +990,42 @@ const DEFAULT_BRAND_PROFILE = {
   brandTone: 'Helpful Peer'
 };
 
-app.get('/api/user/brand-profile', (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  // Return user profile if exists, otherwise default (to avoid empty state/random AI generation)
-  res.json(brandProfiles[userId] || DEFAULT_BRAND_PROFILE);
+app.get('/api/user/brand-profile', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    const user = await User.findOne({ id: userId.toString() });
+    const profile = user ? user.brandProfile : null;
+    res.json(profile && Object.keys(profile).length > 0 ? profile : DEFAULT_BRAND_PROFILE);
+  } catch (err) {
+    console.error('Error fetching brand profile:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // (Duplicate POST /api/user/brand-profile removed as it's now handled above)
 
-const saveTokens = (userId, username, tokenData) => {
+const saveTokens = async (userId, username, tokenData) => {
   if (!userRedditTokens[userId]) userRedditTokens[userId] = {};
   userRedditTokens[userId][username] = tokenData;
   saveSettings({ userRedditTokens });
+
+  try {
+    const user = await User.findOne({ id: userId.toString() });
+    if (user && user.connectedAccounts) {
+      const acc = user.connectedAccounts.find(a => a.username === username);
+      if (acc) {
+        acc.accessToken = tokenData.accessToken;
+        acc.refreshToken = tokenData.refreshToken;
+        acc.expiresAt = tokenData.expiresAt;
+        user.markModified('connectedAccounts');
+        await user.save();
+      }
+    }
+  } catch (err) {
+    console.error('Error saving tokens to DB:', err);
+  }
 };
 
 // Initialize Stripe Client dynamically
@@ -1053,83 +1037,93 @@ const getStripe = () => {
 // Auth Middleware for Admin Routes
 const adminAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  // In our mock system, the admin token is fixed
-  if (authHeader === 'Bearer mock-jwt-token-123') {
-    next();
-  } else {
+  if (!authHeader) return res.status(403).json({ error: 'Unauthorized access to admin API' });
+
+  const token = authHeader.replace('Bearer ', '');
+  if (token === 'mock-jwt-token-123') return next(); // Fallback for hardcoded frontends
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role === 'admin') {
+      next();
+    } else {
+      res.status(403).json({ error: 'Unauthorized access to admin API' });
+    }
+  } catch (err) {
     res.status(403).json({ error: 'Unauthorized access to admin API' });
   }
 };
 
 // Admin Stats
-app.get('/api/admin/stats', adminAuth, (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
+app.get('/api/admin/stats', adminAuth, async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const allUsers = await User.find({});
+    const allPlans = await Plan.find({});
+    const allTickets = await Ticket.find({});
 
-  // 1. Active Subscriptions: Users with status 'Active' who are NOT on 'Starter' plan
-  const activeSubs = users.filter(u =>
-    u.status === 'Active' &&
-    u.plan !== 'Starter' &&
-    (u.role !== 'admin' || (u.email !== process.env.ADMIN_EMAIL))
-  ).length;
+    const activeSubs = allUsers.filter(u =>
+      u.status === 'Active' &&
+      u.plan !== 'Starter' &&
+      (u.role !== 'admin' || (u.email !== process.env.ADMIN_EMAIL))
+    ).length;
 
-  // 2. API Usage: Total credits spent today by all users vs total capacity
-  let totalPointsSpentToday = 0;
-  let totalDailyCapacity = 0;
+    let totalPointsSpentToday = 0;
+    let totalDailyCapacity = 0;
 
-  users.forEach(u => {
-    // Credit usage
-    if (u.lastUsageDate === today) {
-      totalPointsSpentToday += (u.dailyUsagePoints || 0);
+    allUsers.forEach(u => {
+      if (u.lastUsageDate === today) {
+        totalPointsSpentToday += (u.dailyUsagePoints || 0);
+      }
+      if (u.status === 'Active') {
+        const plan = allPlans.find(p => (p.name || '').toLowerCase() === (u.plan || '').toLowerCase());
+        const planLimit = u.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+        const effectiveLimit = (Number(u.customDailyLimit) > 0) ? Number(u.customDailyLimit) : (Number(planLimit) || 0);
+        totalDailyCapacity += effectiveLimit;
+      }
+    });
+
+    const apiUsagePercent = totalDailyCapacity > 0
+      ? Math.min(100, Math.round((totalPointsSpentToday / totalDailyCapacity) * 100))
+      : 0;
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const recentErrors = systemLogs.filter(log =>
+      log.level === 'ERROR' && log.timestamp > oneHourAgo
+    ).length;
+
+    let healthStatus = 'Healthy';
+    let healthPercent = '100%';
+
+    if (recentErrors > 15) {
+      healthStatus = 'Critical';
+      healthPercent = '65%';
+    } else if (recentErrors > 5) {
+      healthStatus = 'Degraded';
+      healthPercent = '88%';
+    } else if (recentErrors > 0) {
+      healthStatus = 'Stable';
+      healthPercent = '99%';
     }
 
-    // Capacity calculation
-    if (u.status === 'Active') {
-      const plan = plans.find(p => (p.name || '').toLowerCase() === (u.plan || '').toLowerCase());
-      const planLimit = u.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
-      const effectiveLimit = (Number(u.customDailyLimit) > 0) ? Number(u.customDailyLimit) : (Number(planLimit) || 0);
-      totalDailyCapacity += effectiveLimit;
-    }
-  });
-
-  // Calculate percentage (default to 0 if no capacity defined yet)
-  const apiUsagePercent = totalDailyCapacity > 0
-    ? Math.min(100, Math.round((totalPointsSpentToday / totalDailyCapacity) * 100))
-    : 0;
-
-  // 3. System Health: Based on ERROR logs in the last hour
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const recentErrors = systemLogs.filter(log =>
-    log.level === 'ERROR' && log.timestamp > oneHourAgo
-  ).length;
-
-  let healthStatus = 'Healthy';
-  let healthPercent = '100%';
-
-  if (recentErrors > 15) {
-    healthStatus = 'Critical';
-    healthPercent = '65%';
-  } else if (recentErrors > 5) {
-    healthStatus = 'Degraded';
-    healthPercent = '88%';
-  } else if (recentErrors > 0) {
-    healthStatus = 'Stable';
-    healthPercent = '99%';
+    res.json({
+      totalUsers: allUsers.length,
+      activeSubscriptions: activeSubs,
+      apiUsage: apiUsagePercent,
+      systemHealth: healthPercent,
+      healthLabel: healthStatus,
+      ticketStats: {
+        total: allTickets.length,
+        open: allTickets.filter(t => t.status === 'open').length,
+        inProgress: allTickets.filter(t => t.status === 'in_progress').length,
+        resolved: allTickets.filter(t => t.status === 'resolved').length,
+        closed: allTickets.filter(t => t.status === 'closed').length
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching admin stats:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  res.json({
-    totalUsers: users.length,
-    activeSubscriptions: activeSubs,
-    apiUsage: apiUsagePercent,
-    systemHealth: healthPercent,
-    healthLabel: healthStatus,
-    ticketStats: {
-      total: (tickets || []).length,
-      open: (tickets || []).filter(t => t.status === 'open').length,
-      inProgress: (tickets || []).filter(t => t.status === 'in_progress').length,
-      resolved: (tickets || []).filter(t => t.status === 'resolved').length,
-      closed: (tickets || []).filter(t => t.status === 'closed').length
-    }
-  });
 });
 
 // Admin Logs
@@ -1138,218 +1132,240 @@ app.get('/api/admin/logs', adminAuth, (req, res) => {
 });
 
 // User Management
-app.get('/api/admin/users', adminAuth, (req, res) => {
-  res.json(users);
+app.get('/api/admin/users', adminAuth, async (req, res) => {
+  try {
+    const allUsers = await User.find({});
+    res.json(allUsers);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-app.post('/api/admin/users', adminAuth, (req, res) => {
-  const newUser = { id: users.length + 1, ...req.body };
-  users.push(newUser);
-  saveSettings({ users });
-  addSystemLog('INFO', `[Admin] Created new user: ${newUser.email}`, { admin: 'Superuser' });
-  res.status(201).json(newUser);
+app.post('/api/admin/users', adminAuth, async (req, res) => {
+  try {
+    const newUser = new User({ id: Math.random().toString(36).substring(2, 9), ...req.body });
+    await newUser.save();
+    addSystemLog('INFO', `[Admin] Created new user: ${newUser.email}`, { admin: 'Superuser' });
+    res.status(201).json(newUser);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-app.put('/api/admin/users/:id', adminAuth, (req, res) => {
-  const { id } = req.params;
-  const index = users.findIndex(u => u.id == id);
-  if (index !== -1) {
-    const updateData = { ...req.body };
-    // If password is empty or not provided, don't update it
-    if (!updateData.password) {
-      delete updateData.password;
-    }
+app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let user = await User.findOne({ id: id.toString() });
 
-    // Logic for Plan Change & Refill
-    const oldPlanName = users[index].plan;
-    const oldCredits = users[index].credits;
+    if (user) {
+      const updateData = { ...req.body };
+      if (!updateData.password) {
+        delete updateData.password;
+      }
 
-    // Explicitly handle status updates first
-    if (req.body.status) updateData.status = req.body.status;
-    if (req.body.statusMessage !== undefined) updateData.statusMessage = req.body.statusMessage;
+      const oldPlanName = user.plan;
+      const oldCredits = user.credits || 0;
 
-    // --- Plan changed: reset credits to new plan's default ---
-    if (updateData.plan && updateData.plan !== oldPlanName) {
-      const newPlanObj = plans.find(p => p.name === updateData.plan);
-      const newPlanCredits = newPlanObj?.credits ?? oldCredits;
-      // Base credits after plan change = new plan's credits
-      updateData.credits = newPlanCredits;
+      if (req.body.status) updateData.status = req.body.status;
+      if (req.body.statusMessage !== undefined) updateData.statusMessage = req.body.statusMessage;
 
-      if (!users[index].transactions) users[index].transactions = [];
-      users[index].transactions.push({
-        id: `tx_admin_plan_${Date.now()}`,
-        date: new Date().toISOString(),
-        amount: 0, currency: 'USD',
-        type: 'admin_plan_change',
-        description: `Plan changed by Admin: ${oldPlanName} → ${updateData.plan}`,
-        subDescription: `Credits reset to ${newPlanCredits} pts (was ${oldCredits} pts).`,
-        creditsAdded: newPlanCredits - oldCredits,
-        finalBalance: newPlanCredits,
-        previousBalance: oldCredits,
-        adjustmentType: 'plan_reset',
-        planName: updateData.plan,
-        isAdjustment: true
-      });
-    }
+      if (updateData.plan && updateData.plan !== oldPlanName) {
+        const newPlanObj = await Plan.findOne({ name: updateData.plan });
+        const newPlanCredits = newPlanObj?.credits ?? oldCredits;
+        updateData.credits = newPlanCredits;
 
-    // --- Add extra credits on top (applies after plan change if both sent) ---
-    if (updateData.extraCreditsToAdd !== undefined && parseInt(updateData.extraCreditsToAdd) > 0) {
-      const extra = parseInt(updateData.extraCreditsToAdd);
-      const baseCredits = updateData.credits ?? oldCredits; // use post-plan-change value if applicable
-      const finalCredits = baseCredits + extra;
-      updateData.credits = finalCredits;
+        if (!user.transactions) updateData.transactions = [];
+        const txs = user.transactions || [];
+        txs.push({
+          id: `tx_admin_plan_${Date.now()}`,
+          date: new Date().toISOString(),
+          amount: 0, currency: 'USD',
+          type: 'admin_plan_change',
+          description: `Plan changed by Admin: ${oldPlanName} → ${updateData.plan}`,
+          subDescription: `Credits reset to ${newPlanCredits} pts (was ${oldCredits} pts).`,
+          creditsAdded: newPlanCredits - oldCredits,
+          finalBalance: newPlanCredits,
+          previousBalance: oldCredits,
+          adjustmentType: 'plan_reset',
+          planName: updateData.plan,
+          isAdjustment: true
+        });
+        updateData.transactions = txs;
+      }
 
-      if (!users[index].transactions) users[index].transactions = [];
-      users[index].transactions.push({
-        id: `tx_admin_extra_${Date.now()}`,
-        date: new Date().toISOString(),
-        amount: 0, currency: 'USD',
-        type: 'admin_credit_adjustment',
-        description: 'Extra Credits Added by Admin',
-        subDescription: `${baseCredits} + ${extra} = ${finalCredits} pts.`,
-        creditsAdded: extra,
-        finalBalance: finalCredits,
-        previousBalance: baseCredits,
-        adjustmentType: 'add_extra',
-        planName: updateData.plan || users[index].plan,
-        isAdjustment: true
-      });
-    }
-    // Clean up helper fields
-    delete updateData.extraCreditsToAdd;
-    delete updateData.creditAdjustmentType;
+      if (updateData.extraCreditsToAdd !== undefined && parseInt(updateData.extraCreditsToAdd) > 0) {
+        const extra = parseInt(updateData.extraCreditsToAdd);
+        const baseCredits = updateData.credits ?? oldCredits;
+        const finalCredits = baseCredits + extra;
+        updateData.credits = finalCredits;
 
-    users[index] = { ...users[index], ...updateData };
-    saveSettings({ users });
+        const txs = updateData.transactions || user.transactions || [];
+        txs.push({
+          id: `tx_admin_extra_${Date.now()}`,
+          date: new Date().toISOString(),
+          amount: 0, currency: 'USD',
+          type: 'admin_credit_adjustment',
+          description: 'Extra Credits Added by Admin',
+          subDescription: `${baseCredits} + ${extra} = ${finalCredits} pts.`,
+          creditsAdded: extra,
+          finalBalance: finalCredits,
+          previousBalance: baseCredits,
+          adjustmentType: 'add_extra',
+          planName: updateData.plan || user.plan,
+          isAdjustment: true
+        });
+        updateData.transactions = txs;
+      }
 
-    // Log specific sensitive changes
-    if (req.body.status && req.body.status !== 'Active') {
-      addSystemLog('WARN', `[Admin] User ${users[index].email} status changed to ${req.body.status}`);
-    } else if (req.body.credits !== undefined) {
-      addSystemLog('INFO', `[Admin] Adjusted credits for ${users[index].email} (New Balance: ${req.body.credits})`);
+      delete updateData.extraCreditsToAdd;
+      delete updateData.creditAdjustmentType;
+
+      Object.assign(user, updateData);
+      await user.save();
+
+      if (req.body.status && req.body.status !== 'Active') {
+        addSystemLog('WARN', `[Admin] User ${user.email} status changed to ${req.body.status}`);
+      } else if (req.body.credits !== undefined) {
+        addSystemLog('INFO', `[Admin] Adjusted credits for ${user.email} (New Balance: ${user.credits})`);
+      } else {
+        addSystemLog('INFO', `[Admin] Updated user profile: ${user.email}`);
+      }
+
+      res.json(user);
     } else {
-      addSystemLog('INFO', `[Admin] Updated user profile: ${users[index].email}`);
+      res.status(404).json({ error: 'User not found' });
     }
-
-    res.json(users[index]);
-  } else {
-    res.status(404).json({ error: 'User not found' });
+  } catch (err) {
+    console.error('Admin update user error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Admin: Get detailed user stats
-app.get('/api/admin/users/:id/stats', adminAuth, (req, res) => {
-  const { id } = req.params;
-  const user = users.find(u => u.id == id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
+app.get('/api/admin/users/:id/stats', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findOne({ id: id.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const { password, ...safeUser } = user;
-  const stats = user.usageStats || { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+    const safeUser = user.toObject();
+    delete safeUser.password;
 
-  // Compute avg/day from history
-  const history = stats.history || [];
-  let avgPerDay = 0;
-  if (history.length > 0) {
-    const oldest = new Date(history[0].date);
-    const days = Math.max(1, Math.ceil((Date.now() - oldest.getTime()) / (1000 * 60 * 60 * 24)));
-    avgPerDay = Math.round(stats.totalSpent / days);
+    const stats = user.usageStats || { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
+
+    const history = stats.history || [];
+    let avgPerDay = 0;
+    if (history.length > 0) {
+      const oldest = new Date(history[0].date);
+      const days = Math.max(1, Math.ceil((Date.now() - oldest.getTime()) / (1000 * 60 * 60 * 24)));
+      avgPerDay = Math.round(stats.totalSpent / days);
+    }
+
+    const planObj = await Plan.findOne({ name: user.plan });
+
+    res.json({
+      ...safeUser,
+      usageStats: stats,
+      avgPerDay,
+      planCredits: planObj?.credits ?? 0,
+      transactions: user.transactions || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  // Plan info
-  const planObj = plans.find(p => p.name === user.plan);
-
-  res.json({
-    ...safeUser,
-    usageStats: stats,
-    avgPerDay,
-    planCredits: planObj?.credits ?? 0,
-    transactions: user.transactions || []
-  });
 });
 
 
 
 // Get Single User Profile (Safe)
-app.get('/api/users/:id', (req, res) => {
-  const { id } = req.params;
-  const user = users.find(u => u.id == id);
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findOne({ id: id.toString() });
 
-  if (user) {
-    // PROACTIVE DAILY LIMIT RESET
-    const today = new Date().toISOString().split('T')[0];
-    if (user.role !== 'admin' && user.lastUsageDate !== today) {
-      user.dailyUsage = 0;
-      user.dailyUsagePoints = 0;
-      user.lastUsageDate = today;
-      saveSettings({ users });
+    if (user) {
+      // PROACTIVE DAILY LIMIT RESET
+      const today = new Date().toISOString().split('T')[0];
+      if (user.role !== 'admin' && user.lastUsageDate !== today) {
+        user.dailyUsage = 0;
+        user.dailyUsagePoints = 0;
+        user.lastUsageDate = today;
+        await user.save();
+      }
+
+      // PROACTIVE MONTHLY CREDIT RENEWAL
+      if ((user.plan === 'Starter' || user.plan === 'starter') && user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
+        const now = new Date();
+        const nextEnd = new Date(now);
+        nextEnd.setMonth(nextEnd.getMonth() + 1);
+
+        const freePlan = await Plan.findOne({ id: 'starter' });
+        const resetCredits = freePlan ? freePlan.credits : 100;
+
+        user.credits = resetCredits;
+        user.subscriptionStart = now.toISOString();
+        user.subscriptionEnd = nextEnd.toISOString();
+
+        if (!user.transactions) user.transactions = [];
+        user.transactions.push({
+          id: `renew_starter_${Date.now()}`,
+          date: now.toISOString(),
+          amount: 0,
+          currency: 'USD',
+          type: 'monthly_renewal',
+          description: 'Monthly Free Plan Credit Renewal',
+          subDescription: 'Your 100 monthly credits have been refilled.',
+          creditsAdded: resetCredits,
+          finalBalance: resetCredits,
+          planName: 'Starter'
+        });
+
+        await user.save();
+        addSystemLog('SUCCESS', `[Renewal] Monthly credits refilled for Starter user: ${user.email}`);
+      }
+
+      const safeUser = user.toObject();
+      delete safeUser.password;
+      res.json(safeUser);
+    } else {
+      res.status(404).json({ error: 'User not found' });
     }
-
-    // PROACTIVE MONTHLY CREDIT RENEWAL (For Free/Starter Plan)
-    // If the month is up for a free user, reset their credits to 100 and set next month
-    if ((user.plan === 'Starter' || user.plan === 'starter') && user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
-      const now = new Date();
-      const nextEnd = new Date(now);
-      nextEnd.setMonth(nextEnd.getMonth() + 1);
-
-      const freePlan = plans.find(p => p.id === 'starter' || p.name === 'Starter');
-      const resetCredits = freePlan ? freePlan.credits : 100;
-
-      user.credits = resetCredits;
-      user.subscriptionStart = now.toISOString();
-      user.subscriptionEnd = nextEnd.toISOString();
-
-      if (!user.transactions) user.transactions = [];
-      user.transactions.push({
-        id: `renew_starter_${Date.now()}`,
-        date: now.toISOString(),
-        amount: 0,
-        currency: 'USD',
-        type: 'monthly_renewal',
-        description: 'Monthly Free Plan Credit Renewal',
-        subDescription: 'Your 100 monthly credits have been refilled.',
-        creditsAdded: resetCredits,
-        finalBalance: resetCredits,
-        planName: 'Starter'
-      });
-
-      saveSettings({ users });
-      addSystemLog('SUCCESS', `[Renewal] Monthly credits refilled for Starter user: ${user.email}`);
-      console.log(`[Renewal] Monthly credits refilled for ${user.email}`);
-    }
-
-    const { password, ...safeUser } = user;
-    res.json(safeUser);
-  } else {
-    res.status(404).json({ error: 'User not found' });
+  } catch (err) {
+    console.error('User fetch error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // User Self-Update Endpoint
-app.put('/api/users/:id', (req, res) => {
-  const { id } = req.params;
-  const index = users.findIndex(u => u.id == id);
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findOne({ id: id.toString() });
 
-  if (index !== -1) {
-    // Basic validation: prevent changing robust fields like role/credits/plan via this endpoint if needed
-    // For this mock, we just take the body. In prod, strict schema validation.
-    const { name, avatar } = req.body;
+    if (user) {
+      const { name, avatar } = req.body;
+      if (name) user.name = name;
+      if (avatar) user.avatar = avatar;
 
-    // Only update allowed fields
-    if (name) users[index].name = name;
-    if (avatar) users[index].avatar = avatar; // assuming we add avatar field support
-
-    saveSettings({ users });
-    const { password, ...safeUser } = users[index];
-    res.json(safeUser);
-  } else {
-    res.status(404).json({ error: 'User not found' });
+      await user.save();
+      const safeUser = user.toObject();
+      delete safeUser.password;
+      res.json(safeUser);
+    } else {
+      res.status(404).json({ error: 'User not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
-  users = users.filter(u => u.id != req.params.id);
-  saveSettings({ users });
-  res.status(204).send();
+app.delete('/api/admin/users/:id', adminAuth, async (req, res) => {
+  try {
+    await User.deleteOne({ id: req.params.id.toString() });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: 'Internal error' });
+  }
 });
 
 // AI Settings
@@ -1419,43 +1435,57 @@ app.post('/api/admin/reddit-settings', adminAuth, (req, res) => {
 
 // --- Support Ticketing System ---
 
-app.get('/api/support/tickets', (req, res) => {
-  const { email, role } = req.query;
-  if (!email) return res.status(400).json({ error: 'Email required' });
+app.get('/api/support/tickets', async (req, res) => {
+  try {
+    const { email, role } = req.query;
+    if (!email) return res.status(400).json({ error: 'Email required' });
 
-  if (role?.toLowerCase() === 'admin') {
-    // Also check token for admin access
-    const authHeader = req.headers.authorization;
-    if (authHeader !== 'Bearer mock-jwt-token-123') {
-      return res.status(403).json({ error: 'Admin role requires valid authorization' });
+    if (role?.toLowerCase() === 'admin') {
+      const authHeader = req.headers.authorization;
+      if (authHeader !== 'Bearer mock-jwt-token-123') {
+        return res.status(403).json({ error: 'Admin role requires valid authorization' });
+      }
+      const allTickets = await Ticket.find({}).sort({ createdAt: -1 });
+      res.json(allTickets);
+    } else {
+      const userTickets = await Ticket.find({ userEmail: email }).sort({ createdAt: -1 });
+      res.json(userTickets);
     }
-    res.json(tickets);
-  } else {
-    res.json(tickets.filter(t => t.userEmail === email));
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.post('/api/support/tickets', (req, res) => {
-  const newTicket = {
-    ...req.body,
-    id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-    createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-    updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
-  };
-  tickets.unshift(newTicket);
-  saveSettings({ tickets });
-  res.status(201).json(newTicket);
+app.post('/api/support/tickets', async (req, res) => {
+  try {
+    const newTicket = new Ticket({
+      ...req.body,
+      id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
+      createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+    });
+    await newTicket.save();
+    res.status(201).json(newTicket);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-app.put('/api/support/tickets/:id', (req, res) => {
-  const { id } = req.params;
-  const index = tickets.findIndex(t => t.id === id);
-  if (index !== -1) {
-    tickets[index] = { ...tickets[index], ...req.body, updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 16) };
-    saveSettings({ tickets });
-    res.json(tickets[index]);
-  } else {
-    res.status(404).json({ error: 'Ticket not found' });
+app.put('/api/support/tickets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ticket = await Ticket.findOne({ id });
+
+    if (ticket) {
+      Object.assign(ticket, req.body);
+      ticket.updatedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
+      await ticket.save();
+      res.json(ticket);
+    } else {
+      res.status(404).json({ error: 'Ticket not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1485,7 +1515,6 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
   const { code, userId } = req.body;
   if (!code) return res.status(400).json({ error: 'Code is required' });
 
-  // Dynamic Redirect URI Logic (Must match exactly what was used in /url)
   const host = req.get('host');
   const protocol = host.includes('localhost') ? 'http' : 'https';
   const redirectUri = redditSettings.redirectUri && redditSettings.redirectUri.trim() !== ''
@@ -1494,7 +1523,6 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
 
   try {
     const auth = Buffer.from(`${redditSettings.clientId}:${redditSettings.clientSecret}`).toString('base64');
-
     const params = new URLSearchParams();
     params.append('grant_type', 'authorization_code');
     params.append('code', code);
@@ -1513,23 +1541,24 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
     const data = await response.json();
     if (data.error) throw new Error(data.error);
 
-    // Fetch user info to get username and icon
     const meRes = await fetch('https://oauth.reddit.com/api/v1/me', {
       headers: {
         'Authorization': `Bearer ${data.access_token}`,
         'User-Agent': redditSettings.userAgent
       }
     });
+
     const meData = await meRes.json();
     const redditUsername = meData.name;
     const redditIcon = meData.icon_img;
 
-    // Check plan limits
-    const user = users.find(u => u.id == userId);
+    const user = await User.findOne({ id: userId.toString() });
     if (user) {
-      // Find the limit from the configured plans
-      const userPlan = plans.find(p => (p.id || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.name || '').toLowerCase() === (user.plan || '').toLowerCase());
-      const limit = userPlan?.maxAccounts || 1;
+      let limit = 1;
+      if (user.plan) {
+        const userPlan = await Plan.findOne({ name: { $regex: new RegExp('^' + user.plan + '$', 'i') } });
+        if (userPlan) limit = userPlan.maxAccounts || 1;
+      }
 
       const currentAccounts = user.connectedAccounts || [];
       const alreadyConnected = currentAccounts.find(a => a.username === redditUsername);
@@ -1538,7 +1567,6 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
         return res.status(403).json({ error: `Account limit reached for ${user.plan} plan (${limit} accounts max).` });
       }
 
-      // Update or add to connectedAccounts
       if (alreadyConnected) {
         alreadyConnected.icon = redditIcon;
         alreadyConnected.lastSeen = new Date().toISOString();
@@ -1551,10 +1579,9 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
           lastSeen: new Date().toISOString()
         });
       }
-      saveSettings({ users });
+      await user.save();
     }
 
-    // Save tokens for this specific account
     saveTokens(userId, redditUsername, {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
@@ -1569,17 +1596,29 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
 });
 
 const getValidToken = async (userId, username) => {
-  if (!userRedditTokens[userId]) return null;
+  let targetAccount = null;
+  const user = await User.findOne({ id: userId.toString() });
 
-  // If no username provided, try to get the first one (for backward compatibility if needed)
-  const targetUsername = username || Object.keys(userRedditTokens[userId])[0];
-  if (!targetUsername) return null;
+  if (user && user.connectedAccounts && user.connectedAccounts.length > 0) {
+    targetAccount = username
+      ? user.connectedAccounts.find(a => a.username === username)
+      : user.connectedAccounts[0];
+  }
 
-  const tokens = userRedditTokens[userId][targetUsername];
-  if (!tokens) return null;
+  // Fallback to memory if not found in DB or DB missing tokens
+  if (!targetAccount || !targetAccount.accessToken) {
+    if (userRedditTokens[userId]) {
+      const uName = username || Object.keys(userRedditTokens[userId])[0];
+      if (userRedditTokens[userId][uName]) {
+        targetAccount = { ...userRedditTokens[userId][uName], username: uName };
+      }
+    }
+  }
 
-  if (Date.now() < tokens.expiresAt - 60000) {
-    return tokens.accessToken;
+  if (!targetAccount || !targetAccount.accessToken) return null;
+
+  if (Date.now() < targetAccount.expiresAt - 60000) {
+    return targetAccount.accessToken;
   }
 
   // Refresh token
@@ -1594,7 +1633,7 @@ const getValidToken = async (userId, username) => {
       },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: tokens.refreshToken
+        refresh_token: targetAccount.refreshToken
       })
     });
 
@@ -1603,11 +1642,11 @@ const getValidToken = async (userId, username) => {
 
     const newTokens = {
       accessToken: data.access_token,
-      refreshToken: tokens.refreshToken,
+      refreshToken: targetAccount.refreshToken,
       expiresAt: Date.now() + (data.expires_in * 1000)
     };
 
-    saveTokens(userId, targetUsername, newTokens);
+    await saveTokens(userId, targetAccount.username || username, newTokens);
     return data.access_token;
   } catch (err) {
     console.error('[Reddit Token Refresh Error]', err);
@@ -1616,51 +1655,61 @@ const getValidToken = async (userId, username) => {
 };
 
 app.get('/api/user/reddit/status', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID required' });
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-  const user = users.find(u => u.id == userId);
-  if (!user) return res.status(404).json({ error: 'User not found' });
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const accounts = user.connectedAccounts || [];
+    const accounts = user.connectedAccounts || [];
 
-  res.json({
-    connected: accounts.length > 0,
-    accounts: accounts
-  });
+    res.json({
+      connected: accounts.length > 0,
+      accounts: accounts
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
+app.post('/api/user/reddit/disconnect', async (req, res) => {
+  try {
+    const { userId, username } = req.body;
+    if (!userId || !username) return res.status(400).json({ error: 'Missing userId or username' });
 
-app.post('/api/user/reddit/disconnect', (req, res) => {
-  const { userId, username } = req.body;
-  if (!userId || !username) return res.status(400).json({ error: 'Missing userId or username' });
+    const user = await User.findOne({ id: userId.toString() });
+    if (user && user.connectedAccounts) {
+      user.connectedAccounts = user.connectedAccounts.filter(a => a.username !== username);
+      await user.save();
+    }
 
-  const user = users.find(u => u.id == userId);
-  if (user && user.connectedAccounts) {
-    user.connectedAccounts = user.connectedAccounts.filter(a => a.username !== username);
-    saveSettings({ users });
+    if (userRedditTokens[userId]) {
+      delete userRedditTokens[userId][username];
+      saveSettings({ userRedditTokens });
+    }
+
+    addSystemLog('INFO', `User disconnected Reddit account: ${username}`, { userId });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  if (userRedditTokens[userId]) {
-    delete userRedditTokens[userId][username];
-    saveSettings({ userRedditTokens });
-  }
-
-  addSystemLog('INFO', `User disconnected Reddit account: ${username}`, { userId });
-
-  res.json({ success: true });
 });
 
 // Helper to get credits for a plan
-const getPlanCredits = (planName) => {
+const getPlanCredits = async (planName) => {
   if (!planName) return 0;
-  // Try to find by name or id
-  const p = plans.find(x => x.id.toLowerCase() === planName.toLowerCase() || x.name.toLowerCase() === planName.toLowerCase());
+  const p = await Plan.findOne({
+    $or: [
+      { id: { $regex: new RegExp('^' + planName + '$', 'i') } },
+      { name: { $regex: new RegExp('^' + planName + '$', 'i') } }
+    ]
+  });
   return p ? p.credits : 0;
 };
 
 
-// AI Generation Proxy (Backend)
 app.post('/api/generate', async (req, res) => {
   try {
     const { prompt, context, userId, type } = req.body; // type can be 'comment' or 'post'
@@ -1670,13 +1719,11 @@ app.post('/api/generate', async (req, res) => {
       return res.status(500).json({ error: 'AI provider is not configured. Please contact the administrator.' });
     }
 
-    const userIndex = users.findIndex(u => String(u.id) === String(userId));
-    if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
-    const user = users[userIndex];
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const rawCost = (aiSettings.creditCosts && aiSettings.creditCosts[type]);
     const cost = Number(rawCost) || (type === 'post' ? 2 : 1);
-
     const today = new Date().toISOString().split('T')[0];
 
     // Reset daily usage if date changed (FOR EVERYONE)
@@ -1687,7 +1734,7 @@ app.post('/api/generate', async (req, res) => {
     }
 
     if (user.role !== 'admin') {
-      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
       const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
       const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
 
@@ -1779,7 +1826,7 @@ app.post('/api/generate', async (req, res) => {
     user.usageStats.history = user.usageStats.history || [];
     user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
 
-    saveSettings({ users });
+    await user.save();
     addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
 
     res.json({
@@ -1794,7 +1841,6 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// AI Image Generation
 app.post('/api/generate-image', async (req, res) => {
   try {
     const { prompt, userId } = req.body;
@@ -1805,11 +1851,10 @@ app.post('/api/generate-image', async (req, res) => {
     }
 
     // CHECK CREDITS
-    const userIndex = users.findIndex(u => String(u.id) === String(userId));
-    if (userIndex === -1) return res.status(404).json({ error: 'User not found' });
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const user = users[userIndex];
-    const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+    const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
 
     // PLAN FEATURE CHECK
     if (user.role !== 'admin' && plan && plan.allowImages === false) {
@@ -1821,7 +1866,6 @@ app.post('/api/generate-image', async (req, res) => {
     }
 
     const cost = Number(aiSettings.creditCosts?.image) || 5;
-
     const today = new Date().toISOString().split('T')[0];
 
     // Reset daily usage if date changed (FOR EVERYONE)
@@ -1889,7 +1933,7 @@ app.post('/api/generate-image', async (req, res) => {
       date: new Date().toISOString()
     };
 
-    saveSettings({ users });
+    await user.save();
     addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
 
     res.json({
@@ -1904,12 +1948,15 @@ app.post('/api/generate-image', async (req, res) => {
   }
 });
 
-// Endpoint to recover latest image
-app.get('/api/user/latest-image', (req, res) => {
-  const { userId } = req.query;
-  const user = users.find(u => String(u.id) === String(userId));
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user.latestImage || null);
+app.get('/api/user/latest-image', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user.latestImage || null);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Reddit Fetching Proxy (Free JSON Method)
@@ -1922,7 +1969,7 @@ app.post('/api/reddit/reply', async (req, res) => {
     console.log(`[Reddit] Posting reply for user ${userId} (account: ${redditUsername || 'default'}) on post ${postId}`);
 
     const token = await getValidToken(userId, redditUsername);
-    let redditResponse = { success: true, message: 'Simulated success (Mock Post)' };
+    let redditCommentId = null;
 
     // If it's a real Reddit post (not from MOCK_POSTS), attempt real API call
     if (token && postId && !['1', '2', '3', '4'].includes(postId)) {
@@ -1945,12 +1992,12 @@ app.post('/api/reddit/reply', async (req, res) => {
         console.error('[Reddit Reply Error]', errorData);
         throw new Error('Failed to post to Reddit API');
       }
-      redditResponse = await response.json();
-      // Extract the real Reddit comment ID (format: t1_xxxx)
+
+      const redditResponse = await response.json();
       try {
         const commentData = redditResponse.json?.data?.things?.[0]?.data;
         if (commentData && commentData.id) {
-          redditResponse.commentId = `t1_${commentData.id}`;
+          redditCommentId = `t1_${commentData.id}`;
         }
       } catch (e) {
         console.error('Error parsing Reddit comment ID:', e);
@@ -1958,46 +2005,47 @@ app.post('/api/reddit/reply', async (req, res) => {
     }
 
     // Save to history
-    const entry = {
+    const entry = new RedditReply({
       id: Math.random().toString(36).substr(2, 9),
-      userId,
+      userId: userId.toString(),
       postId,
-      redditCommentId: redditResponse.commentId || null,
+      redditCommentId,
       postTitle: postTitle || 'Reddit Post',
       postUrl: req.body.postUrl || '#',
       postContent: req.body.postContent || '',
       subreddit: subreddit || 'unknown',
       comment,
       productMention,
-      redditUsername: redditUsername || 'unknown', // Track which account was used
+      redditUsername: redditUsername || 'unknown',
       deployedAt: new Date().toISOString(),
       status: 'Sent',
       ups: 0,
       replies: 0,
       sentiment: 'Neutral'
-    };
+    });
 
-    sentReplies.unshift(entry);
-    saveSettings({ replies: sentReplies });
-
-    // Log the successful reply
+    await entry.save();
     addSystemLog('SUCCESS', `Reddit Reply sent by User ${userId}`, { subreddit, postTitle });
 
     res.json({ success: true, entry });
   } catch (error) {
-    addSystemLog('ERROR', `Reddit Reply Failed for User ${userId}: ${error.message}`);
+    addSystemLog('ERROR', `Reddit Reply Failed: ${error.message}`);
     console.error('Reddit Reply Posting Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Fetch User Reply History
-app.get('/api/user/replies', (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID required' });
+app.get('/api/user/replies', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-  const history = sentReplies.filter(r => r.userId == userId);
-  res.json(history);
+    const history = await RedditReply.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Create New Reddit Post
@@ -2005,8 +2053,6 @@ app.post('/api/reddit/post', async (req, res) => {
   try {
     const { userId, subreddit, title, text, kind, redditUsername } = req.body;
     if (!userId || !subreddit || !title) return res.status(400).json({ error: 'Missing required fields' });
-
-    console.log(`[Reddit] Creating new post for user ${userId} (account: ${redditUsername || 'default'}) in r/${subreddit}`);
 
     const token = await getValidToken(userId, redditUsername);
     if (!token) return res.status(401).json({ error: 'Reddit account not linked' });
@@ -2018,11 +2064,8 @@ app.post('/api/reddit/post', async (req, res) => {
       kind: kind || 'self',
     });
 
-    if (kind === 'link') {
-      bodyParams.append('url', text);
-    } else {
-      bodyParams.append('text', text);
-    }
+    if (kind === 'link') bodyParams.append('url', text);
+    else bodyParams.append('text', text);
 
     const response = await fetch('https://oauth.reddit.com/api/submit', {
       method: 'POST',
@@ -2034,19 +2077,12 @@ app.post('/api/reddit/post', async (req, res) => {
       body: bodyParams
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[Reddit Submit Error]', errorData);
-      throw new Error('Failed to submit to Reddit API');
-    }
-
     const redditResponse = await response.json();
-    addSystemLog('SUCCESS', `Reddit Post submitted by User ${userId}: ${title}`, { subreddit });
+    if (!response.ok) throw new Error(redditResponse.json?.errors?.[0]?.[1] || 'Failed to submit to Reddit API');
 
-    // Save to posts analytics memory
-    const entry = {
+    const entry = new RedditPost({
       id: Math.random().toString(36).substring(2, 11),
-      userId,
+      userId: userId.toString(),
       subreddit,
       postTitle: title,
       postContent: text,
@@ -2058,40 +2094,42 @@ app.post('/api/reddit/post', async (req, res) => {
       ups: 0,
       replies: 0,
       sentiment: 'Neutral'
-    };
-    sentPosts.unshift(entry);
-    saveSettings({ posts: sentPosts });
+    });
+
+    await entry.save();
+    addSystemLog('SUCCESS', `Reddit Post submitted: ${title}`, { subreddit });
 
     res.json({ success: true, redditResponse });
   } catch (error) {
-    console.error('Reddit Post Submission Error:', error);
-    addSystemLog('ERROR', `Reddit Post Failed for User ${userId}: ${error.message}`);
+    addSystemLog('ERROR', `Reddit Post Failed: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Fetch User Posts History
-app.get('/api/user/posts', (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID required' });
+app.get('/api/user/posts', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-  const history = sentPosts.filter(r => r.userId == userId);
-  res.json(history);
+    const history = await RedditPost.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Sync History for Posts with Real Reddit Data
 app.get('/api/user/posts/sync', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID required' });
-
-  console.log(`[Analytics] Syncing Posts for User ${userId}. Store size: ${sentPosts.length}`);
-  let history = sentPosts.filter(r => String(r.userId) === String(userId));
-
   try {
-    const token = await getValidToken(userId);
-    const userPosts = history.filter(r => r.redditCommentId);
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    if (token && userPosts.length > 0) {
+    const userPosts = await RedditPost.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
+    if (userPosts.length === 0) return res.json([]);
+
+    const token = await getValidToken(userId);
+    if (token) {
       const ids = userPosts.map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`).join(',');
       const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
         headers: {
@@ -2104,44 +2142,35 @@ app.get('/api/user/posts/sync', async (req, res) => {
         const data = await response.json();
         const liveItems = data.data.children;
 
-        liveItems.forEach(child => {
+        for (const child of liveItems) {
           const liveData = child.data;
           const entryIdMatch = liveData.name || `t3_${liveData.id}`;
-          const entry = sentPosts.find(r => r.redditCommentId === entryIdMatch || `t3_${r.redditCommentId}` === entryIdMatch);
-          if (entry) {
-            entry.ups = liveData.ups;
-            entry.replies = liveData.num_comments || 0;
-          }
-        });
-
-        // Save fresh stats back
-        saveSettings({ posts: sentPosts });
-        history = sentPosts.filter(r => String(r.userId) === String(userId));
+          await RedditPost.updateOne(
+            { $or: [{ redditCommentId: entryIdMatch }, { redditCommentId: entryIdMatch.replace('t3_', '') }] },
+            { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
+          );
+        }
       }
     }
+    const updatedHistory = await RedditPost.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    res.json(updatedHistory);
   } catch (error) {
     console.error('[Reddit Post Sync Error]', error);
+    res.status(500).json({ error: 'Sync failed' });
   }
-
-  res.json(history);
 });
 
 // Sync History with Real Reddit Data
 app.get('/api/user/replies/sync', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'User ID required' });
-
-  console.log(`[Analytics] Syncing for User ${userId}. Store size: ${sentReplies.length}`);
-  // Get current local history first to ensure we have something to return
-  let history = sentReplies.filter(r => String(r.userId) === String(userId));
-  console.log(`[Analytics] Found ${history.length} records for ${userId}`);
-
   try {
-    const token = await getValidToken(userId);
-    const userReplies = history.filter(r => r.redditCommentId);
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    if (token && userReplies.length > 0) {
-      console.log(`[Reddit Sync] Fetching live stats for ${userReplies.length} replies`);
+    const userReplies = await RedditReply.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
+    if (userReplies.length === 0) return res.json([]);
+
+    const token = await getValidToken(userId);
+    if (token) {
       const ids = userReplies.map(r => r.redditCommentId).join(',');
       const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
         headers: {
@@ -2154,26 +2183,21 @@ app.get('/api/user/replies/sync', async (req, res) => {
         const data = await response.json();
         const liveItems = data.data.children;
 
-        liveItems.forEach(child => {
+        for (const child of liveItems) {
           const liveData = child.data;
-          const entry = sentReplies.find(r => r.redditCommentId === liveData.name);
-          if (entry) {
-            entry.ups = liveData.ups;
-            // num_comments is for posts, for comments we'd need to fetch more, but we can stick to upvotes for now
-            entry.replies = liveData.num_comments || entry.replies || 0;
-          }
-        });
-
-        // Refresh local history after sync
-        history = sentReplies.filter(r => String(r.userId) === String(userId));
+          await RedditReply.updateOne(
+            { redditCommentId: liveData.name },
+            { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
+          );
+        }
       }
     }
+    const updatedHistory = await RedditReply.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    res.json(updatedHistory);
   } catch (error) {
     console.error('[Reddit Sync Error] Non-critical sync failure:', error);
-    // Continue and return existing history even if sync fails
+    res.status(500).json({ error: 'Sync failed' });
   }
-
-  res.json(history);
 });
 
 // Fetch Real-time Reddit Profile (Karma)
