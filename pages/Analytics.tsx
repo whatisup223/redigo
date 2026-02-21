@@ -233,7 +233,36 @@ export const Analytics: React.FC = () => {
 
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
   const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
-  const totalClicks = activeLinks.reduce((a, b) => a + (b.clicks || 0), 0);
+
+  // Smart Clicks Calculation: If a filter is active, count clicks that happened in THAT period
+  const totalClicks = useMemo(() => {
+    if (dateFilter === 'all') return trackingLinks.reduce((a, b) => a + (b.clicks || 0), 0);
+
+    const now = new Date();
+    let msLimit = 0;
+    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+
+    return trackingLinks.reduce((total, link) => {
+      if (!link.clickDetails) return total + (msLimit === 0 ? (link.clicks || 0) : 0);
+
+      const recentClicks = link.clickDetails.filter((c: any) => {
+        const clickDate = new Date(c.timestamp);
+        if (msLimit > 0) return (now.getTime() - clickDate.getTime()) <= msLimit;
+        if (dateFilter === 'custom' && customRange.start && customRange.end) {
+          const start = new Date(customRange.start);
+          const end = new Date(customRange.end);
+          end.setHours(23, 59, 59);
+          return clickDate >= start && clickDate <= end;
+        }
+        return true;
+      }).length;
+
+      return total + recentClicks;
+    }, 0);
+  }, [trackingLinks, dateFilter, customRange]);
+
   const activeSubreddits = new Set([...activeHistory, ...activeLinks].map(r => r.subreddit)).size;
 
   const sentimentData = [
@@ -378,22 +407,25 @@ export const Analytics: React.FC = () => {
 
       <CreditsBanner plan={user?.plan || 'Starter'} credits={user?.credits || 0} />
 
-      <div className="flex p-1.5 bg-slate-100 rounded-[2rem] w-fit mx-auto lg:mx-0">
-        <button onClick={() => setActiveTab('comments')} className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'comments' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
-          <MessageSquare size={18} className={activeTab === 'comments' ? 'text-orange-600' : ''} />
-          COMMENTS
-        </button>
-        <button onClick={() => setActiveTab('posts')} className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'posts' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
-          <PenTool size={18} className={activeTab === 'posts' ? 'text-orange-600' : ''} />
-          POSTS
-        </button>
-        <button onClick={() => setActiveTab('links')} className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'links' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
-          <Link2 size={18} className={activeTab === 'links' ? 'text-blue-600' : ''} />
-          LINKS
-        </button>
+      {/* Scrollable Tabs Wrapper */}
+      <div className="w-full overflow-x-auto pb-4 -mb-4 custom-scrollbar lg:overflow-visible">
+        <div className="flex p-1.5 bg-slate-100 rounded-[2rem] w-fit mx-auto lg:mx-0 min-w-max">
+          <button onClick={() => setActiveTab('comments')} className={`flex items-center gap-2 px-6 lg:px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'comments' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
+            <MessageSquare size={18} className={activeTab === 'comments' ? 'text-orange-600' : ''} />
+            COMMENTS
+          </button>
+          <button onClick={() => setActiveTab('posts')} className={`flex items-center gap-2 px-6 lg:px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'posts' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
+            <PenTool size={18} className={activeTab === 'posts' ? 'text-orange-600' : ''} />
+            POSTS
+          </button>
+          <button onClick={() => setActiveTab('links')} className={`flex items-center gap-2 px-6 lg:px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'links' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
+            <Link2 size={18} className={activeTab === 'links' ? 'text-blue-600' : ''} />
+            LINKS
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard
           label={activeTab === 'links' ? "Total Clicks" : (activeTab === 'comments' ? "Total Upvotes" : "Post Karma")}
           value={activeTab === 'links' ? totalClicks.toLocaleString() : totalUpvotes.toLocaleString()}
@@ -537,41 +569,43 @@ export const Analytics: React.FC = () => {
             <table className="w-full text-sm font-medium">
               <thead className="bg-slate-50/50 text-slate-400 text-[11px] font-extrabold uppercase tracking-widest border-b border-slate-100">
                 <tr>
-                  <th className="px-10 py-5 text-left">{activeTab === 'links' ? 'Target Subreddit' : 'Origin'}</th>
-                  <th className="px-10 py-5 text-left">{activeTab === 'links' ? 'Original URL' : 'Content Preview'}</th>
-                  <th className="px-10 py-5 text-left">{activeTab === 'links' ? 'Clicks' : 'Performance'}</th>
-                  <th className="px-10 py-5 text-left">Date Deployed</th>
-                  <th className="px-10 py-5 text-right">Actions</th>
+                  <th className="px-4 md:px-10 py-5 text-left">{activeTab === 'links' ? 'Target Subreddit' : 'Origin'}</th>
+                  <th className="px-4 md:px-10 py-5 text-left">{activeTab === 'links' ? 'Original URL' : 'Content Preview'}</th>
+                  <th className="px-4 md:px-10 py-5 text-left">{activeTab === 'links' ? 'Clicks' : 'Performance'}</th>
+                  <th className="hidden md:table-cell px-10 py-5 text-left">Date Deployed</th>
+                  <th className="px-4 md:px-10 py-5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(activeTab === 'links' ? activeLinks : activeHistory).map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 group transition-all">
-                    <td className="px-10 py-6">
+                    <td className="px-4 md:px-10 py-6">
                       <span className={`font-black ${activeTab === 'links' ? 'text-blue-600' : 'text-slate-900'}`}>r/{row.subreddit}</span>
                     </td>
-                    <td className="px-10 py-6">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-bold text-slate-900 line-clamp-1">{activeTab === 'links' ? row.originalUrl : row.postTitle}</span>
+                    <td className="px-4 md:px-10 py-6">
+                      <div className="flex flex-col gap-0.5 max-w-[150px] md:max-w-xs">
+                        <span className="font-bold text-slate-900 truncate" title={activeTab === 'links' ? row.originalUrl : row.postTitle}>
+                          {activeTab === 'links' ? row.originalUrl : row.postTitle}
+                        </span>
                         {activeTab === 'comments' && <span className="text-[10px] text-slate-400 line-clamp-1 italic">"{row.comment}"</span>}
                       </div>
                     </td>
-                    <td className="px-10 py-6">
+                    <td className="px-4 md:px-10 py-6">
                       <div className="flex items-center gap-2">
                         <MousePointer2 size={14} className="text-blue-500" />
                         <span className="font-extrabold text-slate-700">{activeTab === 'links' ? row.clicks : row.ups}</span>
                         {activeTab !== 'links' && <><MessageSquare size={14} className="text-slate-300 ml-2" /><span className="text-slate-500 font-bold">{row.replies}</span></>}
                       </div>
                     </td>
-                    <td className="px-10 py-6 text-xs text-slate-400 font-bold">
+                    <td className="hidden md:table-cell px-10 py-6 text-xs text-slate-400 font-bold">
                       {new Date(row.createdAt || row.deployedAt).toLocaleString()}
                     </td>
-                    <td className="px-10 py-6 text-right">
+                    <td className="px-4 md:px-10 py-6 text-right">
                       {activeTab === 'links' ? (
-                        <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all active:scale-95">Copy Tracking Link</button>
+                        <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-3 md:px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-xs md:text-sm">Copy</button>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => setSelectedEntry(row)} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all">Details</button>
+                          <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
                           <a href={row.postUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
                         </div>
                       )}

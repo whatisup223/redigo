@@ -318,7 +318,11 @@ let plans = savedData.plans || [
 ];
 
 // Mock Tracking Database
-let trackingLinks = savedData.trackingLinks || [];
+
+// Tracking Links - Force it to be an array in settingsCache for 1:1 reference
+if (!settingsCache.trackingLinks) settingsCache.trackingLinks = [];
+const getTrackingLinks = () => settingsCache.trackingLinks;
+
 
 // ─── Tracking Redirector ──────────────────────────────────────────────────
 // Robust route to handle both with and without trailing slash
@@ -429,8 +433,8 @@ app.post('/api/tracking/create', (req, res) => {
     clickDetails: []
   };
 
-  trackingLinks.push(newLink);
-  saveSettings({ trackingLinks });
+  getTrackingLinks().push(newLink);
+  saveSettings({ trackingLinks: getTrackingLinks() });
   console.log(`[TRACKING] New link created: ${id} for user ${userId} -> ${trackingUrl}`);
 
   addSystemLog('INFO', `Tracking Link Created: ${id}`, {
@@ -443,10 +447,9 @@ app.post('/api/tracking/create', (req, res) => {
   res.json({ id, trackingUrl });
 });
 
-// ─── Get User Tracking Links ──────────────────────────────────────────────
 app.get('/api/tracking/user/:userId', (req, res) => {
   const { userId } = req.params;
-  const userLinks = trackingLinks.filter(l => l.userId == userId);
+  const userLinks = getTrackingLinks().filter(l => l.userId == userId);
   res.json(userLinks);
 });
 
