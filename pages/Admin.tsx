@@ -539,7 +539,7 @@ export const Admin: React.FC = () => {
                                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Awaiting Response</p>
                                                 <p className="text-3xl font-extrabold text-blue-600">{stats.ticketStats?.open || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
                                                 <Clock size={24} />
                                             </div>
                                         </div>
@@ -548,7 +548,7 @@ export const Admin: React.FC = () => {
                                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Under Review</p>
                                                 <p className="text-3xl font-extrabold text-orange-600">{stats.ticketStats?.inProgress || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
                                                 <AlertCircle size={24} />
                                             </div>
                                         </div>
@@ -557,7 +557,7 @@ export const Admin: React.FC = () => {
                                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Resolved Today</p>
                                                 <p className="text-3xl font-extrabold text-green-600">{stats.ticketStats?.resolved || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-green-50 text-green-600 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <div className="p-4 bg-green-50 text-green-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
                                                 <CheckCircle2 size={24} />
                                             </div>
                                         </div>
@@ -566,7 +566,7 @@ export const Admin: React.FC = () => {
                                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Archived/Closed</p>
                                                 <p className="text-3xl font-extrabold text-slate-500">{stats.ticketStats?.closed || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-slate-50 text-slate-500 rounded-2xl group-hover:rotate-12 transition-transform">
+                                            <div className="p-4 bg-slate-50 text-slate-500 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
                                                 <Archive size={24} />
                                             </div>
                                         </div>

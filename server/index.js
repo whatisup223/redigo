@@ -1075,8 +1075,9 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
       : 0;
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const systemLogs = await SystemLog.find({ timestamp: { $gte: oneHourAgo } });
     const recentErrors = systemLogs.filter(log =>
-      log.level === 'ERROR' && log.timestamp > oneHourAgo
+      log.level === 'ERROR'
     ).length;
 
     let healthStatus = 'Healthy';
