@@ -110,8 +110,8 @@ export const Comments: React.FC = () => {
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
     goal: 'help',
-    productMention: 'Redditgo',
-    productLink: 'https://redditgo.online',
+    productMention: '',
+    productLink: '',
     description: '',
     targetAudience: '',
     problemSolved: ''
@@ -142,7 +142,7 @@ export const Comments: React.FC = () => {
 
   // Check for draft on mount
   useEffect(() => {
-    const savedDraft = localStorage.getItem('redigo_comment_draft');
+    const savedDraft = localStorage.getItem('redditgo_comment_draft');
     if (savedDraft) {
       try {
         const draft = JSON.parse(savedDraft);
@@ -150,7 +150,7 @@ export const Comments: React.FC = () => {
           setShowDraftBanner(true);
         }
       } catch (e) {
-        localStorage.removeItem('redigo_comment_draft');
+        localStorage.removeItem('redditgo_comment_draft');
       }
     }
     setIsInitialCheckDone(true);
@@ -447,13 +447,13 @@ export const Comments: React.FC = () => {
       });
 
       // Avoid default selection if we have a draft pending or already a post selected
-      const hasDraft = localStorage.getItem('redigo_comment_draft');
+      const hasDraft = localStorage.getItem('redditgo_comment_draft');
       if (data.length > 0 && !selectedPost && !hasDraft) {
         setSelectedPost(data[0]);
       }
     } catch (err: any) {
       setPosts(MOCK_POSTS);
-      const hasDraft = localStorage.getItem('redigo_comment_draft');
+      const hasDraft = localStorage.getItem('redditgo_comment_draft');
       if (MOCK_POSTS.length > 0 && !selectedPost && !hasDraft) {
         setSelectedPost(MOCK_POSTS[0]);
       }

@@ -104,8 +104,8 @@ export const ContentArchitect: React.FC = () => {
         content: '',
         imagePrompt: '',
         imageUrl: '',
-        productMention: 'Redditgo',
-        productUrl: 'https://redditgo.online',
+        productMention: '',
+        productUrl: '',
         description: '',
         targetAudience: '',
         problemSolved: '',
@@ -200,6 +200,8 @@ export const ContentArchitect: React.FC = () => {
                 includeImage,
                 language
             }));
+        } else {
+            localStorage.removeItem('redditgo_post_draft');
         }
     }, [postData, step, includeBrandName, includeLink, useTracking, includeImage, language]);
 
