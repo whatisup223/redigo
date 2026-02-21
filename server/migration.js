@@ -36,6 +36,8 @@ async function migrateData() {
             await User.deleteMany({}); // Optional: clear collection before migration if starting fresh
             await User.insertMany(data.users.map(u => ({ ...u, _id: undefined })));
             console.log(`✅ Successfully migrated ${data.users.length} users!`);
+        } else {
+            console.log('ℹ️ No users found in JSON to migrate.');
         }
 
         // 2. Migrate Tracking Links
@@ -52,6 +54,8 @@ async function migrateData() {
             await Plan.deleteMany({});
             await Plan.insertMany(data.plans.map(p => ({ ...p, _id: undefined })));
             console.log('✅ Plans migrated.');
+        } else {
+            console.log('ℹ️ No plans found in JSON to migrate.');
         }
 
         // 4. Migrate Tickets

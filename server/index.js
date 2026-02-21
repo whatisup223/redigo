@@ -23,27 +23,33 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 
 // Connect to MongoDB
 if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('✅ Connected to MongoDB!'))
-    .catch(err => console.error('❌ Failed to connect to MongoDB:', err));
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('✅ Connected to MongoDB!');
+  } catch (err) {
+    console.error('❌ Failed to connect to MongoDB:', err);
+  }
 }
 
 let settingsCache = {};
 const savedData = {};
 
-try {
-  if (process.env.MONGO_URI) {
-    // Top-level await is safe in ES modules
-    const allSettings = await Setting.find({});
-    allSettings.forEach(s => {
-      savedData[s.key] = s.value;
-      settingsCache[s.key] = s.value;
-    });
-    console.log(`✅ Loaded ${allSettings.length} settings from MongoDB into cache`);
+const initSettings = async () => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const allSettings = await Setting.find({});
+      allSettings.forEach(s => {
+        savedData[s.key] = s.value;
+        settingsCache[s.key] = s.value;
+      });
+      console.log(`✅ Loaded ${allSettings.length} settings from MongoDB into cache`);
+    }
+  } catch (e) {
+    console.error('Failed to load settings from DB.', e);
   }
-} catch (e) {
-  console.error('Failed to load settings from DB.', e);
-}
+};
+
+await initSettings();
 
 const loadSettings = () => settingsCache;
 
@@ -2338,6 +2344,16 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
 }
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('❌ SERVER ERROR:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message,
+    path: req.path
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
