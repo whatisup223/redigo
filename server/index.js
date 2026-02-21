@@ -109,7 +109,14 @@ const DEFAULT_EMAIL_TEMPLATES = {
   }
 };
 
-const getEmailTemplates = () => settingsCache.emailTemplates || DEFAULT_EMAIL_TEMPLATES;
+const getEmailTemplates = () => {
+  const cached = settingsCache.emailTemplates || {};
+  const merged = { ...DEFAULT_EMAIL_TEMPLATES };
+  for (const key in cached) {
+    if (cached[key]) merged[key] = { ...merged[key], ...cached[key] };
+  }
+  return merged;
+};
 
 const sendEmail = async (templateId, to, variables = {}) => {
   try {
@@ -508,7 +515,7 @@ const generalAuth = async (req, res, next) => {
   const path = req.path.replace(/\/$/, '');
 
   // Exempt public routes explicitly
-  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
+  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
   if (publicRoutes.includes(path)) return next();
 
   // Try to extract user from token or ID
@@ -734,6 +741,35 @@ app.post('/api/auth/signup', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+// ─── Rate Limiting for Emails ───
+const emailRateLimits = new Map();
+
+const checkRateLimit = (ip, email, action) => {
+  const key = `${action}_${ip}_${email}`;
+  const now = Date.now();
+  const limitWindow = 15 * 60 * 1000; // 15 minutes
+  const maxRequests = 3;
+
+  if (!emailRateLimits.has(key)) {
+    emailRateLimits.set(key, { count: 1, resetAt: now + limitWindow });
+    return true; // allowed
+  }
+
+  const record = emailRateLimits.get(key);
+  if (now > record.resetAt) {
+    emailRateLimits.set(key, { count: 1, resetAt: now + limitWindow });
+    return true;
+  }
+
+  if (record.count >= maxRequests) {
+    return false; // blocked
+  }
+
+  record.count += 1;
+  return true;
+};
+
+// ─── Auth Endpoints ───
 
 app.post('/api/auth/verify-email', async (req, res) => {
   try {
@@ -766,6 +802,48 @@ app.post('/api/auth/verify-email', async (req, res) => {
   }
 });
 
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
+    if (!user) {
+      return res.status(400).json({ error: 'User not found.' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ error: 'Account is already verified.' });
+    }
+
+    // Rate Limiting
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    if (!checkRateLimit(ip, user.email, 'resend_verify')) {
+      return res.status(429).json({ error: 'Too many requests. Please try again after 15 minutes.' });
+    }
+
+    // Generate new token
+    const crypto = await import('crypto');
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    user.verificationToken = verificationToken;
+    user.verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    await user.save();
+
+    const host = req.get('host');
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const baseUrl = process.env.BASE_URL || `${protocol}://${host}`;
+    const verifyLink = `${baseUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
+
+    await sendEmail('verify_email', user.email, { name: user.name || 'there', verify_link: verifyLink });
+
+    res.json({ success: true, message: 'Verification email resent. Please check your inbox.' });
+  } catch (err) {
+    console.error('Resend verification error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -774,6 +852,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
 
     if (user) {
+      // Rate limit check
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      if (!checkRateLimit(ip, user.email, 'forgot_password')) {
+        return res.status(429).json({ error: 'Too many requests. Please try again after 15 minutes.' });
+      }
+
       // Check if user is banned or suspended
       if (user.status === 'Banned' || user.status === 'Suspended') {
         return res.status(403).json({

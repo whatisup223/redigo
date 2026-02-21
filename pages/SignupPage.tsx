@@ -12,6 +12,8 @@ export const SignupPage: React.FC = () => {
     const [isBlocked, setIsBlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [isResending, setIsResending] = useState(false);
+    const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const { signup } = useAuth();
     const navigate = useNavigate();
 
@@ -45,6 +47,28 @@ export const SignupPage: React.FC = () => {
             setError(err.message || 'An unexpected error occurred');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleResend = async () => {
+        setIsResending(true);
+        setResendStatus(null);
+        try {
+            const response = await fetch('/api/auth/resend-verification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            const data = await response.json();
+            if (response.ok) {
+                setResendStatus({ type: 'success', message: data.message || 'Verification email resent successfully!' });
+            } else {
+                setResendStatus({ type: 'error', message: data.error || 'Failed to resend email.' });
+            }
+        } catch (err: any) {
+            setResendStatus({ type: 'error', message: 'An unexpected error occurred.' });
+        } finally {
+            setIsResending(false);
         }
     };
 
@@ -126,17 +150,31 @@ export const SignupPage: React.FC = () => {
                                         </div>
                                     </div>
                                     <h3 className="text-xl font-extrabold text-emerald-800 mb-2">Check Your Email</h3>
-                                    <p className="text-emerald-700 font-medium leading-relaxed">
+                                    <p className="text-emerald-700 font-medium leading-relaxed mb-4">
                                         We've sent a verification link to <span className="font-bold">{email}</span>.
                                         Please verify your email to log in and access your dashboard.
                                     </p>
+
+                                    {resendStatus && (
+                                        <div className={`mt-4 p-3 rounded-xl text-sm font-bold ${resendStatus.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                            {resendStatus.message}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="text-center">
+                                <div className="text-center space-y-3">
                                     <button
                                         onClick={() => navigate('/login')}
                                         className="py-3 px-6 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors w-full"
                                     >
                                         Go to Login Page
+                                    </button>
+                                    <button
+                                        onClick={handleResend}
+                                        disabled={isResending}
+                                        className="py-3 px-6 bg-white text-slate-700 border border-slate-200 rounded-xl font-bold hover:bg-slate-50 transition-colors w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isResending ? <Loader2 className="animate-spin" size={18} /> : null}
+                                        {isResending ? 'Sending...' : "Didn't receive it? Resend"}
                                     </button>
                                 </div>
                             </div>

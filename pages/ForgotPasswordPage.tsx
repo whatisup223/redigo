@@ -9,6 +9,8 @@ export const ForgotPasswordPage: React.FC = () => {
     const [errorReason, setErrorReason] = useState<string | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isResending, setIsResending] = useState(false);
+    const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -40,6 +42,28 @@ export const ForgotPasswordPage: React.FC = () => {
             setError('Something went wrong. Please try again.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleResend = async () => {
+        setIsResending(true);
+        setResendStatus(null);
+        try {
+            const response = await fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            const data = await response.json();
+            if (response.ok) {
+                setResendStatus({ type: 'success', message: 'Email resent successfully!' });
+            } else {
+                setResendStatus({ type: 'error', message: data.error || 'Failed to resend email.' });
+            }
+        } catch (err: any) {
+            setResendStatus({ type: 'error', message: 'Something went wrong. Please try again.' });
+        } finally {
+            setIsResending(false);
         }
     };
 
@@ -112,35 +136,56 @@ export const ForgotPasswordPage: React.FC = () => {
                                 </div>
                             )}
                             {message && (
-                                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300 mb-4">
-                                    <div className="flex items-center gap-3 text-emerald-700">
-                                        <div className="bg-emerald-100 p-1.5 rounded-full">
-                                            <CheckCircle2 size={16} />
+                                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300 mb-4 text-center">
+                                    <div className="flex justify-center mb-3">
+                                        <div className="bg-emerald-100 p-2 rounded-full text-emerald-600">
+                                            <CheckCircle2 size={32} />
                                         </div>
-                                        <p className="text-sm font-bold leading-tight">{message}</p>
                                     </div>
+                                    <p className="text-emerald-800 font-bold mb-3 leading-relaxed">{message}</p>
+
+                                    {resendStatus && (
+                                        <div className={`mt-3 mb-3 p-2 rounded-xl text-sm font-bold ${resendStatus.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                            {resendStatus.message}
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={handleResend}
+                                        disabled={isResending}
+                                        className="py-2.5 px-5 bg-white text-emerald-700 border border-emerald-200 rounded-xl font-bold hover:bg-emerald-50 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                    >
+                                        {isResending ? <Loader2 className="animate-spin" size={16} /> : null}
+                                        {isResending ? 'Sending...' : "Didn't receive it? Resend"}
+                                    </button>
                                 </div>
                             )}
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-bold text-slate-700" htmlFor="email">Email address</label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                                    placeholder="name@company.com"
-                                    required
-                                />
-                            </div>
 
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                            >
-                                {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><Mail size={20} /> Send Reset Link</>}
-                            </button>
+                            {!message && (
+                                <>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-bold text-slate-700" htmlFor="email">Email address</label>
+                                        <input
+                                            type="email"
+                                            id="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                            placeholder="name@company.com"
+                                            required
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={isLoading}
+                                        className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><Mail size={20} /> Send Reset Link</>}
+                                    </button>
+                                </>
+                            )}
                         </form>
 
                         <div className="text-center">
