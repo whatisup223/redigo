@@ -1682,12 +1682,13 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
 
       delete updateData.extraCreditsToAdd;
       delete updateData.creditAdjustmentType;
+      const oldStatus = user.status;
 
       Object.assign(user, updateData);
       await user.save();
 
       // Send Notification Emails
-      if (req.body.status && req.body.status !== user.status) {
+      if (req.body.status && req.body.status !== oldStatus) {
         // Status changed (Banned, Suspended, Active)
         sendEmail('account_status_changed', user.email, {
           name: user.name || 'there',
