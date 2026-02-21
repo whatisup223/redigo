@@ -1584,6 +1584,121 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/analytics', adminAuth, async (req, res) => {
+  try {
+    const allUsers = await User.find({});
+
+    // 1. Revenue & Transactions
+    let totalRevenue = 0;
+    const revenueByDay = {}; // Last 30 days
+    const transactions = [];
+
+    // 2. Consumption (Credits Spent)
+    const consumptionByDay = {}; // Last 30 days
+
+    // 3. Plan Distribution
+    const planDistribution = {};
+
+    // 4. Totals & Activity
+    let totalCreditsCirculating = 0;
+    const liveFeed = [];
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    allUsers.forEach(u => {
+      totalCreditsCirculating += (u.credits || 0);
+
+      // Plan distribution
+      const pName = u.plan || 'Free';
+      planDistribution[pName] = (planDistribution[pName] || 0) + 1;
+
+      // Transactions (Revenue)
+      if (u.transactions && Array.isArray(u.transactions)) {
+        u.transactions.forEach(tx => {
+          const txDate = new Date(tx.date);
+          if (tx.amount) {
+            totalRevenue += tx.amount;
+            if (txDate >= thirtyDaysAgo) {
+              const dateKey = txDate.toISOString().split('T')[0];
+              revenueByDay[dateKey] = (revenueByDay[dateKey] || 0) + tx.amount;
+            }
+          }
+          if (txDate >= thirtyDaysAgo) {
+            transactions.push({
+              userName: u.name,
+              userEmail: u.email,
+              ...tx
+            });
+          }
+        });
+      }
+
+      // Consumption stats
+      if (u.usageStats && u.usageStats.history) {
+        u.usageStats.history.forEach(h => {
+          const hDate = new Date(h.date);
+          if (hDate >= thirtyDaysAgo) {
+            const dateKey = hDate.toISOString().split('T')[0];
+            consumptionByDay[dateKey] = (consumptionByDay[dateKey] || 0) + (h.cost || 0);
+          }
+          // Add to live feed
+          liveFeed.push({
+            userName: u.name,
+            userEmail: u.email,
+            ...h
+          });
+        });
+      }
+    });
+
+    // Top Consumers
+    const topConsumers = allUsers
+      .filter(u => u.role !== 'admin')
+      .map(u => ({
+        name: u.name,
+        email: u.email,
+        totalSpent: u.usageStats?.totalSpent || 0,
+        credits: u.credits,
+        plan: u.plan
+      }))
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 10);
+
+    // Sort activity and transactions
+    transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+    liveFeed.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Prepare chart data for last 30 days
+    const chartData = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      chartData.push({
+        date: key,
+        displayDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        revenue: revenueByDay[key] || 0,
+        consumption: consumptionByDay[key] || 0
+      });
+    }
+
+    res.json({
+      totalRevenue,
+      totalCreditsCirculating,
+      totalUsers: allUsers.length,
+      planDistribution: Object.entries(planDistribution).map(([name, value]) => ({ name, value })),
+      chartData,
+      topConsumers,
+      recentActivity: liveFeed.slice(0, 20),
+      recentTransactions: transactions.slice(0, 50)
+    });
+  } catch (err) {
+    console.error('Error fetching admin analytics:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Admin Logs
 app.get('/api/admin/logs', adminAuth, async (req, res) => {
   try {

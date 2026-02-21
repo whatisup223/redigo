@@ -57,6 +57,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const menuItems = [
         { icon: LayoutDashboard, label: 'Overview', path: '/admin' },
+        { icon: Activity, label: 'Analytics', path: '/admin/analytics' },
         { icon: Users, label: 'User Management', path: '/admin/users' },
         { icon: LifeBuoy, label: 'Support Center', path: '/admin/support' },
         { icon: Sliders, label: 'Configuration', path: '/admin/settings' },
