@@ -16,6 +16,7 @@ interface User {
     customDailyLimit?: number;
     lastUsageDate?: string;
     avatar?: string;
+    brandProfile?: any;
     transactions?: any[];
     connectedAccounts?: any[];
     usageStats?: {

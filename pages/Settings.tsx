@@ -217,6 +217,9 @@ export const Settings: React.FC = () => {
         if (user) {
             setProfileName(user.name || '');
             setAvatarUrl(user.avatar || '');
+            if (user.brandProfile && Object.keys(user.brandProfile).length > 0) {
+                setBrandProfile(prev => ({ ...prev, ...user.brandProfile }));
+            }
         }
         const fetchData = async () => {
             if (!user?.id) { setLoading(false); return; }
@@ -226,12 +229,21 @@ export const Settings: React.FC = () => {
                     fetch(`/api/user/brand-profile?userId=${user.id}`),
                     fetch('/api/plans')
                 ]);
+
                 if (redditRes.ok) {
                     const status = await redditRes.json();
                     setRedditStatus(status);
                 } else {
                     setRedditStatus({ connected: false, accounts: [] });
                 }
+
+                if (brandRes.ok) {
+                    const brandData = await brandRes.json();
+                    if (brandData && Object.keys(brandData).length > 0) {
+                        setBrandProfile(prev => ({ ...prev, ...brandData }));
+                    }
+                }
+
                 if (plansRes.ok) {
                     setPlans(await plansRes.json());
                 }
@@ -265,10 +277,21 @@ export const Settings: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.id, ...brandProfile })
             });
+
             if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || 'Save failed');
+                const errData = await res.json();
+                throw new Error(errData.error || 'Save failed');
             }
+
+            const responseData = await res.json();
+
+            // Update local auth context with new brand data and potential bonus credits
+            const updatePayload: any = { brandProfile: { ...brandProfile } };
+            if (responseData.credits !== undefined) {
+                updatePayload.credits = responseData.credits;
+            }
+            updateUser(updatePayload);
+
             setBrandSaved(true);
             setTimeout(() => setBrandSaved(false), 3000);
         } catch (err: any) {

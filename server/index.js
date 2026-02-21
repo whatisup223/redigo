@@ -664,6 +664,9 @@ app.post('/api/user/complete-onboarding', (req, res) => {
 
 app.post('/api/user/brand-profile', (req, res) => {
   const { userId, ...brandData } = req.body;
+
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+
   const index = users.findIndex(u => u.id == userId);
 
   if (index !== -1) {
@@ -671,17 +674,36 @@ app.post('/api/user/brand-profile', (req, res) => {
 
     // Check if this is the first time completing onboarding to award bonus
     let bonusAwarded = false;
-    if (!user.hasCompletedOnboarding || (user.credits === 0 && (!user.brandProfile || Object.keys(user.brandProfile).length === 0))) {
-      user.credits = (user.credits || 0) + 100;
-      bonusAwarded = true;
+    const isProfileEmpty = !user.brandProfile || Object.keys(user.brandProfile).length === 0;
+
+    if (!user.hasCompletedOnboarding || (user.credits <= 100 && isProfileEmpty)) {
+      // Award 100 bonus credits for setting up the first brand profile
+      if (!user.hasCompletedOnboarding) {
+        user.credits = (user.credits || 0) + 100;
+        bonusAwarded = true;
+      }
     }
 
+    // Update BOTH storage locations for consistency
     user.brandProfile = brandData;
+    brandProfiles[userId] = brandData;
     user.hasCompletedOnboarding = true; // Mark as complete
 
-    saveSettings({ users });
-    addSystemLog('INFO', `Brand profile updated for: ${user.email}`, { bonusAwarded });
-    res.json({ success: true, credits: user.credits, bonusAwarded });
+    saveSettings({ users, brandProfiles });
+
+    console.log(`[BRAND] Profile updated for user ${userId} (${user.email}). Bonus: ${bonusAwarded}`);
+    addSystemLog('INFO', `Brand profile updated for: ${user.email}`, {
+      userId,
+      brandName: brandData.brandName,
+      bonusAwarded
+    });
+
+    res.json({
+      success: true,
+      credits: user.credits,
+      bonusAwarded,
+      brandProfile: user.brandProfile
+    });
   } else {
     res.status(404).json({ error: 'User not found' });
   }
@@ -958,18 +980,7 @@ app.get('/api/user/brand-profile', (req, res) => {
   res.json(brandProfiles[userId] || DEFAULT_BRAND_PROFILE);
 });
 
-app.post('/api/user/brand-profile', (req, res) => {
-  try {
-    const { userId, brandName, description, targetAudience, problem, website, primaryColor, secondaryColor, brandTone, customTone } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId required' });
-    brandProfiles[userId] = { brandName, description, targetAudience, problem, website, primaryColor, secondaryColor, brandTone, customTone };
-    saveSettings({ brandProfiles });
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Brand profile save error:', err);
-    res.status(500).json({ error: 'Failed to save brand profile' });
-  }
-});
+// (Duplicate POST /api/user/brand-profile removed as it's now handled above)
 
 const saveTokens = (userId, username, tokenData) => {
   if (!userRedditTokens[userId]) userRedditTokens[userId] = {};

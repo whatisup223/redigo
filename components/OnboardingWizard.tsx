@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 export const OnboardingWizard: React.FC = () => {
-    const { user, completeOnboarding } = useAuth();
+    const { user, completeOnboarding, updateUser } = useAuth();
     const [step, setStep] = useState(() => {
         const saved = localStorage.getItem('onboarding_step');
         return saved ? parseInt(saved) : 1;
@@ -60,11 +60,23 @@ export const OnboardingWizard: React.FC = () => {
     const handleSaveBrand = async () => {
         setIsLoading(true);
         try {
-            await fetch('/api/user/brand-profile', {
+            const res = await fetch('/api/user/brand-profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user?.id, ...brandData })
             });
+
+            if (res.ok) {
+                const data = await res.json();
+                // Sync brand data and potential credits to local context
+                const updates: any = {};
+                if (data.brandProfile) updates.brandProfile = data.brandProfile;
+                if (data.credits) updates.credits = data.credits;
+
+                if (Object.keys(updates).length > 0) {
+                    updateUser(updates);
+                }
+            }
             handleNext();
         } catch (e) {
             alert("Failed to save brand profile");
