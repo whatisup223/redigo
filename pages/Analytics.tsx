@@ -391,23 +391,23 @@ export const Analytics: React.FC = () => {
       )}
 
       {selectedEntry && activeTab === 'links' && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col md:flex-row justify-end max-h-screen">
-          <div className="bg-white w-full md:w-[600px] h-full flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl relative">
-            <div className="absolute top-0 right-0 p-8 z-10">
-              <button onClick={() => setSelectedEntry(null)} className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors active:scale-95">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-2xl rounded-[2rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] animate-in zoom-in-95 duration-300 relative">
+
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <div className="flex items-center gap-3 mb-2 font-bold text-xs">
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-wider">Tracking Link</span>
+                  <span className="text-slate-400 flex items-center gap-1.5"><Clock size={12} /> {new Date(selectedEntry.createdAt).toLocaleDateString()}</span>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight truncate max-w-[200px] sm:max-w-sm md:max-w-md" title={selectedEntry.originalUrl}>{selectedEntry.originalUrl}</h2>
+                <div className="flex items-center gap-2 text-slate-500 font-bold mt-2">
+                  Targeted: <span className="text-orange-600">r/{selectedEntry.subreddit}</span>
+                </div>
+              </div>
+              <button onClick={() => setSelectedEntry(null)} className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors mt-auto mb-auto bg-white border border-slate-100 shadow-sm active:scale-95">
                 <X size={20} className="stroke-[3]" />
               </button>
-            </div>
-
-            <div className="p-10 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-3 mb-6 font-bold text-xs">
-                <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-wider">Tracking Link</span>
-                <span className="text-slate-400 flex items-center gap-1.5"><Clock size={12} /> {new Date(selectedEntry.createdAt).toLocaleDateString()}</span>
-              </div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2 truncate" title={selectedEntry.originalUrl}>{selectedEntry.originalUrl}</h2>
-              <div className="flex items-center gap-2 text-slate-500 font-bold">
-                Targeted: <span className="text-orange-600">r/{selectedEntry.subreddit}</span>
-              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
