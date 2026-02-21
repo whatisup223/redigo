@@ -62,6 +62,11 @@ export const Settings: React.FC = () => {
     const [isProfileSaving, setIsProfileSaving] = useState(false);
     const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+    // Password State
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+    const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
     const [previewInvoice, setPreviewInvoice] = useState<string | null>(null);
     const [plans, setPlans] = useState<any[]>([]);
 
@@ -353,6 +358,45 @@ export const Settings: React.FC = () => {
         }
     };
 
+    const handlePasswordChange = async () => {
+        if (!user?.id) return;
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'Passwords do not match!' });
+            return;
+        }
+        if (passwordData.newPassword.length < 6) {
+            setPasswordMessage({ type: 'error', text: 'New password must be at least 6 characters.' });
+            return;
+        }
+
+        setIsPasswordSaving(true);
+        setPasswordMessage(null);
+
+        try {
+            const response = await fetch(`/api/users/${user.id}/password`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to change password');
+            }
+
+            setPasswordMessage({ type: 'success', text: 'Password changed successfully!' });
+            setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            setTimeout(() => setPasswordMessage(null), 3000);
+        } catch (error: any) {
+            setPasswordMessage({ type: 'error', text: error.message || 'Failed to change password' });
+        } finally {
+            setIsPasswordSaving(false);
+        }
+    };
+
     if (!user) return (
         <div className="min-h-[400px] flex items-center justify-center">
             <RefreshCw className="animate-spin text-orange-600" size={32} />
@@ -491,6 +535,64 @@ export const Settings: React.FC = () => {
                                 >
                                     {isProfileSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
                                     Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="space-y-4">
+                        <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                            <Shield className="text-orange-600" size={20} /> Security & Password
+                        </h2>
+                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <label className="space-y-2">
+                                    <span className="text-sm font-bold text-slate-700">Current Password</span>
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={passwordData.currentPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
+                                    />
+                                </label>
+                                <label className="space-y-2">
+                                    <span className="text-sm font-bold text-slate-700">New Password</span>
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={passwordData.newPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
+                                    />
+                                </label>
+                                <label className="space-y-2">
+                                    <span className="text-sm font-bold text-slate-700">Confirm New Password</span>
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
+                                    />
+                                </label>
+                            </div>
+
+                            {passwordMessage && (
+                                <div className={`p-4 rounded-xl text-sm font-bold ${passwordMessage.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                    {passwordMessage.type === 'success' ? <CheckCircle2 className="inline mr-2" size={16} /> : null}
+                                    {passwordMessage.text}
+                                </div>
+                            )}
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={handlePasswordChange}
+                                    disabled={isPasswordSaving || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                                    className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black hover:bg-orange-600 transition-all disabled:opacity-50 disabled:grayscale flex items-center gap-2"
+                                >
+                                    {isPasswordSaving ? <RefreshCw className="animate-spin" size={16} /> : <Shield size={16} />}
+                                    Update Password
                                 </button>
                             </div>
                         </div>

@@ -1338,7 +1338,7 @@ app.put('/api/users/:id', async (req, res) => {
     if (user) {
       const { name, avatar } = req.body;
       if (name) user.name = name;
-      if (avatar) user.avatar = avatar;
+      if (avatar !== undefined) user.avatar = avatar;
 
       await user.save();
       const safeUser = user.toObject();
@@ -1348,6 +1348,45 @@ app.put('/api/users/:id', async (req, res) => {
       res.status(404).json({ error: 'User not found' });
     }
   } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Change Password Endpoint
+app.put('/api/users/:id/password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    const user = await User.findOne({ id: id.toString() });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify current password
+    let isMatch = false;
+    if (user.password.startsWith('$2')) {
+      isMatch = await bcrypt.compare(currentPassword, user.password);
+    } else {
+      isMatch = (user.password === currentPassword);
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash and save new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    addSystemLog('INFO', `User changed password: ${user.email}`);
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Password change error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
