@@ -33,7 +33,7 @@ const BRAND_TONES = [
 ];
 
 export const Settings: React.FC = () => {
-    const { user, logout, updateUser, syncUser } = useAuth();
+    const { user, login, token, logout, updateUser, syncUser } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
 
     useEffect(() => {
@@ -614,7 +614,10 @@ export const Settings: React.FC = () => {
                                         try {
                                             const res = await fetch(`/api/users/${user.id}/2fa`, {
                                                 method: 'PUT',
-                                                headers: { 'Content-Type': 'application/json' },
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'Authorization': `Bearer ${token}`
+                                                },
                                                 body: JSON.stringify({ enabled: !user.twoFactorEnabled })
                                             });
                                             if (res.ok) {
