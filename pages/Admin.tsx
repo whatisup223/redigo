@@ -35,7 +35,9 @@ import {
     MessageSquare,
     FileText,
     Image,
-    Mail
+    Mail,
+    Bell,
+    Code
 } from 'lucide-react';
 
 // Mock Data Types
@@ -125,7 +127,7 @@ export const Admin: React.FC = () => {
     };
 
     const activeTab = getActiveTab();
-    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp'>('ai');
+    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email'>('ai');
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -184,6 +186,10 @@ export const Admin: React.FC = () => {
         from: '',
         secure: false
     });
+    const [emailTemplates, setEmailTemplates] = useState<any>({});
+    const [isEmailSaving, setIsEmailSaving] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+    const [testEmailLoading, setTestEmailLoading] = useState<string | null>(null);
     const [stats, setStats] = useState({
         totalUsers: 0,
         activeSubscriptions: 0,
@@ -255,7 +261,7 @@ export const Admin: React.FC = () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
-            const [statsRes, usersRes, aiRes, stripeRes, redditRes, smtpRes, plansRes, logsRes] = await Promise.all([
+            const [statsRes, usersRes, aiRes, stripeRes, redditRes, smtpRes, plansRes, logsRes, emailRes] = await Promise.all([
                 fetch('/api/admin/stats', { headers }),
                 fetch('/api/admin/users', { headers }),
                 fetch('/api/admin/ai-settings', { headers }),
@@ -263,7 +269,8 @@ export const Admin: React.FC = () => {
                 fetch('/api/admin/reddit-settings', { headers }),
                 fetch('/api/admin/smtp-settings', { headers }),
                 fetch('/api/plans', { headers }),
-                fetch('/api/admin/logs', { headers })
+                fetch('/api/admin/logs', { headers }),
+                fetch('/api/admin/email-templates', { headers })
             ]);
 
             if (statsRes.ok) setStats(await statsRes.json());
@@ -272,6 +279,7 @@ export const Admin: React.FC = () => {
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
             if (redditRes.ok) setRedditSettings(await redditRes.json());
             if (smtpRes.ok) setSmtpSettings(await smtpRes.json());
+            if (emailRes.ok) setEmailTemplates(await emailRes.json());
             if (plansRes.ok) setPlans(await plansRes.json());
             if (logsRes.ok) setSystemLogs(await logsRes.json());
         } catch (error) {
@@ -499,6 +507,64 @@ export const Admin: React.FC = () => {
         } catch (e) {
             console.error(e);
             alert('Error saving SMTP settings.');
+        }
+    };
+
+    const handleSaveEmailTemplates = async (updatedTemplates?: any) => {
+        const token = localStorage.getItem('token');
+        setIsEmailSaving(true);
+        try {
+            const res = await fetch('/api/admin/email-templates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(updatedTemplates || emailTemplates)
+            });
+            if (res.ok) {
+                // Success - Fetch again to sync
+                const headers = { 'Authorization': `Bearer ${token}` };
+                const emailRes = await fetch('/api/admin/email-templates', { headers });
+                if (emailRes.ok) setEmailTemplates(await emailRes.json());
+                setEditingTemplate(null);
+            } else {
+                alert('Failed to save email templates.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving templates.');
+        } finally {
+            setIsEmailSaving(false);
+        }
+    };
+
+    const handleTestEmail = async (templateId: string) => {
+        const token = localStorage.getItem('token');
+        const userEmail = prompt('Enter email to send test to:', user?.email || '');
+        if (!userEmail) return;
+
+        setTestEmailLoading(templateId);
+        try {
+            const res = await fetch('/api/admin/email-templates/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ templateId, to: userEmail })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert('Test email sent successfully!');
+            } else {
+                alert(data.error || 'Failed to send test email.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error sending test email.');
+        } finally {
+            setTestEmailLoading(null);
         }
     };
 
@@ -840,7 +906,6 @@ export const Admin: React.FC = () => {
                         {activeTab === 'settings' && (
                             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* Sub-Navigation */}
-                                {/* Sub-Navigation */}
                                 <div className="flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl w-full md:w-fit border border-slate-200/60 overflow-x-auto no-scrollbar">
                                     <button
                                         onClick={() => setSettingsTab('ai')}
@@ -883,6 +948,13 @@ export const Admin: React.FC = () => {
                                     >
                                         <Shield size={18} />
                                         Security
+                                    </button>
+                                    <button
+                                        onClick={() => setSettingsTab('email')}
+                                        className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'email' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <Bell size={18} />
+                                        Email Automation
                                     </button>
                                 </div>
 
@@ -1403,8 +1475,7 @@ export const Admin: React.FC = () => {
                                                 </div>
 
                                                 {passwordMessage && (
-                                                    <div className={`p-4 rounded-2xl flex items-center gap-3 text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${passwordMessage.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
-                                                        }`}>
+                                                    <div className={`p-4 rounded-2xl flex items-center gap-3 text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${passwordMessage.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
                                                         {passwordMessage.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
                                                         {passwordMessage.text}
                                                     </div>
@@ -1515,6 +1586,144 @@ export const Admin: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
+
+                                    {settingsTab === 'email' && (
+                                        <div className="space-y-8 animate-in fade-in duration-500">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-purple-200">
+                                                        <Bell size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-slate-900">Email Automation</h2>
+                                                        <p className="text-slate-400 text-sm">Manage automated email notifications and templates.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                                {/* Template List */}
+                                                <div className="lg:col-span-1 space-y-4">
+                                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-2">Templates</h3>
+                                                    {Object.keys(emailTemplates).length === 0 ? (
+                                                        <div className="p-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-300 text-slate-400 italic">
+                                                            No templates found.
+                                                        </div>
+                                                    ) : (
+                                                        Object.entries(emailTemplates).map(([id, template]: [string, any]) => (
+                                                            <button
+                                                                key={id}
+                                                                onClick={() => setEditingTemplate(id)}
+                                                                className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center justify-between group ${editingTemplate === id ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-200' : 'bg-white border-slate-200 text-slate-700 hover:border-purple-300 hover:shadow-md'}`}
+                                                            >
+                                                                <div className="min-w-0">
+                                                                    <p className="font-bold truncate">{template.name || id}</p>
+                                                                    <p className={`text-[10px] font-bold uppercase tracking-wider ${editingTemplate === id ? 'text-purple-200' : 'text-slate-400'}`}>
+                                                                        {template.active ? '● Active' : '○ Inactive'}
+                                                                    </p>
+                                                                </div>
+                                                                <ChevronRight size={18} className={`transition-transform ${editingTemplate === id ? 'translate-x-1' : 'text-slate-300 group-hover:translate-x-1'}`} />
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+
+                                                {/* Editor */}
+                                                <div className="lg:col-span-2">
+                                                    {editingTemplate ? (
+                                                        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-6 animate-in slide-in-from-right-4 duration-300">
+                                                            <div className="flex items-center justify-between">
+                                                                <h3 className="text-lg font-bold text-slate-900">Edit {emailTemplates[editingTemplate].name}</h3>
+                                                                <div className="flex items-center gap-4">
+                                                                    <button
+                                                                        onClick={() => handleSaveEmailTemplates({
+                                                                            ...emailTemplates,
+                                                                            [editingTemplate]: { ...emailTemplates[editingTemplate], active: !emailTemplates[editingTemplate].active }
+                                                                        })}
+                                                                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${emailTemplates[editingTemplate].active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}
+                                                                    >
+                                                                        {emailTemplates[editingTemplate].active ? 'Active' : 'Inactive'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleTestEmail(editingTemplate)}
+                                                                        disabled={testEmailLoading === editingTemplate}
+                                                                        className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all flex items-center gap-2 text-xs font-bold"
+                                                                    >
+                                                                        {testEmailLoading === editingTemplate ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
+                                                                        Test
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-4">
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Subject</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-purple-50 focus:border-purple-500 focus:outline-none transition-all"
+                                                                        value={emailTemplates[editingTemplate].subject}
+                                                                        onChange={(e) => setEmailTemplates({
+                                                                            ...emailTemplates,
+                                                                            [editingTemplate]: { ...emailTemplates[editingTemplate], subject: e.target.value }
+                                                                        })}
+                                                                    />
+                                                                </label>
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block flex items-center justify-between">
+                                                                        HTML Content
+                                                                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                                                                            <Code size={12} />
+                                                                            HTML Supported
+                                                                        </span>
+                                                                    </span>
+                                                                    <textarea
+                                                                        className="w-full h-80 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-purple-50 focus:border-purple-500 focus:outline-none transition-all font-mono text-xs leading-relaxed"
+                                                                        value={emailTemplates[editingTemplate].body}
+                                                                        onChange={(e) => setEmailTemplates({
+                                                                            ...emailTemplates,
+                                                                            [editingTemplate]: { ...emailTemplates[editingTemplate], body: e.target.value }
+                                                                        })}
+                                                                    />
+                                                                </label>
+                                                            </div>
+
+                                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 italic">
+                                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                                    <Code size={12} /> Available Variables
+                                                                </p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {['name', 'plan_name', 'credits_added', 'final_balance', 'balance', 'ticket_id', 'subject', 'reply_message', 'reset_link'].map(v => (
+                                                                        <span key={v} className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-slate-500 text-[10px] font-mono">
+                                                                            {`{{${v}}}`}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+
+                                                            <button
+                                                                onClick={() => handleSaveEmailTemplates()}
+                                                                disabled={isEmailSaving}
+                                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-purple-600 hover:shadow-purple-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                                                            >
+                                                                {isEmailSaving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
+                                                                Save Template
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-full flex flex-col items-center justify-center p-12 bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-300 text-center space-y-4">
+                                                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-300 shadow-sm border border-slate-200">
+                                                                <Bell size={32} />
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="text-lg font-bold text-slate-900">Select a Template</h3>
+                                                                <p className="text-slate-400 text-sm">Choose a template from the list to preview or edit its content.</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1522,6 +1731,7 @@ export const Admin: React.FC = () => {
                         {/* Logs Tab */}
                         {activeTab === 'logs' && (
                             <div className="bg-slate-900 text-slate-300 p-8 rounded-[2.5rem] font-mono text-xs md:text-sm leading-relaxed shadow-2xl h-[600px] overflow-y-auto custom-scrollbar flex flex-col-reverse">
+
                                 <div>
                                     {systemLogs.length === 0 ? (
                                         <div className="text-center text-slate-500 py-10 italic">No system logs available yet...</div>

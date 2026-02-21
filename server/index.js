@@ -18,6 +18,7 @@ import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, R
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 
@@ -59,6 +60,111 @@ const saveSettings = (data) => {
     for (const [key, value] of Object.entries(data)) {
       Setting.findOneAndUpdate({ key }, { value }, { upsert: true }).exec().catch(err => console.error('Failed to save setting:', key, err));
     }
+  }
+};
+
+// ─── Email Service Logic ───────────────────────────────────────────────
+const DEFAULT_EMAIL_TEMPLATES = {
+  'welcome': {
+    name: 'Welcome Email',
+    subject: 'Welcome to Redditgo! 🚀',
+    body: `<h1>Welcome, {{name}}!</h1><p>We're thrilled to have you here. Redditgo is designed to help you scale your Reddit outreach authentically.</p><p>Get started by connecting your Reddit account in the dashboard.</p><p>Best,<br/>The Redditgo Team</p>`,
+    active: true
+  },
+  'reset_password': {
+    name: 'Reset Password',
+    subject: 'Reset your password - Redditgo',
+    body: `<h1>Password Reset Request</h1><p>You requested a password reset. Click the button below to set a new password:</p><p><a href="{{reset_link}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">Reset Password</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
+    active: true
+  },
+  'payment_success': {
+    name: 'Payment Successful',
+    subject: 'Payment Successful! 🎉',
+    body: `<h1>Thank you for your purchase!</h1><p>Your subscription to <strong>{{plan_name}}</strong> is now active.</p><p>Credits added: {{credits_added}}</p><p>Total balance: {{final_balance}}</p>`,
+    active: true
+  },
+  'low_credits': {
+    name: 'Low Credits Warning',
+    subject: 'Low Credits Warning ⚠️',
+    body: `<h1>Running low on credits!</h1><p>Hi {{name}}, your credit balance is down to {{balance}}.</p><p>To ensure your outreach doesn't stop, consider topping up or upgrading your plan.</p>`,
+    active: true
+  },
+  'ticket_created': {
+    name: 'Ticket Confirmation',
+    subject: 'Support Ticket Received #{{ticket_id}}',
+    body: `<h1>We've received your ticket!</h1><p>Hi {{name}}, thanks for reaching out. Our team is looking into your issue: <strong>{{subject}}</strong></p><p>You'll receive an email when we reply.</p>`,
+    active: true
+  },
+  'admin_reply': {
+    name: 'Admin Reply',
+    subject: 'New Reply to Ticket #{{ticket_id}}',
+    body: `<h1>You have a new reply!</h1><p>Hi {{name}}, an admin has replied to your ticket "<strong>{{subject}}</strong>":</p><div style="padding: 15px; background: #f3f4f6; border-radius: 10px; margin: 15px 0;">{{reply_message}}</div>`,
+    active: true
+  }
+};
+
+const getEmailTemplates = () => settingsCache.emailTemplates || DEFAULT_EMAIL_TEMPLATES;
+
+const sendEmail = async (templateId, to, variables = {}) => {
+  try {
+    const templates = getEmailTemplates();
+    const template = templates[templateId];
+
+    if (!template || !template.active) return;
+
+    if (!smtpSettings || !smtpSettings.host) {
+      console.warn('[EMAIL] SMTP not configured. Skipping email.');
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpSettings.host,
+      port: smtpSettings.port,
+      secure: smtpSettings.secure,
+      auth: {
+        user: smtpSettings.user,
+        pass: smtpSettings.pass
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+
+    let subject = template.subject;
+    let body = template.body;
+
+    // Replace variables
+    Object.entries(variables).forEach(([key, value]) => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      subject = subject.replace(regex, value);
+      body = body.replace(regex, value);
+    });
+
+    const mailOptions = {
+      from: smtpSettings.from || `"Redditgo" <${smtpSettings.user}>`,
+      to,
+      subject,
+      html: `
+        <div style="font-family: 'Inter', sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #EA580C; margin: 0;">Redditgo</h1>
+          </div>
+          <div style="line-height: 1.6;">
+            ${body}
+          </div>
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">
+            © ${new Date().getFullYear()} Redditgo. All rights reserved.
+          </div>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    addSystemLog('INFO', `Email sent: ${templateId} to ${to}`, { messageId: info.messageId });
+    return info;
+  } catch (err) {
+    addSystemLog('ERROR', `Email failed: ${templateId} to ${to}`, { error: err.message });
+    console.error('[EMAIL ERROR]', err);
   }
 };
 
@@ -147,6 +253,13 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
           await dbUser.save();
           addSystemLog('SUCCESS', `[Webhook] User ${emailToSearch} upgraded to ${plan}`);
           console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
+
+          // Send Payment Success Email
+          sendEmail('payment_success', emailToSearch, {
+            plan_name: plan,
+            credits_added: creditsToAdd.toString(),
+            final_balance: (currentCredits + creditsToAdd).toString()
+          });
         } else {
           addSystemLog('ERROR', `[Webhook] User ${emailToSearch} not found.`);
           console.warn(`[Webhook] ERROR: User ${emailToSearch} not found.`);
@@ -575,6 +688,9 @@ app.post('/api/auth/signup', async (req, res) => {
 
     await newUser.save();
     addSystemLog('SUCCESS', `New user registered: ${email}`, { userId: newUser.id || newUser._id });
+
+    // Send Welcome Email
+    sendEmail('welcome', email, { name: name || 'there' });
 
     const userObj = newUser.toObject();
     delete userObj.password;
@@ -1492,6 +1608,37 @@ app.post('/api/admin/smtp-settings', adminAuth, (req, res) => {
   res.json({ message: 'SMTP settings updated', settings: smtpSettings });
 });
 
+// Email Template Management
+app.get('/api/admin/email-templates', adminAuth, (req, res) => {
+  res.json(getEmailTemplates());
+});
+
+app.post('/api/admin/email-templates', adminAuth, (req, res) => {
+  const templates = req.body;
+  saveSettings({ emailTemplates: templates });
+  res.json({ message: 'Email templates updated' });
+});
+
+app.post('/api/admin/email-templates/test', adminAuth, async (req, res) => {
+  const { templateId, to, variables } = req.body;
+  try {
+    const info = await sendEmail(templateId, to, variables || {
+      name: 'Admin Tester',
+      subject: 'Test Subject',
+      reply_message: 'This is a test reply from the admin dashboard.',
+      ticket_id: '1234',
+      plan_name: 'Pro Plan',
+      credits_added: '500',
+      final_balance: '1200',
+      balance: '150'
+    });
+    if (info) res.json({ success: true, message: 'Test email sent!' });
+    else res.status(400).json({ error: 'Failed to send email. Check SMTP settings or template status.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Support Ticketing System ---
 
 app.get('/api/support/tickets', async (req, res) => {
@@ -1525,6 +1672,13 @@ app.post('/api/support/tickets', async (req, res) => {
     });
     await newTicket.save();
     res.status(201).json(newTicket);
+
+    // Send Ticket Confirmation Email
+    sendEmail('ticket_created', newTicket.userEmail || newTicket.email, {
+      name: newTicket.userName || 'Customer',
+      ticket_id: newTicket.id,
+      subject: newTicket.subject
+    });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
