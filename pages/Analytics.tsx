@@ -176,22 +176,42 @@ export const Analytics: React.FC = () => {
     return item.redditUsername === selectedAccount;
   });
 
-  const filteredTrackingLinks = trackingLinks.filter(item => {
-    const itemDate = new Date(item.createdAt || item.deployedAt);
-    const now = new Date();
+  const filteredTrackingLinks = useMemo(() => {
+    // If 'all' is selected, show everything
+    if (dateFilter === 'all') return trackingLinks;
 
-    if (dateFilter === '24h') return (now.getTime() - itemDate.getTime()) <= 24 * 60 * 60 * 1000;
-    if (dateFilter === '7d') return (now.getTime() - itemDate.getTime()) <= 7 * 24 * 60 * 60 * 1000;
-    if (dateFilter === '30d') return (now.getTime() - itemDate.getTime()) <= 30 * 24 * 60 * 60 * 1000;
-    if (dateFilter === 'all') return true;
-    if (dateFilter === 'custom' && customRange.start && customRange.end) {
-      const start = new Date(customRange.start);
-      const end = new Date(customRange.end);
-      end.setHours(23, 59, 59);
-      return itemDate >= start && itemDate <= end;
-    }
-    return true;
-  });
+    const now = new Date();
+    let msLimit = 0;
+    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+
+    return trackingLinks.filter(item => {
+      const createDate = new Date(item.createdAt || item.deployedAt);
+      const isCreatedRecently = msLimit > 0 ? (now.getTime() - createDate.getTime()) <= msLimit : true;
+
+      // Always show links that have recent clicks, even if created long ago
+      const hasRecentClicks = item.clickDetails?.some((c: any) => {
+        const clickDate = new Date(c.timestamp);
+        return msLimit > 0 ? (now.getTime() - clickDate.getTime()) <= msLimit : true;
+      });
+
+      // If it's a custom range
+      if (dateFilter === 'custom' && customRange.start && customRange.end) {
+        const start = new Date(customRange.start);
+        const end = new Date(customRange.end);
+        end.setHours(23, 59, 59);
+        const isCreatedInRange = createDate >= start && createDate <= end;
+        const hasClicksInRange = item.clickDetails?.some((c: any) => {
+          const clickDate = new Date(c.timestamp);
+          return clickDate >= start && clickDate <= end;
+        });
+        return isCreatedInRange || hasClicksInRange;
+      }
+
+      return isCreatedRecently || hasRecentClicks;
+    });
+  }, [trackingLinks, dateFilter, customRange]);
 
   const activeHistory = filteredHistory;
   const activeLinks = filteredTrackingLinks;
@@ -239,15 +259,24 @@ export const Analytics: React.FC = () => {
     if (dateFilter === 'all') return trackingLinks.reduce((a, b) => a + (b.clicks || 0), 0);
 
     const now = new Date();
-    let msLimit = 0;
-    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
-    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
-    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+    return filteredTrackingLinks.reduce((total, link) => {
+      // If we are looking at 'all', take the main click counter
+      if (dateFilter === 'all') return total + (link.clicks || 0);
 
-    return trackingLinks.reduce((total, link) => {
-      if (!link.clickDetails) return total + (msLimit === 0 ? (link.clicks || 0) : 0);
+      const now = new Date();
+      let msLimit = 0;
+      if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+      else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+      else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
 
-      const recentClicks = link.clickDetails.filter((c: any) => {
+      if (!link.clickDetails || link.clickDetails.length === 0) {
+        // Fallback if no details but link is new
+        const createDate = new Date(link.createdAt || link.deployedAt);
+        const isNew = msLimit > 0 ? (now.getTime() - createDate.getTime()) <= msLimit : true;
+        return total + (isNew ? (link.clicks || 0) : 0);
+      }
+
+      const recentClicksCount = link.clickDetails.filter((c: any) => {
         const clickDate = new Date(c.timestamp);
         if (msLimit > 0) return (now.getTime() - clickDate.getTime()) <= msLimit;
         if (dateFilter === 'custom' && customRange.start && customRange.end) {
@@ -259,9 +288,9 @@ export const Analytics: React.FC = () => {
         return true;
       }).length;
 
-      return total + recentClicks;
+      return total + recentClicksCount;
     }, 0);
-  }, [trackingLinks, dateFilter, customRange]);
+  }, [filteredTrackingLinks, dateFilter, customRange]);
 
   const activeSubreddits = new Set([...activeHistory, ...activeLinks].map(r => r.subreddit)).size;
 
