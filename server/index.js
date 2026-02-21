@@ -25,12 +25,30 @@ const loadSettings = () => {
   return {};
 };
 
-const saveSettings = (data) => {
-  const current = loadSettings();
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ ...current, ...data }, null, 2));
+// In-memory settings cache to avoid blocking the event loop on every save
+let settingsCache = {};
+
+const initSettingsCache = () => {
+  settingsCache = loadSettings();
 };
 
-const savedData = loadSettings();
+let _settingsSaveTimer = null;
+const saveSettings = (data) => {
+  // Merge into in-memory cache immediately (non-blocking)
+  Object.assign(settingsCache, data);
+
+  // Write to disk asynchronously with debounce (500ms)
+  if (_settingsSaveTimer) clearTimeout(_settingsSaveTimer);
+  _settingsSaveTimer = setTimeout(() => {
+    fs.writeFile(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2), (e) => {
+      if (e) console.error('Error saving settings:', e);
+    });
+  }, 500);
+};
+
+// Initialize cache from disk
+initSettingsCache();
+const savedData = settingsCache;
 
 const app = express();
 app.set('trust proxy', true); // Trust reverse proxy (EasyPanel/Nginx)
@@ -153,13 +171,15 @@ if (fs.existsSync(LOGS_FILE)) {
   }
 }
 
+let _logSaveTimer = null;
 const saveLogs = () => {
-  // debounce or just save
-  try {
-    fs.writeFileSync(LOGS_FILE, JSON.stringify(systemLogs, null, 2));
-  } catch (e) {
-    console.error('Error saving logs:', e);
-  }
+  // Debounced async save to avoid blocking the event loop on large log files
+  if (_logSaveTimer) clearTimeout(_logSaveTimer);
+  _logSaveTimer = setTimeout(() => {
+    fs.writeFile(LOGS_FILE, JSON.stringify(systemLogs, null, 2), (e) => {
+      if (e) console.error('Error saving logs:', e);
+    });
+  }, 2000);
 };
 
 const addSystemLog = (level, message, metadata = {}) => {
@@ -366,7 +386,21 @@ app.post('/api/tracking/create', (req, res) => {
     return res.status(403).json({ error: 'Link tracking is not included in your current plan.' });
   }
 
+  let baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+
+  // SANITIZATION: Remove trailing slash if exists to prevent double slashes in URL
+  if (baseUrl.endsWith('/')) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
+
+  // Ensure protocol if missing in env var
+  if (!baseUrl.startsWith('http')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+
   const id = Math.random().toString(36).substring(2, 8);
+  const trackingUrl = `${baseUrl}/t/${id}`;
+
   const newLink = {
     id,
     userId: Number(userId),
@@ -381,10 +415,7 @@ app.post('/api/tracking/create', (req, res) => {
 
   trackingLinks.push(newLink);
   saveSettings({ trackingLinks });
-  console.log(`[TRACKING] New link created: ${id} for user ${userId}`);
-
-  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-  const trackingUrl = `${baseUrl}/t/${id}`;
+  console.log(`[TRACKING] New link created: ${id} for user ${userId} -> ${trackingUrl}`);
 
   addSystemLog('INFO', `Tracking Link Created: ${id}`, {
     userId,

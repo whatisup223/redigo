@@ -110,8 +110,8 @@ export const Comments: React.FC = () => {
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
     goal: 'help',
-    productMention: '',
-    productLink: '',
+    productMention: 'Redditgo',
+    productLink: 'https://redditgo.online',
     description: '',
     targetAudience: '',
     problemSolved: ''

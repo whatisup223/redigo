@@ -1,5 +1,47 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  BarChart3,
+  TrendingUp,
+  Users,
+  MessageSquare,
+  ExternalLink,
+  Search,
+  Calendar,
+  Filter,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronRight,
+  MousePointer2,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Layout,
+  Globe,
+  Share2,
+  RefreshCw,
+  LayoutList,
+  PenTool,
+  Image as ImageIcon,
+  ChevronDown,
+  Check,
+  Link2,
+  PieChart as PieIcon,
+  Bell,
+  Settings,
+  Plus,
+  X,
+  Info,
+  Clipboard,
+  Eye,
+  EyeOff,
+  Trash2,
+  Edit,
+  Zap,
+  Rocket,
+  Star,
+  Tag
+} from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -14,7 +56,6 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { TrendingUp, Users, MousePointer2, ExternalLink, Calendar, ChevronRight, LayoutList, RefreshCw, BarChart3, PieChart as PieIcon, MessageSquare, PenTool, Image as ImageIcon, ChevronDown, Check, Link2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CreditsBanner from '../components/CreditsBanner';
 
@@ -28,41 +69,14 @@ const DATA = [
   { name: 'Sun', upvotes: 900, replies: 56, reach: 3100 },
 ];
 
-const POSTS_MOCK = [
-  {
-    id: 'p1',
-    type: 'post',
-    subreddit: 'SaaS',
-    postTitle: 'How we reached $10k MRR in 3 months with Reddit',
-    deployedAt: new Date(Date.now() - 86400000).toISOString(),
-    ups: 145,
-    replies: 32,
-    productMention: 'Redigo',
-    imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60',
-    content: 'We spent months trying to figure out the right way to engage on Reddit without being spammy. Here is our blueprint...'
-  },
-  {
-    id: 'p2',
-    type: 'post',
-    subreddit: 'indiehackers',
-    postTitle: 'What is your favorite tool for Reddit marketing?',
-    deployedAt: new Date(Date.now() - 172800000).toISOString(),
-    ups: 89,
-    replies: 12,
-    productMention: 'Redigo',
-    imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60',
-    content: 'Looking for tools that help manage outreach and stay authentic. Any recommendations?'
-  }
-];
-
 const StatCard = ({ label, value, trend, icon: Icon, color }: any) => (
   <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm hover:shadow-xl transition-all duration-500 group">
     <div className="flex items-start justify-between mb-6">
       <div className={`p-4 rounded-2xl ${color} shadow-lg transition-transform group-hover:scale-110`}>
         <Icon size={26} />
       </div>
-      <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${trend.startsWith('+') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-        <TrendingUp size={12} className={trend.startsWith('-') ? 'rotate-180' : ''} />
+      <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${trend?.startsWith('+') ? 'bg-green-50 text-green-600' : (trend?.startsWith('-') ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500')}`}>
+        <TrendingUp size={12} className={trend?.startsWith('-') ? 'rotate-180' : ''} />
         {trend}
       </div>
     </div>
@@ -85,7 +99,6 @@ export const Analytics: React.FC = () => {
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [trackingLinks, setTrackingLinks] = useState<any[]>([]);
 
-
   // Date Filtering State
   const [dateFilter, setDateFilter] = useState<'24h' | '7d' | '30d' | 'all' | 'custom'>('7d');
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -101,37 +114,32 @@ export const Analytics: React.FC = () => {
 
   const fetchData = async () => {
     if (!user?.id) return;
-    syncUser(); // Ensure credits and daily limits are accurate for analytics view
+    syncUser();
     try {
-      // Fetch comments history
       const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}`);
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(Array.isArray(historyData) ? historyData : []);
       }
 
-      // Fetch posts history
       const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}`);
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         setPostsHistory(Array.isArray(postsData) ? postsData : []);
       }
 
-      // Fetch tracking links
       const tracksRes = await fetch(`/api/tracking/user/${user.id}`);
       if (tracksRes.ok) {
         const tracksData = await tracksRes.json();
         setTrackingLinks(Array.isArray(tracksData) ? tracksData : []);
       }
 
-      // Fetch profile
       const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}`);
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         setProfile(profileData);
       }
 
-      // Fetch reddit accounts
       const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}`);
       if (statusRes.ok) {
         const status = await statusRes.json();
@@ -139,7 +147,6 @@ export const Analytics: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch data', err);
-      // We don't want to spam with toasts if it's a minor sync error, but log it
     } finally {
       setIsLoading(false);
     }
@@ -149,7 +156,6 @@ export const Analytics: React.FC = () => {
     fetchData();
   }, [user, selectedAccount]);
 
-  // Filter History by Date Logic
   const filteredHistory = (activeTab === 'comments' ? history : postsHistory).filter(item => {
     const itemDate = new Date(item.deployedAt);
     const now = new Date();
@@ -161,7 +167,7 @@ export const Analytics: React.FC = () => {
     if (dateFilter === 'custom' && customRange.start && customRange.end) {
       const start = new Date(customRange.start);
       const end = new Date(customRange.end);
-      end.setHours(23, 59, 59); // Include the whole end day
+      end.setHours(23, 59, 59);
       return itemDate >= start && itemDate <= end;
     }
     return true;
@@ -170,34 +176,41 @@ export const Analytics: React.FC = () => {
     return item.redditUsername === selectedAccount;
   });
 
-  // Process active history based on tab
   const activeHistory = filteredHistory;
 
-  // Process history for charts
-  const chartData = (activeTab === 'links' ? trackingLinks : activeHistory).reduce((acc: any[], current) => {
-    const timestamp = activeTab === 'links' ? (current.createdAt || current.deployedAt) : current.deployedAt;
-    const date = new Date(timestamp).toLocaleDateString('en-US', { weekday: 'short' });
-    const existing = acc.find(d => d.name === date);
+  const chartData = useMemo(() => {
+    const dataByDate: Record<string, any> = {};
+    const sourceData = activeTab === 'links' ? trackingLinks : activeHistory;
 
-    if (activeTab === 'links') {
-      const clicks = Number(current.clicks) || 0;
-      if (existing) {
-        existing.clicks += clicks;
-      } else {
-        acc.push({ name: date, clicks: clicks, upvotes: 0, replies: 0 });
-      }
-    } else {
-      if (existing) {
-        existing.upvotes += current.ups || 0;
-        existing.replies += current.replies || 0;
-      } else {
-        acc.push({ name: date, upvotes: current.ups || 0, replies: current.replies || 0, clicks: 0 });
-      }
-    }
-    return acc;
-  }, []);
+    sourceData.forEach(current => {
+      const ts = activeTab === 'links' ? (current.createdAt || current.deployedAt) : current.deployedAt;
+      if (!ts) return;
 
-  // Ensure we have at least some data to show trends, even if zero
+      const dateObj = new Date(ts);
+      if (isNaN(dateObj.getTime())) return;
+
+      const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      if (!dataByDate[dateKey]) {
+        dataByDate[dateKey] = { name: dateKey, clicks: 0, upvotes: 0, replies: 0 };
+      }
+
+      if (activeTab === 'links') {
+        dataByDate[dateKey].clicks += Number(current.clicks) || 0;
+      } else {
+        dataByDate[dateKey].upvotes += current.ups || 0;
+        dataByDate[dateKey].replies += current.replies || 0;
+      }
+    });
+
+    return Object.values(dataByDate).sort((a, b) => {
+      const year = new Date().getFullYear();
+      const dateA = new Date(a.name + ' ' + year);
+      const dateB = new Date(b.name + ' ' + year);
+      return dateA.getTime() - dateB.getTime();
+    });
+  }, [activeTab, trackingLinks, activeHistory]);
+
   const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0, clicks: 0 }];
 
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
@@ -205,14 +218,12 @@ export const Analytics: React.FC = () => {
   const totalClicks = trackingLinks.reduce((a, b) => a + (b.clicks || 0), 0);
   const activeSubreddits = new Set([...activeHistory, ...trackingLinks].map(r => r.subreddit)).size;
 
-  // Sentiment Logic (Calculated based on upvotes/replies ratio)
   const sentimentData = [
     { name: 'Supportive', value: activeHistory.filter(h => h.ups > 2).length, color: '#10b981' },
     { name: 'Neutral', value: activeHistory.filter(h => h.ups <= 2 && h.ups >= 0).length, color: '#94a3b8' },
     { name: 'Critical', value: activeHistory.filter(h => h.ups < 0).length, color: '#ef4444' },
   ];
 
-  // Top Communities Logic
   const subPerformance = activeHistory.reduce((acc: any, curr) => {
     acc[curr.subreddit] = (acc[curr.subreddit] || 0) + (curr.ups || 0) + (curr.replies || 0);
     return acc;
@@ -225,7 +236,13 @@ export const Analytics: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
-      {/* Detail Modal */}
+      {toast && (
+        <div className={`fixed top-10 right-10 z-[300] p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-10 duration-500 ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
+          {toast.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
+          <span className="font-bold">{toast.message}</span>
+        </div>
+      )}
+
       {selectedEntry && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-4xl rounded-[2rem] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] animate-in zoom-in-95 duration-300">
@@ -239,16 +256,12 @@ export const Analytics: React.FC = () => {
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">r/{selectedEntry.subreddit} • {new Date(selectedEntry.deployedAt).toLocaleString()}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedEntry(null)}
-                className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors"
-              >
-                <RefreshCw size={24} className="rotate-45" />
+              <button onClick={() => setSelectedEntry(null)} className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors">
+                <X size={24} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-10 space-y-10">
-              {/* Original Post */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -265,7 +278,6 @@ export const Analytics: React.FC = () => {
                 </div>
               </div>
 
-              {/* Our AI Reply */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
@@ -281,18 +293,8 @@ export const Analytics: React.FC = () => {
             </div>
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
-              <button
-                onClick={() => setSelectedEntry(null)}
-                className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95"
-              >
-                Close
-              </button>
-              <a
-                href={selectedEntry.postUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2"
-              >
+              <button onClick={() => setSelectedEntry(null)} className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95">Close</button>
+              <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2">
                 Verify on Live Reddit <ExternalLink size={18} />
               </a>
             </div>
@@ -300,7 +302,7 @@ export const Analytics: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="space-y-1">
           <p className="text-slate-400 font-semibold text-sm">Welcome back, {user?.name?.split(' ')[0] || 'there'}</p>
           <div className="flex items-center gap-2">
@@ -309,165 +311,62 @@ export const Analytics: React.FC = () => {
           </div>
           <p className="text-slate-400 font-medium text-sm pl-4">Real-time data for your Reddit ecosystem.</p>
         </div>
-        <div className="relative">
-          <button
-            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-            className="flex items-center gap-3 px-6 py-4 bg-white border border-slate-200/60 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all font-bold text-slate-600 active:scale-95"
-          >
-            <Calendar size={20} className="text-orange-600" />
-            <span className="min-w-[100px] text-left">
-              {dateFilter === '24h' ? 'Past 24 Hours' :
-                dateFilter === '7d' ? 'Past 7 Days' :
-                  dateFilter === '30d' ? 'Past 30 Days' :
-                    dateFilter === 'all' ? 'All Time' :
-                      'Custom Range'}
-            </span>
-            <ChevronDown size={18} className={`text-slate-300 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
-          </button>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative">
+            <button onClick={() => setShowFilterDropdown(!showFilterDropdown)} className="flex items-center gap-3 px-6 py-4 bg-white border border-slate-200/60 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all font-bold text-slate-600 active:scale-95">
+              <Calendar size={20} className="text-orange-600" />
+              <span className="min-w-[100px] text-left">
+                {dateFilter === '24h' ? 'Past 24 Hours' :
+                  dateFilter === '7d' ? 'Past 7 Days' :
+                    dateFilter === '30d' ? 'Past 30 Days' :
+                      dateFilter === 'all' ? 'All Time' :
+                        'Custom Range'}
+              </span>
+              <ChevronDown size={18} className={`text-slate-300 transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
+            </button>
 
-          {/* Account Filter */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200/60 rounded-[1.5rem] px-4 py-3 shadow-sm">
-            <Users size={18} className="text-blue-600" />
-            <select
-              value={selectedAccount}
-              onChange={(e) => setSelectedAccount(e.target.value)}
-              className="bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none min-w-[140px] cursor-pointer"
-            >
-              <option value="all">All Accounts</option>
-              {(redditStatus.accounts || []).map(acc => (
-                <option key={acc.username} value={acc.username}>u/{acc.username}</option>
-              ))}
-            </select>
+            {showFilterDropdown && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowFilterDropdown(false)}></div>
+                <div className="absolute top-full right-0 mt-3 w-64 bg-white rounded-3xl shadow-2xl border border-slate-100 p-3 z-20 animate-in fade-in zoom-in-95 duration-200">
+                  {['24h', '7d', '30d', 'all'].map((id) => (
+                    <button key={id} onClick={() => { setDateFilter(id as any); setShowFilterDropdown(false); }} className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-sm font-bold transition-colors ${dateFilter === id ? 'bg-orange-50 text-orange-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                      {id === '24h' ? 'Past 24 Hours' : id === '7d' ? 'Past 7 Days' : id === '30d' ? 'Past 30 Days' : 'All Time'}
+                      {dateFilter === id && <Check size={16} />}
+                    </button>
+                  ))}
+                  <div className="h-px bg-slate-100 my-2 mx-5"></div>
+                  <button onClick={() => { setShowDatePicker(true); setShowFilterDropdown(false); }} className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-sm font-bold transition-colors ${dateFilter === 'custom' ? 'bg-orange-50 text-orange-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    Custom Range...
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          {showFilterDropdown && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowFilterDropdown(false)}></div>
-              <div className="absolute top-full right-0 mt-3 w-64 bg-white rounded-3xl shadow-2xl border border-slate-100 p-3 z-20 animate-in fade-in zoom-in-95 duration-200">
-                {[
-                  { id: '24h', label: 'Past 24 Hours' },
-                  { id: '7d', label: 'Past 7 Days' },
-                  { id: '30d', label: 'Past 30 Days' },
-                  { id: 'all', label: 'All Time' }
-                ].map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => {
-                      setDateFilter(option.id as any);
-                      setShowFilterDropdown(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-sm font-bold transition-colors ${dateFilter === option.id ? 'bg-orange-50 text-orange-600 font-extrabold' : 'text-slate-500 hover:bg-slate-50'}`}
-                  >
-                    {option.label}
-                    {dateFilter === option.id && <Check size={16} />}
-                  </button>
-                ))}
-                <div className="h-px bg-slate-100 my-2 mx-5"></div>
-                <button
-                  onClick={() => {
-                    setShowDatePicker(true);
-                    setShowFilterDropdown(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-sm font-bold transition-colors ${dateFilter === 'custom' ? 'bg-orange-50 text-orange-600 font-extrabold' : 'text-slate-500 hover:bg-slate-50'}`}
-                >
-                  Custom Range...
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </>
-          )}
+          <div className="flex items-center gap-2 bg-white border border-slate-200/60 rounded-[1.5rem] px-4 py-4 shadow-sm h-[60px]">
+            <Users size={18} className="text-blue-600" />
+            <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none min-w-[140px] cursor-pointer">
+              <option value="all">All Accounts</option>
+              {redditStatus.accounts?.map(acc => <option key={acc.username} value={acc.username}>u/{acc.username}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Custom Date Picker Modal */}
-      {showDatePicker && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 space-y-6 md:space-y-8 animate-in zoom-in-95 duration-300">
-            <div className="text-center space-y-2">
-              <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                <Calendar size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900">Custom Range</h3>
-              <p className="text-sm font-bold text-slate-400">Select start and end dates</p>
-            </div>
+      <CreditsBanner plan={user?.plan || 'Starter'} credits={user?.credits || 0} />
 
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Start Date</label>
-                <input
-                  type="date"
-                  value={customRange.start}
-                  onChange={(e) => setCustomRange({ ...customRange, start: e.target.value })}
-                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 focus:outline-none focus:border-orange-500 transition-all"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">End Date</label>
-                <input
-                  type="date"
-                  value={customRange.end}
-                  onChange={(e) => setCustomRange({ ...customRange, end: e.target.value })}
-                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-900 focus:outline-none focus:border-orange-500 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={() => setShowDatePicker(false)}
-                className="py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setDateFilter('custom');
-                  setShowDatePicker(false);
-                }}
-                disabled={!customRange.start || !customRange.end}
-                className="py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:grayscale"
-              >
-                Apply Filter
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <CreditsBanner
-        plan={user?.plan || 'Starter'}
-        credits={user?.credits || 0}
-      />
-
-      {/* Tab Switcher */}
       <div className="flex p-1.5 bg-slate-100 rounded-[2rem] w-fit mx-auto lg:mx-0">
-        <button
-          onClick={() => setActiveTab('comments')}
-          className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'comments'
-            ? 'bg-white text-slate-900 shadow-xl shadow-slate-200'
-            : 'text-slate-400 hover:text-slate-600'
-            }`}
-        >
+        <button onClick={() => setActiveTab('comments')} className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'comments' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
           <MessageSquare size={18} className={activeTab === 'comments' ? 'text-orange-600' : ''} />
           COMMENTS
         </button>
-        <button
-          onClick={() => setActiveTab('posts')}
-          className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'posts'
-            ? 'bg-white text-slate-900 shadow-xl shadow-slate-200'
-            : 'text-slate-400 hover:text-slate-600'
-            }`}
-        >
+        <button onClick={() => setActiveTab('posts')} className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'posts' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
           <PenTool size={18} className={activeTab === 'posts' ? 'text-orange-600' : ''} />
           POSTS
         </button>
-        <button
-          onClick={() => setActiveTab('links')}
-          className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'links'
-            ? 'bg-white text-slate-900 shadow-xl shadow-slate-200'
-            : 'text-slate-400 hover:text-slate-600'
-            }`}
-        >
+        <button onClick={() => setActiveTab('links')} className={`flex items-center gap-2 px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'links' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
           <Link2 size={18} className={activeTab === 'links' ? 'text-blue-600' : ''} />
           LINKS
         </button>
@@ -479,33 +378,32 @@ export const Analytics: React.FC = () => {
           value={activeTab === 'links' ? totalClicks.toLocaleString() : totalUpvotes.toLocaleString()}
           trend={activeTab === 'links' ? `${trackingLinks.length} Links` : "+12.5%"}
           icon={activeTab === 'links' ? MousePointer2 : (activeTab === 'comments' ? TrendingUp : BarChart3)}
-          color={activeTab === 'links' ? "bg-blue-600 text-white shadow-blue-100" : "bg-orange-600 text-white shadow-orange-100"}
+          color={activeTab === 'links' ? "bg-blue-600 text-white" : "bg-orange-600 text-white"}
         />
         <StatCard
           label={activeTab === 'links' ? "Avg Click Rate" : "Account Authority"}
           value={activeTab === 'links' ? (trackingLinks.length > 0 ? (totalClicks / trackingLinks.length).toFixed(1) : "0.0") : (profile ? (activeTab === 'comments' ? profile.commentKarma.toLocaleString() : (profile.linkKarma || profile.totalKarma).toLocaleString()) : "---")}
           trend="Live"
           icon={activeTab === 'links' ? TrendingUp : Users}
-          color={activeTab === 'links' ? "bg-emerald-600 text-white shadow-emerald-100" : "bg-blue-600 text-white shadow-blue-100"}
+          color={activeTab === 'links' ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"}
         />
         <StatCard
-          label={activeTab === 'links' ? "Link Conversions" : (activeTab === 'comments' ? "Engagement Impact" : "Viral Reach")}
+          label={activeTab === 'links' ? "Link Conversions" : "Engagement Impact"}
           value={activeTab === 'links' ? totalClicks.toLocaleString() : (totalUpvotes + totalReplies).toLocaleString()}
           trend={activeTab === 'links' ? "100%" : "+15.0%"}
-          icon={activeTab === 'links' ? ExternalLink : (activeTab === 'comments' ? MousePointer2 : TrendingUp)}
-          color={activeTab === 'links' ? "bg-indigo-600 text-white shadow-indigo-100" : "bg-purple-600 text-white shadow-purple-100"}
+          icon={activeTab === 'links' ? ExternalLink : MousePointer2}
+          color={activeTab === 'links' ? "bg-indigo-600 text-white" : "bg-purple-600 text-white"}
         />
         <StatCard
           label="Target Communities"
           value={activeSubreddits}
           trend="Active"
           icon={ExternalLink}
-          color="bg-slate-900 text-white shadow-slate-100"
+          color="bg-slate-900 text-white"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Sentiment Distribution */}
         <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-xl font-extrabold text-slate-900">Sentiment Pulse</h2>
@@ -514,23 +412,10 @@ export const Analytics: React.FC = () => {
           <div className="h-[280px] relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={sentimentData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {sentimentData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                  ))}
+                <Pie data={sentimentData} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={8} dataKey="value">
+                  {sentimentData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />)}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)' }}
-                  itemStyle={{ fontWeight: 800 }}
-                />
+                <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)' }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -551,7 +436,6 @@ export const Analytics: React.FC = () => {
           </div>
         </div>
 
-        {/* Top Communities */}
         <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-xl font-extrabold text-slate-900">Top Communities</h2>
@@ -565,211 +449,111 @@ export const Analytics: React.FC = () => {
                   <span className="text-xs font-bold text-slate-400">{sub.score} pts</span>
                 </div>
                 <div className="h-3 w-full bg-slate-50 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-1000 ${i === 0 ? 'bg-orange-600' : i === 1 ? 'bg-blue-600' : 'bg-purple-600'}`}
-                    style={{ width: `${(sub.score / topSubs[0].score) * 100}%` }}
-                  ></div>
+                  <div className={`h-full rounded-full transition-all duration-1000 ${i === 0 ? 'bg-orange-600' : i === 1 ? 'bg-blue-600' : 'bg-purple-600'}`} style={{ width: `${(sub.score / (topSubs[0]?.score || 1)) * 100}%` }}></div>
                 </div>
               </div>
             )) : (
               <div className="h-full flex flex-col items-center justify-center p-10 text-center space-y-4">
-                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
-                  <Users size={32} />
-                </div>
+                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200"><Users size={32} /></div>
                 <p className="text-sm font-bold text-slate-400">Deploy replies to see performance ranking.</p>
               </div>
             )}
           </div>
-          <button className="mt-8 w-full py-4 bg-slate-50 hover:bg-slate-100 rounded-2xl text-xs font-black text-slate-400 uppercase tracking-widest transition-all">
-            Explore All Subreddits
-          </button>
         </div>
 
-        {/* Growth Velocity */}
         <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200/60 shadow-sm">
           <div className="flex items-center justify-between mb-10">
             <h2 className="text-xl font-extrabold text-slate-900">Growth Velocity</h2>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-orange-600"></span>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Dynamic</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Sync</span>
             </div>
           </div>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={displayData}>
                 <defs>
-                  <linearGradient id="colorUp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorClick" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
+                  <linearGradient id="colorUp" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.2} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="colorClick" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} /><stop offset="95%" stopColor="#2563eb" stopOpacity={0} /></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }}
-                />
-                <Tooltip
-                  cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '5 5' }}
-                  contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '20px' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey={activeTab === 'links' ? "clicks" : "upvotes"}
-                  stroke={activeTab === 'links' ? "#2563eb" : "#f97316"}
-                  strokeWidth={4}
-                  fillOpacity={1}
-                  fill={activeTab === 'links' ? "url(#colorClick)" : "url(#colorUp)"}
-                />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                <Tooltip cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '5 5' }} contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '20px' }} />
+                <Area type="monotone" dataKey={activeTab === 'links' ? "clicks" : "upvotes"} stroke={activeTab === 'links' ? "#2563eb" : "#f97316"} strokeWidth={4} fillOpacity={1} fill={activeTab === 'links' ? "url(#colorClick)" : "url(#colorUp)"} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden min-h-[400px]">
+      <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden mb-10">
         <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-extrabold text-slate-900">
-              {activeTab === 'links' ? 'Link Tracking History' : 'Outreach History'}
-            </h2>
+            <h2 className="text-xl font-extrabold text-slate-900">{activeTab === 'links' ? 'Link Tracking History' : 'Outreach History'}</h2>
             {(activeTab === 'links' ? trackingLinks : activeHistory).length > 0 && (
               <span className={`px-2 py-0.5 text-white text-[10px] font-black rounded-lg ${activeTab === 'links' ? 'bg-blue-600' : 'bg-slate-900'}`}>
                 {(activeTab === 'links' ? trackingLinks : activeHistory).length}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Sync Active</p>
-            <button
-              onClick={() => fetchData()}
-              className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-orange-600 hover:border-orange-200 transition-all active:scale-95 shadow-sm"
-            >
-              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
+          <button onClick={() => fetchData()} className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-orange-600 transition-all active:scale-95 shadow-sm">
+            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+          </button>
         </div>
+
         <div className="overflow-x-auto">
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center p-20 gap-4">
-              <RefreshCw className="animate-spin text-orange-600" size={32} />
-              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Loading Records...</p>
-            </div>
+            <div className="flex flex-col items-center justify-center p-20 gap-4"><RefreshCw className="animate-spin text-orange-600" size={32} /></div>
           ) : (activeTab === 'links' ? trackingLinks : activeHistory).length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 gap-4">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
                 {activeTab === 'links' ? <Link2 size={32} /> : <LayoutList size={32} />}
               </div>
               <p className="text-slate-900 font-bold">No {activeTab} tracked yet</p>
-              <p className="text-slate-400 text-sm">Deploy engaging content to see {activeTab} data.</p>
             </div>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50/50 text-slate-400 text-[11px] font-extrabold uppercase tracking-[0.2em]">
-                  <th className="px-10 py-5">{activeTab === 'links' ? 'Subreddit' : (activeTab === 'posts' ? 'Preview' : 'Origin')}</th>
-                  <th className="px-10 py-5">{activeTab === 'links' ? 'Tracked URL' : 'Conversation'}</th>
-                  {selectedAccount === 'all' && (activeTab !== 'links') && <th className="px-10 py-5">Account</th>}
-                  <th className="px-10 py-5">{activeTab === 'links' ? 'Performance' : 'Impact'}</th>
-                  <th className="px-10 py-5">Type</th>
-                  <th className="px-10 py-5">Actions</th>
+            <table className="w-full text-sm font-medium">
+              <thead className="bg-slate-50/50 text-slate-400 text-[11px] font-extrabold uppercase tracking-widest border-b border-slate-100">
+                <tr>
+                  <th className="px-10 py-5 text-left">{activeTab === 'links' ? 'Target Subreddit' : 'Origin'}</th>
+                  <th className="px-10 py-5 text-left">{activeTab === 'links' ? 'Original URL' : 'Content Preview'}</th>
+                  <th className="px-10 py-5 text-left">{activeTab === 'links' ? 'Clicks' : 'Performance'}</th>
+                  <th className="px-10 py-5 text-left">Date Deployed</th>
+                  <th className="px-10 py-5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm font-medium">
+              <tbody className="divide-y divide-slate-100">
                 {(activeTab === 'links' ? trackingLinks : activeHistory).map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50 transition-all group">
-                    <td className="px-10 py-6 font-bold text-slate-900">
-                      {activeTab === 'links' ? (
-                        <span className="text-blue-600 font-black">r/{row.subreddit}</span>
-                      ) : (activeTab === 'posts' && row.imageUrl ? (
-                        <div className="w-16 h-10 rounded-lg overflow-hidden border border-slate-200 shadow-sm group-hover:scale-105 transition-transform">
-                          <img src={row.imageUrl} className="w-full h-full object-cover" alt="Post" />
-                        </div>
-                      ) : (
-                        `r/${row.subreddit}`
-                      ))}
+                  <tr key={row.id} className="hover:bg-slate-50 group transition-all">
+                    <td className="px-10 py-6">
+                      <span className={`font-black ${activeTab === 'links' ? 'text-blue-600' : 'text-slate-900'}`}>r/{row.subreddit}</span>
                     </td>
                     <td className="px-10 py-6">
-                      <div className="flex flex-col gap-1 max-w-xs">
-                        <span className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
-                          {activeTab === 'links' ? row.originalUrl : row.postTitle}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {activeTab === 'links' && <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded">Redirect Link</span>}
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {new Date(row.createdAt || row.deployedAt).toLocaleString()}
-                          </span>
-                        </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-bold text-slate-900 line-clamp-1">{activeTab === 'links' ? row.originalUrl : row.postTitle}</span>
+                        {activeTab === 'comments' && <span className="text-[10px] text-slate-400 line-clamp-1 italic">"{row.comment}"</span>}
                       </div>
-                    </td>
-                    {selectedAccount === 'all' && (activeTab !== 'links') && (
-                      <td className="px-10 py-6">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-lg bg-slate-100 flex items-center justify-center text-[8px] font-black text-slate-400">u/</div>
-                          <span className="text-xs font-bold text-slate-600">{row.redditUsername || 'unknown'}</span>
-                        </div>
-                      </td>
-                    )}
-                    <td className="px-10 py-6">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 font-extrabold text-blue-600">
-                          <MousePointer2 size={14} className="text-blue-500" />
-                          {activeTab === 'links' ? row.clicks : row.ups} clicks
-                        </div>
-                        {activeTab !== 'links' && (
-                          <div className="flex items-center gap-1.5 font-extrabold text-slate-400">
-                            <MessageSquare size={14} />
-                            {row.replies}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-10 py-6 uppercase text-[10px] font-black tracking-widest text-slate-400">
-                      {activeTab === 'links' ? row.type : (row.productMention || 'Engagement')}
                     </td>
                     <td className="px-10 py-6">
                       <div className="flex items-center gap-2">
-                        {activeTab === 'links' ? (
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(row.trackingUrl);
-                              showToast('Tracking URL copied!', 'success');
-                            }}
-                            className="px-6 py-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl font-bold transition-all active:scale-95 flex items-center gap-2"
-                          >
-                            <ExternalLink size={14} />
-                            Copy Link
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => setSelectedEntry(row)}
-                              className="px-6 py-2 bg-slate-100 hover:bg-orange-600 hover:text-white rounded-xl font-bold transition-all active:scale-95"
-                            >
-                              View Details
-                            </button>
-                            <a
-                              href={row.postUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2.5 bg-slate-100 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-95"
-                              title="Open on Reddit"
-                            >
-                              <ExternalLink size={18} />
-                            </a>
-                          </>
-                        )}
+                        <MousePointer2 size={14} className="text-blue-500" />
+                        <span className="font-extrabold text-slate-700">{activeTab === 'links' ? row.clicks : row.ups}</span>
+                        {activeTab !== 'links' && <><MessageSquare size={14} className="text-slate-300 ml-2" /><span className="text-slate-500 font-bold">{row.replies}</span></>}
                       </div>
+                    </td>
+                    <td className="px-10 py-6 text-xs text-slate-400 font-bold">
+                      {new Date(row.createdAt || row.deployedAt).toLocaleString()}
+                    </td>
+                    <td className="px-10 py-6 text-right">
+                      {activeTab === 'links' ? (
+                        <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all active:scale-95">Copy Tracking Link</button>
+                      ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => setSelectedEntry(row)} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all">Details</button>
+                          <a href={row.postUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -778,7 +562,24 @@ export const Analytics: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showDatePicker && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 animate-in zoom-in-95 duration-300">
+            <h3 className="text-2xl font-black text-slate-900 mb-6 text-center">Select Range</h3>
+            <div className="space-y-4 mb-8">
+              <input type="date" value={customRange.start} onChange={(e) => setCustomRange({ ...customRange, start: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold" />
+              <input type="date" value={customRange.end} onChange={(e) => setCustomRange({ ...customRange, end: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => setShowDatePicker(false)} className="py-4 bg-slate-100 rounded-2xl font-black text-xs uppercase text-slate-500">Cancel</button>
+              <button onClick={() => { setDateFilter('custom'); setShowDatePicker(false); }} disabled={!customRange.start || !customRange.end} className="py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase shadow-lg shadow-orange-100">Apply Filter</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
+export default Analytics;

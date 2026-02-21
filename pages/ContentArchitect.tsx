@@ -104,8 +104,8 @@ export const ContentArchitect: React.FC = () => {
         content: '',
         imagePrompt: '',
         imageUrl: '',
-        productMention: '',
-        productUrl: '',
+        productMention: 'Redditgo',
+        productUrl: 'https://redditgo.online',
         description: '',
         targetAudience: '',
         problemSolved: '',
@@ -175,7 +175,7 @@ export const ContentArchitect: React.FC = () => {
 
     // Check for draft on mount
     useEffect(() => {
-        const savedDraft = localStorage.getItem('redigo_post_draft');
+        const savedDraft = localStorage.getItem('redditgo_post_draft');
         if (savedDraft) {
             try {
                 const draft = JSON.parse(savedDraft);
@@ -191,7 +191,7 @@ export const ContentArchitect: React.FC = () => {
     // Auto-save effect
     useEffect(() => {
         if (postData.title || postData.content) {
-            localStorage.setItem('redigo_post_draft', JSON.stringify({
+            localStorage.setItem('redditgo_post_draft', JSON.stringify({
                 ...postData,
                 step: step
             }));
@@ -470,7 +470,7 @@ export const ContentArchitect: React.FC = () => {
                 })
             });
             if (!response.ok) throw new Error('Failed to post to Reddit');
-            localStorage.removeItem('redigo_post_draft');
+            localStorage.removeItem('redditgo_post_draft');
             showToast('Post successfully published to Reddit! 🎉', 'success');
         } catch (err: any) {
             showToast(err.message, 'error');
