@@ -11,6 +11,7 @@ export const SignupPage: React.FC = () => {
     const [errorReason, setErrorReason] = useState<string | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
     const { signup } = useAuth();
     const navigate = useNavigate();
 
@@ -38,8 +39,8 @@ export const SignupPage: React.FC = () => {
                 return;
             }
 
-            signup(data.token, data.user);
-            navigate('/dashboard');
+            // Successfully registered but needs verification
+            setIsSuccess(true);
         } catch (err: any) {
             setError(err.message || 'An unexpected error occurred');
         } finally {
@@ -114,75 +115,104 @@ export const SignupPage: React.FC = () => {
                             <p className="text-slate-500 text-base">Start your growth journey today.</p>
                         </div>
 
-                        <form className="space-y-5" onSubmit={handleSubmit}>
-                            {error && (
-                                <div className={`p-4 rounded-2xl border font-medium ${isBlocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-50 text-red-600 border-red-100'} animate-in fade-in slide-in-from-top-2 duration-300`}>
-                                    <div className="flex items-start gap-3">
-                                        <AlertTriangle className="shrink-0 mt-0.5" size={18} />
-                                        <div className="space-y-1">
-                                            <p className="font-extrabold">{error}</p>
-                                            {errorReason && (
-                                                <p className="text-xs opacity-80 bg-red-100/50 p-2 rounded-lg mt-2 border border-red-200/50">
-                                                    <span className="font-black uppercase tracking-widest text-[10px]">Reason:</span> {errorReason}
-                                                </p>
-                                            )}
+                        {isSuccess ? (
+                            <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
+                                <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-2xl text-center">
+                                    <div className="flex justify-center mb-4">
+                                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
+                                            <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
                                         </div>
                                     </div>
+                                    <h3 className="text-xl font-extrabold text-emerald-800 mb-2">Check Your Email</h3>
+                                    <p className="text-emerald-700 font-medium leading-relaxed">
+                                        We've sent a verification link to <span className="font-bold">{email}</span>.
+                                        Please verify your email to log in and access your dashboard.
+                                    </p>
                                 </div>
-                            )}
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-bold text-slate-700" htmlFor="name">Full Name</label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                                    placeholder="John Doe"
-                                    required
-                                />
+                                <div className="text-center">
+                                    <button
+                                        onClick={() => navigate('/login')}
+                                        className="py-3 px-6 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-colors w-full"
+                                    >
+                                        Go to Login Page
+                                    </button>
+                                </div>
                             </div>
+                        ) : (
+                            <form className="space-y-5" onSubmit={handleSubmit}>
+                                {error && (
+                                    <div className={`p-4 rounded-2xl border font-medium ${isBlocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-50 text-red-600 border-red-100'} animate-in fade-in slide-in-from-top-2 duration-300`}>
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                                            <div className="space-y-1">
+                                                <p className="font-extrabold">{error}</p>
+                                                {errorReason && (
+                                                    <p className="text-xs opacity-80 bg-red-100/50 p-2 rounded-lg mt-2 border border-red-200/50">
+                                                        <span className="font-black uppercase tracking-widest text-[10px]">Reason:</span> {errorReason}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-bold text-slate-700" htmlFor="name">Full Name</label>
+                                    <input
+                                        type="text"
+                                        id="name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                        placeholder="John Doe"
+                                        required
+                                    />
+                                </div>
 
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-bold text-slate-700" htmlFor="email">Email address</label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                                    placeholder="name@company.com"
-                                    required
-                                />
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-bold text-slate-700" htmlFor="email">Email address</label>
+                                    <input
+                                        type="email"
+                                        id="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                        placeholder="name@company.com"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-bold text-slate-700" htmlFor="password">Password</label>
+                                    <input
+                                        type="password"
+                                        id="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                        placeholder="Create a strong password"
+                                        required
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full py-3.5 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-500 transition-colors shadow-lg hover:shadow-xl hover:shadow-orange-500/30 hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {isLoading ? <Loader2 className="animate-spin" size={20} /> : <>Get Started Free <ArrowRight size={20} /></>}
+                                </button>
+                            </form>
+                        )}
+
+                        {!isSuccess && (
+                            <div className="text-center">
+                                <p className="text-slate-500 font-medium text-sm">
+                                    Already have an account? <Link to="/login" className="text-orange-600 font-bold hover:text-orange-700">Sign In</Link>
+                                </p>
                             </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-bold text-slate-700" htmlFor="password">Password</label>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                                    placeholder="Create a strong password"
-                                    required
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className="w-full py-3.5 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-500 transition-colors shadow-lg hover:shadow-xl hover:shadow-orange-500/30 hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                            >
-                                {isLoading ? <Loader2 className="animate-spin" size={20} /> : <>Get Started Free <ArrowRight size={20} /></>}
-                            </button>
-                        </form>
-
-                        <div className="text-center">
-                            <p className="text-slate-500 font-medium text-sm">
-                                Already have an account? <Link to="/login" className="text-orange-600 font-bold hover:text-orange-700">Sign In</Link>
-                            </p>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
