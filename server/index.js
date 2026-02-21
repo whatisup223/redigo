@@ -112,6 +112,18 @@ const DEFAULT_EMAIL_TEMPLATES = {
     subject: 'Your Verification Code - Redditgo',
     body: `<h1>Verification Code</h1><p>Hi {{name}},</p><p>We received a login attempt for your account. Use the following code to complete your login:</p><div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #EA580C; margin: 20px 0;">{{code}}</div><p>This code will expire in 10 minutes. If you did not attempt to log in, please ignore this email or change your password.</p>`,
     active: true
+  },
+  'account_status_changed': {
+    name: 'Account Status Update',
+    subject: 'Important: Your account status has been updated - Redditgo',
+    body: `<h1>Account Status Update</h1><p>Hi {{name}},</p><p>Your account status has been changed to: <strong>{{status}}</strong></p><p><strong>Reason:</strong> {{reason}}</p><p>If you believe this is a mistake, please contact our support team.</p>`,
+    active: true
+  },
+  'plan_upgraded': {
+    name: 'Plan Upgrade Confirmation',
+    subject: 'Your plan has been upgraded! 🚀',
+    body: `<h1>Success, {{name}}!</h1><p>An admin has upgraded your account to the <strong>{{plan_name}}</strong> plan.</p><p>Your new credit balance is: <strong>{{credits}}</strong></p><p>Enjoy your new features!</p>`,
+    active: true
   }
 };
 
@@ -1673,6 +1685,24 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
 
       Object.assign(user, updateData);
       await user.save();
+
+      // Send Notification Emails
+      if (req.body.status && req.body.status !== user.status) {
+        // Status changed (Banned, Suspended, Active)
+        sendEmail('account_status_changed', user.email, {
+          name: user.name || 'there',
+          status: req.body.status,
+          reason: req.body.statusMessage || 'Administrative action.'
+        });
+      }
+
+      if (updateData.plan && updateData.plan !== oldPlanName) {
+        sendEmail('plan_upgraded', user.email, {
+          name: user.name || 'there',
+          plan_name: updateData.plan,
+          credits: user.credits.toString()
+        });
+      }
 
       if (req.body.status && req.body.status !== 'Active') {
         addSystemLog('WARN', `[Admin] User ${user.email} status changed to ${req.body.status}`);
