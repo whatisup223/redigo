@@ -14,6 +14,7 @@ import { LoginPage } from './pages/LoginPage';
 import { PricingPage } from './pages/PricingPage';
 import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { RedditCallback } from './pages/RedditCallback';
 import { ContentArchitect } from './pages/ContentArchitect';
 import { Comments } from './pages/Comments';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/auth/reddit/callback" element={<RedditCallback />} />
 
           {/* User Dashboard Routes - Wrapped in AppLayout */}

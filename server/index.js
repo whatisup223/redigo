@@ -502,7 +502,7 @@ const generalAuth = async (req, res, next) => {
   const path = req.path.replace(/\/$/, '');
 
   // Exempt public routes explicitly
-  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/forgot-password', '/api/health', '/api/webhook'];
+  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
   if (publicRoutes.includes(path)) return next();
 
   // Try to extract user from token or ID
@@ -715,29 +715,97 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
     const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
 
     if (user) {
       // Check if user is banned or suspended
       if (user.status === 'Banned' || user.status === 'Suspended') {
-        console.log(`[FORGOT-PASSWORD] Blocked ${user.status} user: ${user.email}`);
         return res.status(403).json({
           error: `Your account has been ${user.status.toLowerCase()}.`,
           reason: user.statusMessage || 'Contact support for details.'
         });
       }
 
-      console.log(`[Mock Email] Password reset link sent to ${email}`);
-      res.json({ message: 'If an account exists, a reset link has been sent.' });
-    } else {
-      // For security, generic message
-      res.json({ message: 'If an account exists, a reset link has been sent.' });
+      // Generate a secure random token
+      const crypto = await import('crypto');
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      // Save token to DB
+      user.resetPasswordToken = resetToken;
+      user.resetPasswordExpires = expiresAt;
+      await user.save();
+
+      // Build reset link
+      const host = req.get('host');
+      const protocol = host.includes('localhost') ? 'http' : 'https';
+      const baseUrl = process.env.BASE_URL || `${protocol}://${host}`;
+      const resetLink = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+      addSystemLog('INFO', `[Password Reset] Token generated for: ${user.email}`);
+
+      // Send email using the reset_password template
+      const emailResult = await sendEmail('reset_password', user.email, {
+        name: user.name || 'User',
+        reset_link: resetLink
+      });
+
+      if (emailResult) {
+        addSystemLog('SUCCESS', `[Password Reset] Email sent to: ${user.email}`);
+      } else {
+        addSystemLog('WARN', `[Password Reset] Email not sent (SMTP not configured?) - Token: ${resetToken}`);
+        console.log(`[Password Reset] Reset link (for debug): ${resetLink}`);
+      }
     }
+
+    // Always return generic message for security (don't reveal if account exists)
+    res.json({ message: 'If an account with this email exists, a reset link has been sent.' });
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Reset Password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, email, newPassword } = req.body;
+    if (!token || !email || !newPassword) {
+      return res.status(400).json({ error: 'Token, email, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({
+      email: new RegExp('^' + email + '$', 'i'),
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() } // token must not be expired
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired password reset link. Please request a new one.' });
+    }
+
+    // Hash and save the new password
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    addSystemLog('SUCCESS', `[Password Reset] Password successfully reset for: ${user.email}`);
+
+    res.json({ success: true, message: 'Your password has been reset successfully. You can now log in.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 
 app.post('/api/user/complete-onboarding', async (req, res) => {
   try {

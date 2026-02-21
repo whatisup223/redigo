@@ -34,7 +34,9 @@ const UserSchema = new mongoose.Schema({
     postsHistory: [mongoose.Schema.Types.Mixed],
     transactions: [mongoose.Schema.Types.Mixed],
     prompts: [mongoose.Schema.Types.Mixed],
-    brandProfile: mongoose.Schema.Types.Mixed
+    brandProfile: mongoose.Schema.Types.Mixed,
+    resetPasswordToken: String,
+    resetPasswordExpires: Date
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const TrackingLinkSchema = new mongoose.Schema({
