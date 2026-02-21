@@ -330,13 +330,18 @@ const getTrackingLinks = () => settingsCache.trackingLinks;
 app.get(['/t/:id', '/t/:id/'], (req, res) => {
   const { id } = req.params;
 
-  // Ensure trackingLinks exists in cache
+  // Reload trackingLinks from disk to prevent 404 if link was created in another process
+  const freshSettings = loadSettings();
+  if (freshSettings.trackingLinks) {
+    settingsCache.trackingLinks = freshSettings.trackingLinks;
+  }
+
   if (!settingsCache.trackingLinks) settingsCache.trackingLinks = [];
 
   // Case-insensitive lookup and cleanup (remove trailing slash from param if any)
   const cleanId = id.replace(/\/$/, '').toLowerCase();
 
-  // Directly find in the cache to avoid any stale local variables
+  // Directly find in the cache
   const link = (settingsCache.trackingLinks || []).find(l => l.id.toLowerCase() === cleanId);
 
   if (!link) {
@@ -362,9 +367,9 @@ app.get(['/t/:id', '/t/:id/'], (req, res) => {
   });
   link.lastClickedAt = now;
 
-  // Limit click history to last 100 entries to avoid bloating settings file
-  if (link.clickDetails.length > 100) {
-    link.clickDetails = link.clickDetails.slice(-100);
+  // Limit click history to 10000 entries to preserve chart data without blowing up file size
+  if (link.clickDetails.length > 10000) {
+    link.clickDetails = link.clickDetails.slice(-10000);
   }
 
   // Persist to disk
@@ -424,6 +429,12 @@ app.post('/api/tracking/create', (req, res) => {
     clickDetails: []
   };
 
+  // Reload from disk to prevent concurrency overriding
+  const freshSettings = loadSettings();
+  if (freshSettings.trackingLinks) {
+    settingsCache.trackingLinks = freshSettings.trackingLinks;
+  }
+
   // Immutable update to cache
   const currentLinks = settingsCache.trackingLinks || [];
   settingsCache.trackingLinks = [...currentLinks, newLink];
@@ -437,6 +448,13 @@ app.post('/api/tracking/create', (req, res) => {
 
 app.get('/api/tracking/user/:userId', (req, res) => {
   const { userId } = req.params;
+
+  // Reload from disk to prevent returning stale data (sync delay)
+  const freshData = loadSettings();
+  if (freshData.trackingLinks) {
+    settingsCache.trackingLinks = freshData.trackingLinks;
+  }
+
   const links = settingsCache.trackingLinks || [];
 
   // Strict String Comparison

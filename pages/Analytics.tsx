@@ -221,26 +221,34 @@ export const Analytics: React.FC = () => {
     const dataByDate: Record<string, any> = {};
     const sourceData = activeTab === 'links' ? activeLinks : activeHistory;
 
-    sourceData.forEach(current => {
-      const ts = activeTab === 'links' ? (current.createdAt || current.deployedAt) : current.deployedAt;
-      if (!ts) return;
-
-      const dateObj = new Date(ts);
-      if (isNaN(dateObj.getTime())) return;
-
-      const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
-      if (!dataByDate[dateKey]) {
-        dataByDate[dateKey] = { name: dateKey, clicks: 0, upvotes: 0, replies: 0 };
-      }
-
-      if (activeTab === 'links') {
-        dataByDate[dateKey].clicks += Number(current.clicks) || 0;
-      } else {
+    if (activeTab === 'links') {
+      sourceData.forEach((current: any) => {
+        if (current.clickDetails && current.clickDetails.length > 0) {
+          current.clickDetails.forEach((click: any) => {
+            const dateObj = new Date(click.timestamp);
+            if (isNaN(dateObj.getTime())) return;
+            const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            if (!dataByDate[dateKey]) {
+              dataByDate[dateKey] = { name: dateKey, clicks: 0, upvotes: 0, replies: 0 };
+            }
+            dataByDate[dateKey].clicks += 1;
+          });
+        }
+      });
+    } else {
+      sourceData.forEach((current: any) => {
+        const ts = current.deployedAt;
+        if (!ts) return;
+        const dateObj = new Date(ts);
+        if (isNaN(dateObj.getTime())) return;
+        const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (!dataByDate[dateKey]) {
+          dataByDate[dateKey] = { name: dateKey, clicks: 0, upvotes: 0, replies: 0 };
+        }
         dataByDate[dateKey].upvotes += current.ups || 0;
         dataByDate[dateKey].replies += current.replies || 0;
-      }
-    });
+      });
+    }
 
     return Object.values(dataByDate).sort((a, b) => {
       const year = new Date().getFullYear();
