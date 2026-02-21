@@ -454,10 +454,10 @@ export const Analytics: React.FC = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard
-          label={activeTab === 'links' ? "Total Clicks" : (activeTab === 'comments' ? "Total Upvotes" : "Post Karma")}
-          value={activeTab === 'links' ? totalClicks.toLocaleString() : totalUpvotes.toLocaleString()}
-          trend={activeTab === 'links' ? `${trackingLinks.length} Links` : "+12.5%"}
-          icon={activeTab === 'links' ? MousePointer2 : (activeTab === 'comments' ? TrendingUp : BarChart3)}
+          label={activeTab === 'comments' ? "Total Upvotes" : (activeTab === 'posts' ? "Post Karma" : "Link Reach")}
+          value={activeTab === 'links' ? activeLinks.length : totalUpvotes.toLocaleString()}
+          trend={activeTab === 'links' ? `${trackingLinks.length} Total` : "+12.5%"}
+          icon={activeTab === 'links' ? BarChart3 : (activeTab === 'comments' ? MessageSquare : PenTool)}
           color={activeTab === 'links' ? "bg-blue-600 text-white" : "bg-orange-600 text-white"}
         />
         <StatCard
@@ -468,11 +468,11 @@ export const Analytics: React.FC = () => {
           color={activeTab === 'links' ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"}
         />
         <StatCard
-          label={activeTab === 'links' ? "Link Conversions" : "Engagement Impact"}
-          value={activeTab === 'links' ? totalClicks.toLocaleString() : (totalUpvotes + totalReplies).toLocaleString()}
-          trend={activeTab === 'links' ? "100%" : "+15.0%"}
-          icon={activeTab === 'links' ? ExternalLink : MousePointer2}
-          color={activeTab === 'links' ? "bg-indigo-600 text-white" : "bg-purple-600 text-white"}
+          label="Total Link Clicks"
+          value={totalClicks.toLocaleString()}
+          trend="Real-time"
+          icon={MousePointer2}
+          color="bg-indigo-600 text-white"
         />
         <StatCard
           label="Target Communities"

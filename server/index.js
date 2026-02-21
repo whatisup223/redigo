@@ -38,16 +38,13 @@ const saveSettings = (data) => {
     Object.assign(settingsCache, data);
   }
 
-  // Write to disk asynchronously with debounce (500ms)
-  if (global._settingsSaveTimer) clearTimeout(global._settingsSaveTimer);
-  global._settingsSaveTimer = setTimeout(() => {
-    try {
-      // Use Sync write in critical paths or just here for extreme reliability
-      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2));
-    } catch (e) {
-      console.error('[CRITICAL] Failed to save settings.storage.json:', e);
-    }
-  }, 500);
+  // Write to disk synchronously for critical data durability
+  try {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2));
+    // console.log('[System] Settings saved successfully');
+  } catch (e) {
+    console.error('[CRITICAL] Failed to save settings.storage.json:', e);
+  }
 };
 
 // Initialize cache from disk
@@ -417,31 +414,40 @@ app.post('/api/tracking/create', (req, res) => {
 
   const newLink = {
     id,
-    userId: Number(userId),
+    userId: userId.toString(), // Store as string for consistency
     originalUrl,
     subreddit,
     postId,
-    type, // 'comment' or 'post'
+    type,
     createdAt: new Date().toISOString(),
     clicks: 0,
     clickDetails: []
   };
 
-  getTrackingLinks().push(newLink);
-  saveSettings({ trackingLinks: getTrackingLinks() });
+  // Immutable update to cache
+  const currentLinks = settingsCache.trackingLinks || [];
+  settingsCache.trackingLinks = [...currentLinks, newLink];
 
-  console.log(`[TRACKING] New link created: ${id} for user ${userId}`);
+  // Save immediately
+  saveSettings();
+
+  console.log(`[TRACKING] Created Link: ${id} | User: ${userId} | Target: ${originalUrl}`);
   res.json({ id, trackingUrl });
 });
 
 app.get('/api/tracking/user/:userId', (req, res) => {
   const { userId } = req.params;
-  // Robust Comparison: Both to string to prevent Number/String mismatch in Production
-  const userLinks = getTrackingLinks().filter(l =>
+  const links = settingsCache.trackingLinks || [];
+
+  // Strict String Comparison
+  const userLinks = links.filter(l =>
     l.userId && l.userId.toString() === userId.toString()
   );
 
-  console.log(`[Analytics] Request for user ${userId}. Found ${userLinks.length} tracking links.`);
+  // Sort by newest first
+  userLinks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  console.log(`[Analytics] Serving ${userLinks.length} links for user ${userId} (Total system links: ${links.length})`);
   res.json(userLinks);
 });
 
