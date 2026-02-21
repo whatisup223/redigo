@@ -43,6 +43,12 @@ export const Settings: React.FC = () => {
             setActiveTab('billing'); // Automatically switch to billing so user sees the change
         }
     }, [syncUser]);
+
+    useEffect(() => {
+        if (activeTab === 'history') {
+            syncUser();
+        }
+    }, [activeTab, syncUser]);
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [loading, setLoading] = useState(true);
     const [brandSaving, setBrandSaving] = useState(false);
