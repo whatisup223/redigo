@@ -183,7 +183,7 @@ export const ContentArchitect: React.FC = () => {
                     setShowDraftBanner(true);
                 }
             } catch (e) {
-                localStorage.removeItem('redigo_post_draft');
+                localStorage.removeItem('redditgo_post_draft');
             }
         }
     }, []);
@@ -199,7 +199,7 @@ export const ContentArchitect: React.FC = () => {
     }, [postData, step]);
 
     const handleResumeDraft = async () => {
-        const savedDraft = localStorage.getItem('redigo_post_draft');
+        const savedDraft = localStorage.getItem('redditgo_post_draft');
         if (savedDraft) {
             const draft = JSON.parse(savedDraft);
             setPostData(draft);
@@ -232,7 +232,7 @@ export const ContentArchitect: React.FC = () => {
     };
 
     const handleDiscardDraft = () => {
-        localStorage.removeItem('redigo_post_draft');
+        localStorage.removeItem('redditgo_post_draft');
         setPostData({
             subreddit: '',
             goal: 'Engagement',
