@@ -114,33 +114,34 @@ export const Analytics: React.FC = () => {
 
   const fetchData = async () => {
     if (!user?.id) return;
-    syncUser();
     try {
-      const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}`);
+      const ts = Date.now(); // Cache busting
+      const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}&_=${ts}`);
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(Array.isArray(historyData) ? historyData : []);
       }
 
-      const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}`);
+      const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}&_=${ts}`);
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         setPostsHistory(Array.isArray(postsData) ? postsData : []);
       }
 
-      const tracksRes = await fetch(`/api/tracking/user/${user.id}`);
+      const tracksRes = await fetch(`/api/tracking/user/${user.id}?_=${ts}`);
       if (tracksRes.ok) {
         const tracksData = await tracksRes.json();
+        console.log(`[DEBUG] Received ${tracksData.length} links for user ${user.id}`);
         setTrackingLinks(Array.isArray(tracksData) ? tracksData : []);
       }
 
-      const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}`);
+      const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}&_=${ts}`);
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         setProfile(profileData);
       }
 
-      const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}`);
+      const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}&_=${ts}`);
       if (statusRes.ok) {
         const status = await statusRes.json();
         setRedditStatus(status);
@@ -154,7 +155,7 @@ export const Analytics: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [user, selectedAccount]);
+  }, [user?.id, selectedAccount]);
 
   const filteredHistory = (activeTab === 'comments' ? history : postsHistory).filter(item => {
     const itemDate = new Date(item.deployedAt);
@@ -254,43 +255,41 @@ export const Analytics: React.FC = () => {
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
   const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
 
-  // Smart Clicks Calculation: If a filter is active, count clicks that happened in THAT period
+  // Smart Clicks Calculation
   const totalClicks = useMemo(() => {
-    if (dateFilter === 'all') return trackingLinks.reduce((a, b) => a + (b.clicks || 0), 0);
+    if (dateFilter === 'all') return trackingLinks.reduce((a, b) => a + (Number(b.clicks) || 0), 0);
 
     const now = new Date();
-    return filteredTrackingLinks.reduce((total, link) => {
-      // If we are looking at 'all', take the main click counter
-      if (dateFilter === 'all') return total + (link.clicks || 0);
+    let msLimit = 0;
+    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
 
-      const now = new Date();
-      let msLimit = 0;
-      if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
-      else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
-      else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+    return trackingLinks.reduce((total, link) => {
+      if (link.clickDetails && link.clickDetails.length > 0) {
+        const recentDetails = link.clickDetails.filter((c: any) => {
+          const clickDate = new Date(c.timestamp);
+          if (msLimit > 0) return (now.getTime() - clickDate.getTime()) <= msLimit;
+          if (dateFilter === 'custom' && customRange.start && customRange.end) {
+            const start = new Date(customRange.start);
+            const end = new Date(customRange.end);
+            return clickDate >= start && clickDate <= end;
+          }
+          return true;
+        }).length;
 
-      if (!link.clickDetails || link.clickDetails.length === 0) {
-        // Fallback if no details but link is new
         const createDate = new Date(link.createdAt || link.deployedAt);
         const isNew = msLimit > 0 ? (now.getTime() - createDate.getTime()) <= msLimit : true;
-        return total + (isNew ? (link.clicks || 0) : 0);
+        if (recentDetails === 0 && isNew) return total + (Number(link.clicks) || 0);
+
+        return total + recentDetails;
       }
 
-      const recentClicksCount = link.clickDetails.filter((c: any) => {
-        const clickDate = new Date(c.timestamp);
-        if (msLimit > 0) return (now.getTime() - clickDate.getTime()) <= msLimit;
-        if (dateFilter === 'custom' && customRange.start && customRange.end) {
-          const start = new Date(customRange.start);
-          const end = new Date(customRange.end);
-          end.setHours(23, 59, 59);
-          return clickDate >= start && clickDate <= end;
-        }
-        return true;
-      }).length;
-
-      return total + recentClicksCount;
+      const createDate = new Date(link.createdAt || link.deployedAt);
+      const isNew = msLimit > 0 ? (now.getTime() - createDate.getTime()) <= msLimit : true;
+      return total + (isNew ? (Number(link.clicks) || 0) : 0);
     }, 0);
-  }, [filteredTrackingLinks, dateFilter, customRange]);
+  }, [trackingLinks, dateFilter, customRange]);
 
   const activeSubreddits = new Set([...activeHistory, ...activeLinks].map(r => r.subreddit)).size;
 
@@ -436,7 +435,6 @@ export const Analytics: React.FC = () => {
 
       <CreditsBanner plan={user?.plan || 'Starter'} credits={user?.credits || 0} />
 
-      {/* Scrollable Tabs Wrapper */}
       <div className="w-full overflow-x-auto pb-4 -mb-4 custom-scrollbar lg:overflow-visible">
         <div className="flex p-1.5 bg-slate-100 rounded-[2rem] w-fit mx-auto lg:mx-0 min-w-max">
           <button onClick={() => setActiveTab('comments')} className={`flex items-center gap-2 px-6 lg:px-8 py-3.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'comments' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>

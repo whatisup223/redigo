@@ -385,9 +385,6 @@ app.get(['/t/:id', '/t/:id/'], (req, res) => {
   });
 
   console.log(`[TRACKING OK] ID ${cleanId} -> Redirecting to ${link.originalUrl} (Click #${link.clicks})`);
-
-  // Preferred way for tracking: HTTP 302 (Found)
-  // This is better for analytics and SEO as it's a server-side redirect
   res.redirect(302, link.originalUrl);
 });
 
@@ -435,21 +432,19 @@ app.post('/api/tracking/create', (req, res) => {
 
   getTrackingLinks().push(newLink);
   saveSettings({ trackingLinks: getTrackingLinks() });
-  console.log(`[TRACKING] New link created: ${id} for user ${userId} -> ${trackingUrl}`);
 
-  addSystemLog('INFO', `Tracking Link Created: ${id}`, {
-    userId,
-    subreddit,
-    trackingUrl,
-    originalUrl
-  });
-
+  console.log(`[TRACKING] New link created: ${id} for user ${userId}`);
   res.json({ id, trackingUrl });
 });
 
 app.get('/api/tracking/user/:userId', (req, res) => {
   const { userId } = req.params;
-  const userLinks = getTrackingLinks().filter(l => l.userId == userId);
+  // Robust Comparison: Both to string to prevent Number/String mismatch in Production
+  const userLinks = getTrackingLinks().filter(l =>
+    l.userId && l.userId.toString() === userId.toString()
+  );
+
+  console.log(`[Analytics] Request for user ${userId}. Found ${userLinks.length} tracking links.`);
   res.json(userLinks);
 });
 
