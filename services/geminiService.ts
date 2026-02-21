@@ -15,7 +15,7 @@ export interface BrandProfile {
 
 export const fetchBrandProfile = async (userId: string | number): Promise<BrandProfile> => {
   try {
-    const res = await fetch(`/api/user/brand-profile?userId=${userId}`);
+    const res = await fetch(`/api/user/brand-profile?userId=${userId}&_t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) return {};
     return await res.json();
   } catch {

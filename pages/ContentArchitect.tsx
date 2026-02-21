@@ -401,13 +401,14 @@ export const ContentArchitect: React.FC = () => {
         try {
             // Build override profile from any filled-in fields
             const overrideProfile: Partial<BrandProfile> = {
-                brandName: postData.productMention || undefined,
-                website: postData.productUrl || undefined,
-                description: postData.description || undefined,
-                targetAudience: postData.targetAudience || undefined,
-                problem: postData.problemSolved || undefined,
-                primaryColor: postData.primaryColor || undefined,
-                secondaryColor: postData.secondaryColor || undefined
+                ...(user?.brandProfile || {}),
+                brandName: postData.productMention || user?.brandProfile?.brandName || undefined,
+                website: postData.productUrl || user?.brandProfile?.website || undefined,
+                description: postData.description || user?.brandProfile?.description || undefined,
+                targetAudience: postData.targetAudience || user?.brandProfile?.targetAudience || undefined,
+                problem: postData.problemSolved || user?.brandProfile?.problem || undefined,
+                primaryColor: postData.primaryColor || user?.brandProfile?.primaryColor || undefined,
+                secondaryColor: postData.secondaryColor || user?.brandProfile?.secondaryColor || undefined
             };
 
             const generated = await generateRedditPost(

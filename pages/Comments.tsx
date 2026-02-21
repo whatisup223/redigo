@@ -284,11 +284,12 @@ export const Comments: React.FC = () => {
       const goal = customSettings?.goal || wizardData.goal;
 
       const overrideProfile: Partial<BrandProfile> = {
-        brandName: wizardData.productMention || undefined,
-        website: wizardData.productLink || undefined,
-        description: wizardData.description || undefined,
-        targetAudience: wizardData.targetAudience || undefined,
-        problem: wizardData.problemSolved || undefined
+        ...(user?.brandProfile || {}),
+        brandName: wizardData.productMention || user?.brandProfile?.brandName || undefined,
+        website: wizardData.productLink || user?.brandProfile?.website || undefined,
+        description: wizardData.description || user?.brandProfile?.description || undefined,
+        targetAudience: wizardData.targetAudience || user?.brandProfile?.targetAudience || undefined,
+        problem: wizardData.problemSolved || user?.brandProfile?.problem || undefined
       };
 
       const context = `Tone: ${tone}, Goal: ${goal}`;
