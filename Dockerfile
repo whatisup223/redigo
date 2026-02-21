@@ -26,9 +26,6 @@ COPY server ./server
 # Copy built frontend from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Create empty settings file if not exists (for volume mount)
-RUN echo "{}" > settings.storage.json
-
 # Environment variables
 ENV NODE_ENV=production
 ENV PORT=3000

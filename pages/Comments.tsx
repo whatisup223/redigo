@@ -146,7 +146,7 @@ export const Comments: React.FC = () => {
     if (savedDraft) {
       try {
         const draft = JSON.parse(savedDraft);
-        if (draft.selectedPost || draft.generatedReply || draft.wizardData?.productMention) {
+        if (draft.selectedPost || draft.generatedReply || draft.editedComment) {
           setShowDraftBanner(true);
         }
       } catch (e) {
@@ -159,9 +159,7 @@ export const Comments: React.FC = () => {
   // Auto-save effect
   useEffect(() => {
     // CRITICAL: Skip while initial check is happening or while banner is visible
-    if (!isInitialCheckDone || showDraftBanner) return;
-
-    const hasData = !!(selectedPost || generatedReply || wizardData.productMention);
+    const hasData = !!(generatedReply || editedComment || (selectedPost && wizardData.description));
 
     if (hasData) {
       const draft = {
@@ -170,29 +168,31 @@ export const Comments: React.FC = () => {
         editedComment,
         wizardData,
         selectedAccount,
+        brandProfile,
         activeTone,
         language,
         includeBrandName,
         includeLink,
         useTracking
       };
-      localStorage.setItem('redigo_comment_draft', JSON.stringify(draft));
-    } else {
-      // ONLY remove if it was checked and it's truly empty
-      localStorage.removeItem('redigo_comment_draft');
+      localStorage.setItem('redditgo_comment_draft', JSON.stringify(draft));
+    } else if (isInitialCheckDone && !showDraftBanner) {
+      // ONLY remove if it's explicitly empty and we're not currently showing a draft banner
+      localStorage.removeItem('redditgo_comment_draft');
     }
   }, [selectedPost, generatedReply, editedComment, wizardData, selectedAccount, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
 
   const handleResumeDraft = () => {
-    const savedDraft = localStorage.getItem('redigo_comment_draft');
+    setShowDraftBanner(false);
+    const savedDraft = localStorage.getItem('redditgo_comment_draft');
     if (savedDraft) {
       const draft = JSON.parse(savedDraft);
       setSelectedPost(draft.selectedPost);
       setGeneratedReply(draft.generatedReply);
-      setEditedComment(draft.editedComment);
+      setEditedComment(draft.editedComment || draft.generatedReply?.comment || '');
       setWizardData(draft.wizardData);
       setSelectedAccount(draft.selectedAccount);
-      setBrandProfile(draft.brandProfile);
+      if (draft.brandProfile) setBrandProfile(draft.brandProfile);
       setActiveTone(draft.activeTone);
       setLanguage(draft.language || 'English');
       setIncludeBrandName(draft.includeBrandName !== undefined ? draft.includeBrandName : true);
@@ -208,14 +208,13 @@ export const Comments: React.FC = () => {
         });
       }
 
-      setShowDraftBanner(false);
       showToast('Draft restored! 🚀', 'success');
       syncUser(); // Sync usage state after resuming
     }
   };
 
   const handleDiscardDraft = () => {
-    localStorage.removeItem('redigo_comment_draft');
+    localStorage.removeItem('redditgo_comment_draft');
     setSelectedPost(null);
     setGeneratedReply(null);
     setEditedComment('');
@@ -411,7 +410,7 @@ export const Comments: React.FC = () => {
         targetAudience: '',
         problemSolved: ''
       });
-      localStorage.removeItem('redigo_comment_draft');
+      localStorage.removeItem('redditgo_comment_draft');
     } catch (err: any) {
       showToast(err.message, 'error');
     } finally {

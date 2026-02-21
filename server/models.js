@@ -17,6 +17,8 @@ const UserSchema = new mongoose.Schema({
     allowTracking: Boolean,
     dailyUsagePoints: { type: Number, default: 0 },
     dailyUsage: String,
+    lastUsageDate: String,
+    usageStats: mongoose.Schema.Types.Mixed,
     accounts: [{
         username: String,
         accessToken: String,

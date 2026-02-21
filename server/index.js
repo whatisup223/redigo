@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
-import fs from 'fs';
+
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -1817,6 +1817,7 @@ app.post('/api/generate', async (req, res) => {
     user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
     user.usageStats.history = user.usageStats.history || [];
     user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
+    user.markModified('usageStats');
 
     await user.save();
     addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
@@ -1917,6 +1918,7 @@ app.post('/api/generate-image', async (req, res) => {
     user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
     user.usageStats.history = user.usageStats.history || [];
     user.usageStats.history.push({ date: new Date().toISOString(), type: 'image', cost });
+    user.markModified('usageStats');
 
     // SAVE LATEST IMAGE FOR RECOVERY
     user.latestImage = {
