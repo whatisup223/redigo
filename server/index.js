@@ -100,6 +100,12 @@ const DEFAULT_EMAIL_TEMPLATES = {
     subject: 'New Reply to Ticket #{{ticket_id}}',
     body: `<h1>You have a new reply!</h1><p>Hi {{name}}, an admin has replied to your ticket "<strong>{{subject}}</strong>":</p><div style="padding: 15px; background: #f3f4f6; border-radius: 10px; margin: 15px 0;">{{reply_message}}</div>`,
     active: true
+  },
+  'verify_email': {
+    name: 'Verify Email',
+    subject: 'Action Required: Verify your email - Redditgo',
+    body: `<h1>Welcome to Redditgo, {{name}}!</h1><p>Please confirm your email address to activate your account and start your outreach journey.</p><p><a href="{{verify_link}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">Verify Email</a></p><p>This link will expire in 24 hours.</p>`,
+    active: true
   }
 };
 
@@ -502,7 +508,7 @@ const generalAuth = async (req, res, next) => {
   const path = req.path.replace(/\/$/, '');
 
   // Exempt public routes explicitly
-  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
+  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
   if (publicRoutes.includes(path)) return next();
 
   // Try to extract user from token or ID
@@ -605,6 +611,15 @@ app.post('/api/auth/login', async (req, res) => {
         });
       }
 
+      // Check if user is verified
+      if (!user.isVerified) {
+        return res.status(403).json({
+          error: 'Email not verified.',
+          reason: 'Please check your inbox to verify your email address before logging in.',
+          isUnverified: true
+        });
+      }
+
       let updated = false;
       if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
         addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
@@ -670,6 +685,9 @@ app.post('/api/auth/signup', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const tempId = Math.random().toString(36).substring(2, 9);
 
+    const crypto = await import('crypto');
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
     const newUser = new User({
       id: tempId,
       name,
@@ -688,26 +706,62 @@ app.post('/api/auth/signup', async (req, res) => {
       customDailyLimit: 0,
       lastUsageDate: new Date().toISOString().split('T')[0],
       transactions: [],
-      usageStats: { fill: true }
+      usageStats: { fill: true },
+      isVerified: false,
+      verificationToken: verificationToken,
+      verificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     });
 
     await newUser.save();
-    addSystemLog('SUCCESS', `New user registered: ${email}`, { userId: newUser.id || newUser._id });
+    addSystemLog('SUCCESS', `New user registered (unverified): ${email}`, { userId: newUser.id || newUser._id });
 
-    // Send Welcome Email
-    sendEmail('welcome', email, { name: name || 'there' });
+    // Build verification link
+    const host = req.get('host');
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const baseUrl = process.env.BASE_URL || `${protocol}://${host}`;
+    const verifyLink = `${baseUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`;
 
-    const userObj = newUser.toObject();
-    delete userObj.password;
-    userObj.id = newUser.id || newUser._id.toString();
+    // Send Verification Email
+    sendEmail('verify_email', email, { name: name || 'there', verify_link: verifyLink });
 
-    // Implement real JWT
-    const payload = { id: userObj.id, email: userObj.email, role: userObj.role };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
-
-    res.status(201).json({ user: userObj, token });
+    // Don't log them in yet, they must verify first
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful! Please check your email to verify your account.'
+    });
   } catch (err) {
     console.error('Signup error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { token, email } = req.body;
+    if (!token || !email) {
+      return res.status(400).json({ error: 'Token and email are required' });
+    }
+
+    const user = await User.findOne({
+      email: new RegExp('^' + email + '$', 'i'),
+      verificationToken: token,
+      verificationExpires: { $gt: new Date() } // Must not be expired
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification link.' });
+    }
+
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    user.verificationExpires = undefined;
+    await user.save();
+
+    addSystemLog('SUCCESS', `User verified email: ${user.email}`);
+
+    res.json({ success: true, message: 'Email successfully verified. You can now log in.' });
+  } catch (err) {
+    console.error('Verify email error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

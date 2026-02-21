@@ -36,7 +36,10 @@ const UserSchema = new mongoose.Schema({
     prompts: [mongoose.Schema.Types.Mixed],
     brandProfile: mongoose.Schema.Types.Mixed,
     resetPasswordToken: String,
-    resetPasswordExpires: Date
+    resetPasswordExpires: Date,
+    isVerified: { type: Boolean, default: false },
+    verificationToken: String,
+    verificationExpires: Date
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const TrackingLinkSchema = new mongoose.Schema({
