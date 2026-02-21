@@ -1901,9 +1901,32 @@ app.put('/api/support/tickets/:id', async (req, res) => {
     const ticket = await Ticket.findOne({ id });
 
     if (ticket) {
+      const isNewAdminMessage =
+        req.body.messages &&
+        req.body.messages.length > (ticket.messages || []).length;
+
+      let lastAdminMsg = null;
+      if (isNewAdminMessage) {
+        const lastMsg = req.body.messages[req.body.messages.length - 1];
+        if (lastMsg.sender === 'Admin') {
+          lastAdminMsg = lastMsg.text;
+        }
+      }
+
       Object.assign(ticket, req.body);
       ticket.updatedAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
       await ticket.save();
+
+      if (lastAdminMsg) {
+        sendEmail('admin_reply', ticket.userEmail || ticket.email, {
+          name: ticket.userName || 'Customer',
+          ticket_id: ticket.id,
+          subject: ticket.subject,
+          reply_message: lastAdminMsg
+        });
+        addSystemLog('INFO', `Admin reply email sent for Ticket ${ticket.id}`);
+      }
+
       res.json(ticket);
     } else {
       res.status(404).json({ error: 'Ticket not found' });
