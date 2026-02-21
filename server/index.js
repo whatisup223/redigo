@@ -32,17 +32,21 @@ const initSettingsCache = () => {
   settingsCache = loadSettings();
 };
 
-let _settingsSaveTimer = null;
 const saveSettings = (data) => {
   // Merge into in-memory cache immediately (non-blocking)
-  Object.assign(settingsCache, data);
+  if (data) {
+    Object.assign(settingsCache, data);
+  }
 
   // Write to disk asynchronously with debounce (500ms)
-  if (_settingsSaveTimer) clearTimeout(_settingsSaveTimer);
-  _settingsSaveTimer = setTimeout(() => {
-    fs.writeFile(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2), (e) => {
-      if (e) console.error('Error saving settings:', e);
-    });
+  if (global._settingsSaveTimer) clearTimeout(global._settingsSaveTimer);
+  global._settingsSaveTimer = setTimeout(() => {
+    try {
+      // Use Sync write in critical paths or just here for extreme reliability
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsCache, null, 2));
+    } catch (e) {
+      console.error('[CRITICAL] Failed to save settings.storage.json:', e);
+    }
   }, 500);
 };
 
@@ -336,46 +340,38 @@ app.get(['/t/:id', '/t/:id/'], (req, res) => {
   const cleanId = id.replace(/\/$/, '').toLowerCase();
 
   // Directly find in the cache to avoid any stale local variables
-  const link = settingsCache.trackingLinks.find(l => l.id.toLowerCase() === cleanId);
+  const link = (settingsCache.trackingLinks || []).find(l => l.id.toLowerCase() === cleanId);
 
   if (!link) {
-    console.error(`[TRACKING ERROR] Link not found: ${cleanId}`);
+    console.warn(`[TRACKING] 404 - Link not found: ${cleanId}`);
     addSystemLog('WARN', `Tracking link not found: ${cleanId}`, {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
       requestedUrl: req.originalUrl
     });
-    return res.status(404).send(`
-      <html>
-        <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #64748b;">
-          <h2>Link Not Found</h2>
-          <p>The tracking link you are looking for does not exist or has expired.</p>
-          <a href="/" style="color: #f97316; font-weight: bold; text-decoration: none;">Return to Home</a>
-        </body>
-      </html>
-    `);
+    return res.status(404).send("Tracking link not found");
   }
 
-  // Log the click
+  // Update Stats in Memory FIRST
   link.clicks = (Number(link.clicks) || 0) + 1;
-  link.lastClickedAt = new Date().toISOString();
+  const now = new Date().toISOString();
 
-  // Optimized click details (keep it lean)
   if (!link.clickDetails) link.clickDetails = [];
   link.clickDetails.push({
-    timestamp: new Date().toISOString(),
-    userAgent: req.headers['user-agent'],
+    timestamp: now,
+    userAgent: req.headers['user-agent'] || 'unknown',
     referer: req.headers['referer'] || 'direct',
-    ip: req.ip
+    ip: req.headers['x-forwarded-for'] || req.ip || 'unknown'
   });
+  link.lastClickedAt = now;
 
   // Limit click history to last 100 entries to avoid bloating settings file
   if (link.clickDetails.length > 100) {
     link.clickDetails = link.clickDetails.slice(-100);
   }
 
-  // Save changes for persistency - Pass the WHOLE cache to ensure it's saved correctly
-  saveSettings(settingsCache);
+  // Persist to disk
+  saveSettings({ trackingLinks: settingsCache.trackingLinks });
 
   addSystemLog('INFO', `Tracking Click: ${cleanId} [Total: ${link.clicks}]`, {
     id: cleanId,
@@ -383,8 +379,9 @@ app.get(['/t/:id', '/t/:id/'], (req, res) => {
     userId: link.userId,
     subreddit: link.subreddit
   });
+  console.log(`[TRACKING DATA] Click Recorded: ${cleanId} | New Total: ${link.clicks} | User: ${link.userId}`);
 
-  console.log(`[TRACKING OK] ID ${cleanId} -> Redirecting to ${link.originalUrl} (Click #${link.clicks})`);
+  // 302 Redirect is better for analytics
   res.redirect(302, link.originalUrl);
 });
 
