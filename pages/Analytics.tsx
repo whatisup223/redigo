@@ -211,8 +211,11 @@ export const Analytics: React.FC = () => {
       }
 
       return isCreatedRecently || hasRecentClicks;
+    }).filter(item => {
+      if (selectedAccount === 'all') return true;
+      return item.redditUsername === selectedAccount;
     });
-  }, [trackingLinks, dateFilter, customRange]);
+  }, [trackingLinks, dateFilter, customRange, selectedAccount]);
 
   const activeHistory = filteredHistory;
   const activeLinks = filteredTrackingLinks;
