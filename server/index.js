@@ -117,16 +117,21 @@ const sendEmail = async (templateId, to, variables = {}) => {
       return;
     }
 
+    const port = parseInt(smtpSettings.port) || 587;
+    // port 465 => implicit SSL (secure: true), other ports => STARTTLS (secure: false + requireTLS)
+    const useImplicitSSL = smtpSettings.secure && port === 465;
     const transporter = nodemailer.createTransport({
       host: smtpSettings.host,
-      port: smtpSettings.port,
-      secure: smtpSettings.secure,
+      port: port,
+      secure: useImplicitSSL,
+      ...((!useImplicitSSL && smtpSettings.secure) ? { requireTLS: true } : {}),
       auth: {
         user: smtpSettings.user,
         pass: smtpSettings.pass
       },
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
       }
     });
 

@@ -82,13 +82,20 @@ const PlanSchema = new mongoose.Schema({
 const TicketSchema = new mongoose.Schema({
     id: String,
     subject: String,
+    description: String,
     message: String,
     email: String,
+    userEmail: String,
+    userName: String,
     userId: String,
-    status: { type: String, default: 'Open' },
-    createdAt: Date,
-    replies: [mongoose.Schema.Types.Mixed]
-});
+    status: { type: String, default: 'open' },
+    priority: { type: String, default: 'medium' },
+    category: { type: String, default: 'General' },
+    messages: [mongoose.Schema.Types.Mixed],
+    replies: [mongoose.Schema.Types.Mixed],
+    createdAt: String,
+    updatedAt: String
+}, { strict: false });
 
 const RedditReplySchema = new mongoose.Schema({
     id: String,
