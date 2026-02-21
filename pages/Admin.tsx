@@ -34,7 +34,8 @@ import {
     BarChart2,
     MessageSquare,
     FileText,
-    Image
+    Image,
+    Mail
 } from 'lucide-react';
 
 // Mock Data Types
@@ -99,9 +100,20 @@ interface RedditSettings {
     userAgent: string;
 }
 
+interface SMTPSettings {
+    host: string;
+    port: number;
+    user: string;
+    pass: string;
+    from: string;
+    secure: boolean;
+}
+
 import { useLocation, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const Admin: React.FC = () => {
+    const { user } = useAuth();
     const location = useLocation();
     // Determine active tab based on URL
     const getActiveTab = () => {
@@ -113,7 +125,7 @@ export const Admin: React.FC = () => {
     };
 
     const activeTab = getActiveTab();
-    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans'>('ai');
+    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp'>('ai');
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -164,6 +176,14 @@ export const Admin: React.FC = () => {
         redirectUri: '',
         userAgent: 'RedigoApp/1.0'
     });
+    const [smtpSettings, setSmtpSettings] = useState<SMTPSettings>({
+        host: '',
+        port: 587,
+        user: '',
+        pass: '',
+        from: '',
+        secure: false
+    });
     const [stats, setStats] = useState({
         totalUsers: 0,
         activeSubscriptions: 0,
@@ -189,6 +209,11 @@ export const Admin: React.FC = () => {
     const [planForm, setPlanForm] = useState<Partial<Plan>>({ features: [''] });
 
     const [editForm, setEditForm] = useState({ name: '', email: '', password: '', role: '', plan: '', status: '', statusMessage: '', credits: 0, extraCreditsToAdd: 0, showAddExtra: false, customDailyLimit: 0 });
+
+    // Password State (for Admin Account)
+    const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+    const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // User Detail Modal State
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -230,12 +255,13 @@ export const Admin: React.FC = () => {
         const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
-            const [statsRes, usersRes, aiRes, stripeRes, redditRes, plansRes, logsRes] = await Promise.all([
+            const [statsRes, usersRes, aiRes, stripeRes, redditRes, smtpRes, plansRes, logsRes] = await Promise.all([
                 fetch('/api/admin/stats', { headers }),
                 fetch('/api/admin/users', { headers }),
                 fetch('/api/admin/ai-settings', { headers }),
                 fetch('/api/admin/stripe-settings', { headers }),
                 fetch('/api/admin/reddit-settings', { headers }),
+                fetch('/api/admin/smtp-settings', { headers }),
                 fetch('/api/plans', { headers }),
                 fetch('/api/admin/logs', { headers })
             ]);
@@ -245,6 +271,7 @@ export const Admin: React.FC = () => {
             if (aiRes.ok) setAiSettings(await aiRes.json());
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
             if (redditRes.ok) setRedditSettings(await redditRes.json());
+            if (smtpRes.ok) setSmtpSettings(await smtpRes.json());
             if (plansRes.ok) setPlans(await plansRes.json());
             if (logsRes.ok) setSystemLogs(await logsRes.json());
         } catch (error) {
@@ -453,6 +480,77 @@ export const Admin: React.FC = () => {
         }
     };
 
+    const handleSaveSMTPSettings = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/smtp-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(smtpSettings)
+            });
+            if (res.ok) {
+                alert('SMTP settings saved successfully!');
+            } else {
+                alert('Failed to save SMTP settings.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving SMTP settings.');
+        }
+    };
+
+    const handlePasswordChange = async () => {
+        if (!user) {
+            setPasswordMessage({ type: 'error', text: 'You must be logged in to change your password' });
+            return;
+        }
+
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setPasswordMessage({ type: 'error', text: 'New passwords do not match' });
+            return;
+        }
+
+        if (passwordData.newPassword.length < 6) {
+            setPasswordMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+            return;
+        }
+
+        setIsPasswordSaving(true);
+        setPasswordMessage(null);
+        const token = localStorage.getItem('token');
+
+        try {
+            const res = await fetch(`/api/users/${user.id}/password`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                setPasswordMessage({ type: 'success', text: 'Password updated successfully!' });
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                setPasswordMessage({ type: 'error', text: data.error || 'Failed to update password' });
+            }
+        } catch (error) {
+            console.error('Password change error:', error);
+            setPasswordMessage({ type: 'error', text: 'Server error. Please try again later.' });
+        } finally {
+            setIsPasswordSaving(false);
+        }
+    };
+
+
     return (
         <>
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 font-['Outfit'] pb-20">
@@ -533,40 +631,40 @@ export const Admin: React.FC = () => {
                                             View All Tickets <ChevronRight size={14} />
                                         </Link>
                                     </div>
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
-                                            <div>
-                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Awaiting Response</p>
-                                                <p className="text-3xl font-extrabold text-blue-600">{stats.ticketStats?.open || 0}</p>
+                                            <div className="min-w-0">
+                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 truncate">Awaiting Response</p>
+                                                <p className="text-3xl font-extrabold text-blue-600 truncate">{stats.ticketStats?.open || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
+                                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0 ml-4">
                                                 <Clock size={24} />
                                             </div>
                                         </div>
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
-                                            <div>
-                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Under Review</p>
-                                                <p className="text-3xl font-extrabold text-orange-600">{stats.ticketStats?.inProgress || 0}</p>
+                                            <div className="min-w-0">
+                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 truncate">Under Review</p>
+                                                <p className="text-3xl font-extrabold text-orange-600 truncate">{stats.ticketStats?.inProgress || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
+                                            <div className="p-4 bg-orange-50 text-orange-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0 ml-4">
                                                 <AlertCircle size={24} />
                                             </div>
                                         </div>
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
-                                            <div>
-                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Resolved Today</p>
-                                                <p className="text-3xl font-extrabold text-green-600">{stats.ticketStats?.resolved || 0}</p>
+                                            <div className="min-w-0">
+                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 truncate">Resolved Today</p>
+                                                <p className="text-3xl font-extrabold text-green-600 truncate">{stats.ticketStats?.resolved || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-green-50 text-green-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
+                                            <div className="p-4 bg-green-50 text-green-600 rounded-2xl group-hover:rotate-12 transition-transform shrink-0 ml-4">
                                                 <CheckCircle2 size={24} />
                                             </div>
                                         </div>
                                         <div className="bg-white p-6 rounded-[2rem] border border-slate-200/60 shadow-sm flex items-center justify-between group hover:shadow-lg transition-all">
-                                            <div>
-                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Archived/Closed</p>
-                                                <p className="text-3xl font-extrabold text-slate-500">{stats.ticketStats?.closed || 0}</p>
+                                            <div className="min-w-0">
+                                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 truncate">Archived/Closed</p>
+                                                <p className="text-3xl font-extrabold text-slate-500 truncate">{stats.ticketStats?.closed || 0}</p>
                                             </div>
-                                            <div className="p-4 bg-slate-50 text-slate-500 rounded-2xl group-hover:rotate-12 transition-transform shrink-0">
+                                            <div className="p-4 bg-slate-50 text-slate-500 rounded-2xl group-hover:rotate-12 transition-transform shrink-0 ml-4">
                                                 <Archive size={24} />
                                             </div>
                                         </div>
@@ -771,6 +869,20 @@ export const Admin: React.FC = () => {
                                     >
                                         <Zap size={18} />
                                         Plans
+                                    </button>
+                                    <button
+                                        onClick={() => setSettingsTab('smtp')}
+                                        className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'smtp' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <Mail size={18} />
+                                        SMTP
+                                    </button>
+                                    <button
+                                        onClick={() => setSettingsTab('security')}
+                                        className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'security' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <Shield size={18} />
+                                        Security
                                     </button>
                                 </div>
 
@@ -1238,6 +1350,168 @@ export const Admin: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {settingsTab === 'security' && (
+                                        <div className="max-w-2xl">
+                                            <div className="flex items-center gap-4 mb-8">
+                                                <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-200">
+                                                    <Shield size={24} />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-xl font-bold text-slate-900">Account Security</h2>
+                                                    <p className="text-slate-400 text-sm">Update your administrative password.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-6 bg-slate-50/50 p-8 rounded-[2.5rem] border border-slate-200/60 transition-all">
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-bold text-slate-700 ml-1">Current Password</label>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                            placeholder="••••••••"
+                                                            value={passwordData.currentPassword}
+                                                            onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="space-y-2">
+                                                            <label className="text-sm font-bold text-slate-700 ml-1">New Password</label>
+                                                            <input
+                                                                type="password"
+                                                                className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                                placeholder="••••••••"
+                                                                value={passwordData.newPassword}
+                                                                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <label className="text-sm font-bold text-slate-700 ml-1">Confirm New Password</label>
+                                                            <input
+                                                                type="password"
+                                                                className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                                placeholder="••••••••"
+                                                                value={passwordData.confirmPassword}
+                                                                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {passwordMessage && (
+                                                    <div className={`p-4 rounded-2xl flex items-center gap-3 text-sm font-bold animate-in fade-in slide-in-from-top-2 duration-300 ${passwordMessage.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                                        }`}>
+                                                        {passwordMessage.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                                                        {passwordMessage.text}
+                                                    </div>
+                                                )}
+
+                                                <button
+                                                    onClick={handlePasswordChange}
+                                                    disabled={isPasswordSaving || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 hover:shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
+                                                >
+                                                    {isPasswordSaving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
+                                                    Update Password
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {settingsTab === 'smtp' && (
+                                        <div className="max-w-2xl">
+                                            <div className="flex items-center gap-4 mb-8">
+                                                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                                                    <Mail size={24} />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-xl font-bold text-slate-900">SMTP Configuration</h2>
+                                                    <p className="text-slate-400 text-sm">Configure email sending settings.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-6 bg-slate-50/50 p-8 rounded-[2.5rem] border border-slate-200/60 transition-all">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">SMTP Host</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                            value={smtpSettings.host}
+                                                            onChange={(e) => setSmtpSettings({ ...smtpSettings, host: e.target.value })}
+                                                            placeholder="smtp.example.com"
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Port</span>
+                                                        <input
+                                                            type="number"
+                                                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all"
+                                                            value={smtpSettings.port}
+                                                            onChange={(e) => setSmtpSettings({ ...smtpSettings, port: parseInt(e.target.value) })}
+                                                            placeholder="587"
+                                                        />
+                                                    </label>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Username</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                            value={smtpSettings.user}
+                                                            onChange={(e) => setSmtpSettings({ ...smtpSettings, user: e.target.value })}
+                                                            placeholder="user@example.com"
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Password</span>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                            value={smtpSettings.pass}
+                                                            onChange={(e) => setSmtpSettings({ ...smtpSettings, pass: e.target.value })}
+                                                            placeholder="••••••••"
+                                                        />
+                                                    </label>
+                                                </div>
+
+                                                <label className="block">
+                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">From Email</span>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full p-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-300"
+                                                        value={smtpSettings.from}
+                                                        onChange={(e) => setSmtpSettings({ ...smtpSettings, from: e.target.value })}
+                                                        placeholder="noreply@example.com"
+                                                    />
+                                                </label>
+
+                                                <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
+                                                    <div>
+                                                        <h3 className="font-bold text-slate-900">Secure (SSL/TLS)</h3>
+                                                        <p className="text-slate-500 text-xs">Enable for secure connections.</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSmtpSettings({ ...smtpSettings, secure: !smtpSettings.secure })}
+                                                        className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${smtpSettings.secure ? 'bg-blue-600' : 'bg-slate-300'}`}
+                                                    >
+                                                        <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${smtpSettings.secure ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                    </button>
+                                                </div>
+
+                                                <button
+                                                    onClick={handleSaveSMTPSettings}
+                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-blue-600 hover:shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                >
+                                                    <Save size={20} />
+                                                    Save SMTP Config
+                                                </button>
                                             </div>
                                         </div>
                                     )}

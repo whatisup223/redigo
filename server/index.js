@@ -745,6 +745,16 @@ let redditSettings = savedData.reddit || {
   userAgent: 'RedditgoApp/1.0'
 };
 
+// SMTP Settings (In-memory)
+let smtpSettings = savedData.smtp || {
+  host: '',
+  port: 587,
+  user: '',
+  pass: '',
+  from: '',
+  secure: false
+};
+
 // Store user Reddit tokens (Initialized from DB/Cache)
 if (!settingsCache.userRedditTokens) settingsCache.userRedditTokens = {};
 const userRedditTokens = settingsCache.userRedditTokens;
@@ -1463,6 +1473,23 @@ app.post('/api/admin/reddit-settings', adminAuth, (req, res) => {
   saveSettings({ reddit: redditSettings });
   console.log('[Reddit] Configuration updated');
   res.json({ message: 'Reddit settings updated', settings: redditSettings });
+});
+
+// SMTP Settings Management
+app.get('/api/admin/smtp-settings', adminAuth, (req, res) => {
+  const safe = { ...smtpSettings };
+  if (safe.pass) safe.pass = '********';
+  res.json(safe);
+});
+
+app.post('/api/admin/smtp-settings', adminAuth, (req, res) => {
+  const newSettings = { ...req.body };
+  if (newSettings.pass && newSettings.pass.includes('****')) delete newSettings.pass;
+
+  smtpSettings = { ...smtpSettings, ...newSettings };
+  saveSettings({ smtp: smtpSettings });
+  console.log('[SMTP] Configuration updated');
+  res.json({ message: 'SMTP settings updated', settings: smtpSettings });
 });
 
 // --- Support Ticketing System ---
