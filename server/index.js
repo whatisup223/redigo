@@ -14,7 +14,7 @@ dotenv.config();
 
 // MongoDB Integration
 import mongoose from 'mongoose';
-import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost } from './models.js';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog } from './models.js';
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -169,50 +169,24 @@ app.use(cors());
 app.use(express.json());
 
 
-// --- System Logging ---
-const LOGS_FILE = './logs.storage.json';
-let systemLogs = [];
-
-// Load logs on startup
-if (fs.existsSync(LOGS_FILE)) {
+// --- System Logging (MongoDB) ---
+const addSystemLog = async (level, message, metadata = {}) => {
   try {
-    systemLogs = JSON.parse(fs.readFileSync(LOGS_FILE, 'utf8'));
-  } catch (e) {
-    console.error('Error loading logs:', e);
-    systemLogs = [];
-  }
-}
-
-let _logSaveTimer = null;
-const saveLogs = () => {
-  // Debounced async save to avoid blocking the event loop on large log files
-  if (_logSaveTimer) clearTimeout(_logSaveTimer);
-  _logSaveTimer = setTimeout(() => {
-    fs.writeFile(LOGS_FILE, JSON.stringify(systemLogs, null, 2), (e) => {
-      if (e) console.error('Error saving logs:', e);
+    const logEntry = new SystemLog({
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      timestamp: new Date(),
+      level: level.toUpperCase(),
+      message,
+      metadata
     });
-  }, 2000);
-};
+    await logEntry.save();
 
-const addSystemLog = (level, message, metadata = {}) => {
-  const logEntry = {
-    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-    timestamp: new Date().toISOString(),
-    level: level.toUpperCase(),
-    message,
-    metadata
-  };
-
-  // Prepend to array
-  systemLogs.unshift(logEntry);
-
-  // Keep last 2000 logs
-  if (systemLogs.length > 2000) {
-    systemLogs = systemLogs.slice(0, 2000);
+    // Optional: Keep only last 2000 logs in DB to prevent bloating
+    // This is better done as a periodic task, but for now we'll just insert.
+    return logEntry;
+  } catch (err) {
+    console.error('Failed to save system log to DB:', err);
   }
-
-  saveLogs();
-  return logEntry;
 };
 
 // Request Logging Middleware
@@ -687,6 +661,7 @@ app.post('/api/user/brand-profile', async (req, res) => {
 
       user.brandProfile = brandData;
       user.hasCompletedOnboarding = true;
+      user.markModified('brandProfile');
 
       // Ensure tracking in BrandProfile collection for completeness, though User embedded is main
       await BrandProfile.findOneAndUpdate(
@@ -1002,8 +977,14 @@ app.get('/api/user/brand-profile', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId required' });
 
     const user = await User.findOne({ id: userId.toString() });
-    const profile = user ? user.brandProfile : null;
-    res.json(profile && Object.keys(profile).length > 0 ? profile : DEFAULT_BRAND_PROFILE);
+    let profile = user ? user.brandProfile : null;
+
+    // Fallback to separate collection if not in user document
+    if (!profile || Object.keys(profile).length === 0) {
+      profile = await BrandProfile.findOne({ userId: userId.toString() });
+    }
+
+    res.json(profile && (profile.brandName || profile.website || Object.keys(profile).length > 2) ? profile : DEFAULT_BRAND_PROFILE);
   } catch (err) {
     console.error('Error fetching brand profile:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -1133,8 +1114,13 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
 });
 
 // Admin Logs
-app.get('/api/admin/logs', adminAuth, (req, res) => {
-  res.json(systemLogs);
+app.get('/api/admin/logs', adminAuth, async (req, res) => {
+  try {
+    const logs = await SystemLog.find({}).sort({ timestamp: -1 }).limit(2000);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch logs' });
+  }
 });
 
 // User Management
@@ -2132,32 +2118,34 @@ app.get('/api/user/posts/sync', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
     const userPosts = await RedditPost.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
-    if (userPosts.length === 0) return res.json([]);
 
-    const token = await getValidToken(userId);
-    if (token) {
-      const ids = userPosts.map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`).join(',');
-      const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'User-Agent': redditSettings.userAgent
-        }
-      });
+    if (userPosts.length > 0) {
+      const token = await getValidToken(userId);
+      if (token) {
+        const ids = userPosts.map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`).join(',');
+        const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'User-Agent': redditSettings.userAgent
+          }
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        const liveItems = data.data.children;
+        if (response.ok) {
+          const data = await response.json();
+          const liveItems = data.data.children;
 
-        for (const child of liveItems) {
-          const liveData = child.data;
-          const entryIdMatch = liveData.name || `t3_${liveData.id}`;
-          await RedditPost.updateOne(
-            { $or: [{ redditCommentId: entryIdMatch }, { redditCommentId: entryIdMatch.replace('t3_', '') }] },
-            { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
-          );
+          for (const child of liveItems) {
+            const liveData = child.data;
+            const entryIdMatch = liveData.name || `t3_${liveData.id}`;
+            await RedditPost.updateOne(
+              { $or: [{ redditCommentId: entryIdMatch }, { redditCommentId: entryIdMatch.replace('t3_', '') }] },
+              { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
+            );
+          }
         }
       }
     }
+
     const updatedHistory = await RedditPost.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
   } catch (error) {
@@ -2173,31 +2161,33 @@ app.get('/api/user/replies/sync', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
     const userReplies = await RedditReply.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
-    if (userReplies.length === 0) return res.json([]);
 
-    const token = await getValidToken(userId);
-    if (token) {
-      const ids = userReplies.map(r => r.redditCommentId).join(',');
-      const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'User-Agent': redditSettings.userAgent
-        }
-      });
+    if (userReplies.length > 0) {
+      const token = await getValidToken(userId);
+      if (token) {
+        const ids = userReplies.map(r => r.redditCommentId).join(',');
+        const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'User-Agent': redditSettings.userAgent
+          }
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        const liveItems = data.data.children;
+        if (response.ok) {
+          const data = await response.json();
+          const liveItems = data.data.children;
 
-        for (const child of liveItems) {
-          const liveData = child.data;
-          await RedditReply.updateOne(
-            { redditCommentId: liveData.name },
-            { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
-          );
+          for (const child of liveItems) {
+            const liveData = child.data;
+            await RedditReply.updateOne(
+              { redditCommentId: liveData.name },
+              { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
+            );
+          }
         }
       }
     }
+
     const updatedHistory = await RedditReply.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
   } catch (error) {

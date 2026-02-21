@@ -26,7 +26,8 @@ const UserSchema = new mongoose.Schema({
     history: [mongoose.Schema.Types.Mixed],
     postsHistory: [mongoose.Schema.Types.Mixed],
     transactions: [mongoose.Schema.Types.Mixed],
-    prompts: [mongoose.Schema.Types.Mixed]
+    prompts: [mongoose.Schema.Types.Mixed],
+    brandProfile: mongoose.Schema.Types.Mixed
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const TrackingLinkSchema = new mongoose.Schema({
@@ -117,6 +118,14 @@ const RedditPostSchema = new mongoose.Schema({
     sentiment: String
 }, { strict: false });
 
+const SystemLogSchema = new mongoose.Schema({
+    id: String,
+    timestamp: { type: Date, default: Date.now },
+    level: { type: String, enum: ['INFO', 'WARN', 'ERROR', 'SUCCESS', 'DEBUG'], default: 'INFO' },
+    message: String,
+    metadata: mongoose.Schema.Types.Mixed
+});
+
 const SettingsSchema = new mongoose.Schema({
     key: { type: String, unique: true },
     value: mongoose.Schema.Types.Mixed
@@ -130,3 +139,4 @@ export const Ticket = mongoose.model('Ticket', TicketSchema);
 export const Setting = mongoose.model('Setting', SettingsSchema);
 export const RedditReply = mongoose.model('RedditReply', RedditReplySchema);
 export const RedditPost = mongoose.model('RedditPost', RedditPostSchema);
+export const SystemLog = mongoose.model('SystemLog', SystemLogSchema);

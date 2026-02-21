@@ -193,10 +193,15 @@ export const ContentArchitect: React.FC = () => {
         if (postData.title || postData.content) {
             localStorage.setItem('redditgo_post_draft', JSON.stringify({
                 ...postData,
-                step: step
+                step: step,
+                includeBrandName,
+                includeLink,
+                useTracking,
+                includeImage,
+                language
             }));
         }
-    }, [postData, step]);
+    }, [postData, step, includeBrandName, includeLink, useTracking, includeImage, language]);
 
     const handleResumeDraft = async () => {
         const savedDraft = localStorage.getItem('redditgo_post_draft');
@@ -204,6 +209,11 @@ export const ContentArchitect: React.FC = () => {
             const draft = JSON.parse(savedDraft);
             setPostData(draft);
             setStep(draft.step || 2);
+            setIncludeBrandName(draft.includeBrandName !== undefined ? draft.includeBrandName : true);
+            setIncludeLink(draft.includeLink !== undefined ? draft.includeLink : true);
+            setUseTracking(draft.useTracking !== undefined ? draft.useTracking : false);
+            setIncludeImage(draft.includeImage !== undefined ? draft.includeImage : true);
+            setLanguage(draft.language || 'English');
             setShowDraftBanner(false);
             showToast('Draft restored! Continuing from where you left off.', 'success');
             syncUser(); // Sync usage state after resuming
@@ -1361,7 +1371,13 @@ export const ContentArchitect: React.FC = () => {
                                         </div>
                                         <h2 className="text-xl font-extrabold text-slate-900">Final Review</h2>
                                     </div>
-                                    <button onClick={() => setStep(2)} className="text-xs font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">← Edit</button>
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => setStep(1)} className="text-[10px] font-black text-slate-400 hover:text-orange-600 uppercase tracking-widest transition-colors flex items-center gap-1">
+                                            <Settings size={12} /> Settings
+                                        </button>
+                                        <div className="w-[1px] h-3 bg-slate-200" />
+                                        <button onClick={() => setStep(2)} className="text-xs font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest">← Edit</button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">

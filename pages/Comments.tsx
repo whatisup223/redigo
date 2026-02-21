@@ -170,16 +170,18 @@ export const Comments: React.FC = () => {
         editedComment,
         wizardData,
         selectedAccount,
-        brandProfile,
         activeTone,
-        language
+        language,
+        includeBrandName,
+        includeLink,
+        useTracking
       };
       localStorage.setItem('redigo_comment_draft', JSON.stringify(draft));
     } else {
       // ONLY remove if it was checked and it's truly empty
       localStorage.removeItem('redigo_comment_draft');
     }
-  }, [selectedPost, generatedReply, editedComment, wizardData, selectedAccount, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone]);
+  }, [selectedPost, generatedReply, editedComment, wizardData, selectedAccount, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
 
   const handleResumeDraft = () => {
     const savedDraft = localStorage.getItem('redigo_comment_draft');
@@ -193,6 +195,9 @@ export const Comments: React.FC = () => {
       setBrandProfile(draft.brandProfile);
       setActiveTone(draft.activeTone);
       setLanguage(draft.language || 'English');
+      setIncludeBrandName(draft.includeBrandName !== undefined ? draft.includeBrandName : true);
+      setIncludeLink(draft.includeLink !== undefined ? draft.includeLink : true);
+      setUseTracking(draft.useTracking !== undefined ? draft.useTracking : false);
 
       // Ensure the drafted post is in the list so it's visible
       if (draft.selectedPost) {
@@ -818,7 +823,15 @@ export const Comments: React.FC = () => {
                         {/* Editor */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between px-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Final Polish</label>
+                            <div className="flex items-center gap-3">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Final Polish</label>
+                              <button
+                                onClick={() => { setGeneratedReply(null); setIsWizardOpen(true); }}
+                                className="text-[10px] font-black text-orange-600 hover:text-orange-700 uppercase tracking-widest flex items-center gap-1 transition-colors"
+                              >
+                                <ChevronRight size={10} className="rotate-180" /> Back to Wizard
+                              </button>
+                            </div>
                             <button onClick={() => { navigator.clipboard.writeText(editedComment); showToast('Copied!', 'success'); }} className="text-[10px] font-black text-slate-400 hover:text-slate-900 flex items-center gap-1 transition-colors"><Copy size={12} /> Copy</button>
                           </div>
                           <textarea
