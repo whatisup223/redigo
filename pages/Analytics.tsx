@@ -380,10 +380,116 @@ export const Analytics: React.FC = () => {
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
               <button onClick={() => setSelectedEntry(null)} className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95">Close</button>
-              <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2">
-                Verify on Live Reddit <ExternalLink size={18} />
-              </a>
+              {activeTab !== 'links' && (
+                <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2">
+                  Verify on Live Reddit <ExternalLink size={18} />
+                </a>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedEntry && activeTab === 'links' && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col md:flex-row justify-end max-h-screen">
+          <div className="bg-white w-full md:w-[600px] h-full flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl relative">
+            <div className="absolute top-0 right-0 p-8 z-10">
+              <button onClick={() => setSelectedEntry(null)} className="w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors active:scale-95">
+                <X size={20} className="stroke-[3]" />
+              </button>
+            </div>
+
+            <div className="p-10 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3 mb-6 font-bold text-xs">
+                <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-wider">Tracking Link</span>
+                <span className="text-slate-400 flex items-center gap-1.5"><Clock size={12} /> {new Date(selectedEntry.createdAt).toLocaleDateString()}</span>
+              </div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2 truncate" title={selectedEntry.originalUrl}>{selectedEntry.originalUrl}</h2>
+              <div className="flex items-center gap-2 text-slate-500 font-bold">
+                Targeted: <span className="text-orange-600">r/{selectedEntry.subreddit}</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col items-center justify-center text-center">
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4"><MousePointer2 size={24} /></div>
+                  <span className="text-3xl font-black text-slate-900">{selectedEntry.clicks}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Total Clicks</span>
+                </div>
+                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col items-center justify-center text-center">
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-4"><Globe size={24} /></div>
+                  <span className="text-3xl font-black text-slate-900">{new Set((selectedEntry.clickDetails || []).map((c: any) => c.ip)).size}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Unique IPs</span>
+                </div>
+              </div>
+
+              {selectedEntry.clickDetails && selectedEntry.clickDetails.length > 0 && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Device Types</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {(() => {
+                      const getDevice = (ua: string) => ua.toLowerCase().includes('mobile') || ua.toLowerCase().includes('android') || ua.toLowerCase().includes('iphone') ? 'Mobile Devices' : 'Desktop / PC';
+                      const devices = (selectedEntry.clickDetails || []).reduce((acc: any, curr: any) => {
+                        const dev = getDevice(curr.userAgent || '');
+                        acc[dev] = (acc[dev] || 0) + 1;
+                        return acc;
+                      }, {});
+                      return Object.entries(devices).map(([dev, count]: any) => (
+                        <div key={dev} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                              {dev === 'Mobile Devices' ? <LayoutList size={14} /> : <Layout size={14} />}
+                            </div>
+                            <span className="font-bold text-slate-700">{dev}</span>
+                          </div>
+                          <span className="font-extrabold text-slate-900">{count} clicks</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {selectedEntry.clickDetails && selectedEntry.clickDetails.length > 0 && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 mb-6">
+                    <span className="w-1.5 h-6 bg-slate-900 rounded-full"></span>
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Recent Click Timeline</h3>
+                  </div>
+                  <div className="border-l-2 border-slate-100 ml-4 pl-6 space-y-6">
+                    {[...(selectedEntry.clickDetails)].reverse().slice(0, 10).map((click: any, idx) => (
+                      <div key={idx} className="relative">
+                        <div className="absolute -left-[31px] w-4 h-4 bg-white border-4 border-blue-500 rounded-full top-1 shadow-sm"></div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-900 text-sm">{new Date(click.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            {idx === 0 && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase">Latest</span>}
+                          </div>
+                          <p className="text-xs font-bold text-slate-400 capitalize bg-slate-50 w-fit px-3 py-1.5 rounded-lg border border-slate-100">
+                            {click.userAgent.includes('Mobile') ? '📱 Mobile Browser' : '💻 Desktop Browser'} • IP: {click.ip?.substring(0, 6)}...
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-between gap-4 font-bold">
+              <button onClick={() => { const url = `${window.location.origin}/t/${selectedEntry.id}`; navigator.clipboard.writeText(url); showToast('Tracking URL Copied!'); }} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center gap-2 transition-all active:scale-95 shadow-sm">
+                <Copy size={18} /> Copy Link
+              </button>
+              <button onClick={() => setSelectedEntry(null)} className="px-10 py-4 bg-slate-900 text-white rounded-[1.5rem] shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95">
+                Done
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -637,7 +743,14 @@ export const Analytics: React.FC = () => {
                     </td>
                     <td className="px-4 md:px-10 py-6 text-right">
                       {activeTab === 'links' ? (
-                        <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-3 md:px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-xs md:text-sm">Copy</button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold hover:bg-blue-600 hover:text-white transition-all active:scale-95 text-xs md:text-sm">
+                            <span className="hidden sm:inline">Details</span>
+                            <span className="sm:hidden"><MousePointer2 size={14} /></span>
+                          </button>
+                          <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-3 py-2 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl transition-all active:scale-95"><Copy size={16} /></button>
+                          <a href={row.originalUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
+                        </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
