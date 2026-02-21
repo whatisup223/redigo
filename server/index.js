@@ -496,6 +496,7 @@ console.log(`--- ADMIN ACCOUNT READY: ${superuser.email} ---`);
 
 let tickets = savedData.tickets || [];
 let sentReplies = savedData.replies || [];
+let sentPosts = savedData.posts || [];
 
 // General Auth Middleware to enforce Bans/Suspensions on every request
 const generalAuth = (req, res, next) => {
@@ -2005,12 +2006,88 @@ app.post('/api/reddit/post', async (req, res) => {
 
     const redditResponse = await response.json();
     addSystemLog('SUCCESS', `Reddit Post submitted by User ${userId}: ${title}`, { subreddit });
+
+    // Save to posts analytics memory
+    const entry = {
+      id: Math.random().toString(36).substring(2, 11),
+      userId,
+      subreddit,
+      postTitle: title,
+      postContent: text,
+      postUrl: `https://reddit.com${redditResponse.json.data.url || ''}`,
+      redditUsername: redditUsername || 'unknown',
+      redditCommentId: redditResponse.json.data.id || redditResponse.json.data.name || null,
+      deployedAt: new Date().toISOString(),
+      status: 'Sent',
+      ups: 0,
+      replies: 0,
+      sentiment: 'Neutral'
+    };
+    sentPosts.unshift(entry);
+    saveSettings({ posts: sentPosts });
+
     res.json({ success: true, redditResponse });
   } catch (error) {
     console.error('Reddit Post Submission Error:', error);
     addSystemLog('ERROR', `Reddit Post Failed for User ${userId}: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Fetch User Posts History
+app.get('/api/user/posts', (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+  const history = sentPosts.filter(r => r.userId == userId);
+  res.json(history);
+});
+
+// Sync History for Posts with Real Reddit Data
+app.get('/api/user/posts/sync', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+  console.log(`[Analytics] Syncing Posts for User ${userId}. Store size: ${sentPosts.length}`);
+  let history = sentPosts.filter(r => String(r.userId) === String(userId));
+
+  try {
+    const token = await getValidToken(userId);
+    const userPosts = history.filter(r => r.redditCommentId);
+
+    if (token && userPosts.length > 0) {
+      const ids = userPosts.map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`).join(',');
+      const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'User-Agent': redditSettings.userAgent
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const liveItems = data.data.children;
+
+        liveItems.forEach(child => {
+          const liveData = child.data;
+          const entryIdMatch = liveData.name || `t3_${liveData.id}`;
+          const entry = sentPosts.find(r => r.redditCommentId === entryIdMatch || `t3_${r.redditCommentId}` === entryIdMatch);
+          if (entry) {
+            entry.ups = liveData.ups;
+            entry.replies = liveData.num_comments || 0;
+          }
+        });
+
+        // Save fresh stats back
+        saveSettings({ posts: sentPosts });
+        history = sentPosts.filter(r => String(r.userId) === String(userId));
+      }
+    }
+  } catch (error) {
+    console.error('[Reddit Post Sync Error]', error);
+  }
+
+  res.json(history);
 });
 
 // Sync History with Real Reddit Data
