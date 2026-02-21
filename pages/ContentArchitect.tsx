@@ -122,6 +122,7 @@ export const ContentArchitect: React.FC = () => {
     const [showRegenConfirm, setShowRegenConfirm] = useState(false);
     const [regenMode, setRegenMode] = useState<'text' | 'image' | 'both'>('text');
     const [showDraftBanner, setShowDraftBanner] = useState(false);
+    const [isInitialCheckDone, setIsInitialCheckDone] = useState(false);
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
     const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
@@ -186,6 +187,7 @@ export const ContentArchitect: React.FC = () => {
                 localStorage.removeItem('redditgo_post_draft');
             }
         }
+        setIsInitialCheckDone(true);
     }, []);
 
     // Auto-save effect
@@ -200,10 +202,10 @@ export const ContentArchitect: React.FC = () => {
                 includeImage,
                 language
             }));
-        } else {
+        } else if (isInitialCheckDone && !showDraftBanner) {
             localStorage.removeItem('redditgo_post_draft');
         }
-    }, [postData, step, includeBrandName, includeLink, useTracking, includeImage, language]);
+    }, [postData, step, includeBrandName, includeLink, useTracking, includeImage, language, isInitialCheckDone, showDraftBanner]);
 
     const handleResumeDraft = async () => {
         const savedDraft = localStorage.getItem('redditgo_post_draft');
