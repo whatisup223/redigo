@@ -325,14 +325,31 @@ let trackingLinks = savedData.trackingLinks || [];
 app.get(['/t/:id', '/t/:id/'], (req, res) => {
   const { id } = req.params;
 
+  // Ensure trackingLinks exists in cache
+  if (!settingsCache.trackingLinks) settingsCache.trackingLinks = [];
+
   // Case-insensitive lookup and cleanup (remove trailing slash from param if any)
-  const cleanId = id.replace(/\/$/, '');
-  const link = trackingLinks.find(l => l.id.toLowerCase() === cleanId.toLowerCase());
+  const cleanId = id.replace(/\/$/, '').toLowerCase();
+
+  // Directly find in the cache to avoid any stale local variables
+  const link = settingsCache.trackingLinks.find(l => l.id.toLowerCase() === cleanId);
 
   if (!link) {
-    console.error(`[TRACKING] Link not found: ${id}`);
-    addSystemLog('WARN', `Tracking link not found: ${id}`, { ip: req.ip });
-    return res.status(404).send('Tracking link not found or expired.');
+    console.error(`[TRACKING ERROR] Link not found: ${cleanId}`);
+    addSystemLog('WARN', `Tracking link not found: ${cleanId}`, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      requestedUrl: req.originalUrl
+    });
+    return res.status(404).send(`
+      <html>
+        <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: #64748b;">
+          <h2>Link Not Found</h2>
+          <p>The tracking link you are looking for does not exist or has expired.</p>
+          <a href="/" style="color: #f97316; font-weight: bold; text-decoration: none;">Return to Home</a>
+        </body>
+      </html>
+    `);
   }
 
   // Log the click
@@ -344,51 +361,30 @@ app.get(['/t/:id', '/t/:id/'], (req, res) => {
   link.clickDetails.push({
     timestamp: new Date().toISOString(),
     userAgent: req.headers['user-agent'],
-    referer: req.headers['referer'],
+    referer: req.headers['referer'] || 'direct',
     ip: req.ip
   });
 
-  // Limit click history to last 50 entries to avoid bloating settings file
+  // Limit click history to last 100 entries to avoid bloating settings file
   if (link.clickDetails.length > 100) {
     link.clickDetails = link.clickDetails.slice(-100);
   }
 
-  // Save changes for persistency - explicitly use the array reference
-  saveSettings({ trackingLinks });
+  // Save changes for persistency - Pass the WHOLE cache to ensure it's saved correctly
+  saveSettings(settingsCache);
 
-  addSystemLog('INFO', `Tracking Click: ${cleanId} -> ${link.originalUrl}`, {
-    subreddit: link.subreddit,
+  addSystemLog('INFO', `Tracking Click: ${cleanId} [Total: ${link.clicks}]`, {
+    id: cleanId,
+    url: link.originalUrl,
     userId: link.userId,
-    clicks: link.clicks,
-    referer: req.headers['referer']
+    subreddit: link.subreddit
   });
 
-  console.log(`[TRACKING] ID ${cleanId} clicked. Total clicks: ${link.clicks}`);
+  console.log(`[TRACKING OK] ID ${cleanId} -> Redirecting to ${link.originalUrl} (Click #${link.clicks})`);
 
-  // Premium feel: Meta refresh and JS fallback
-  res.send(`
-    <html>
-      <head>
-        <title>Redirecting...</title>
-        <meta http-equiv="refresh" content="0;url=${link.originalUrl}">
-        <style>
-          body { font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc; color: #64748b; margin: 0; }
-          .container { text-align: center; }
-          .loader { border: 3px solid #f3f3f3; border-top: 3px solid #f97316; border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-          h2 { font-weight: 800; color: #0f172a; margin-bottom: 8px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="loader"></div>
-          <h2>Redirecting you safely</h2>
-          <p>Please wait while we take you to your destination...</p>
-        </div>
-        <script>setTimeout(function(){ window.location.href = "${link.originalUrl}"; }, 100);</script>
-      </body>
-    </html>
-  `);
+  // Preferred way for tracking: HTTP 302 (Found)
+  // This is better for analytics and SEO as it's a server-side redirect
+  res.redirect(302, link.originalUrl);
 });
 
 // ─── Create Tracking Link ──────────────────────────────────────────────────

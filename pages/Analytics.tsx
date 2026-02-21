@@ -512,9 +512,9 @@ export const Analytics: React.FC = () => {
         <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-extrabold text-slate-900">{activeTab === 'links' ? 'Link Tracking History' : 'Outreach History'}</h2>
-            {(activeTab === 'links' ? trackingLinks : activeHistory).length > 0 && (
+            {(activeTab === 'links' ? activeLinks : activeHistory).length > 0 && (
               <span className={`px-2 py-0.5 text-white text-[10px] font-black rounded-lg ${activeTab === 'links' ? 'bg-blue-600' : 'bg-slate-900'}`}>
-                {(activeTab === 'links' ? trackingLinks : activeHistory).length}
+                {(activeTab === 'links' ? activeLinks : activeHistory).length}
               </span>
             )}
           </div>
@@ -526,7 +526,7 @@ export const Analytics: React.FC = () => {
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center p-20 gap-4"><RefreshCw className="animate-spin text-orange-600" size={32} /></div>
-          ) : (activeTab === 'links' ? trackingLinks : activeHistory).length === 0 ? (
+          ) : (activeTab === 'links' ? activeLinks : activeHistory).length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 gap-4">
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-200">
                 {activeTab === 'links' ? <Link2 size={32} /> : <LayoutList size={32} />}
@@ -545,7 +545,7 @@ export const Analytics: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(activeTab === 'links' ? trackingLinks : activeHistory).map((row) => (
+                {(activeTab === 'links' ? activeLinks : activeHistory).map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 group transition-all">
                     <td className="px-10 py-6">
                       <span className={`font-black ${activeTab === 'links' ? 'text-blue-600' : 'text-slate-900'}`}>r/{row.subreddit}</span>
