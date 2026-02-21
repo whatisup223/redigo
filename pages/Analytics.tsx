@@ -176,11 +176,29 @@ export const Analytics: React.FC = () => {
     return item.redditUsername === selectedAccount;
   });
 
+  const filteredTrackingLinks = trackingLinks.filter(item => {
+    const itemDate = new Date(item.createdAt || item.deployedAt);
+    const now = new Date();
+
+    if (dateFilter === '24h') return (now.getTime() - itemDate.getTime()) <= 24 * 60 * 60 * 1000;
+    if (dateFilter === '7d') return (now.getTime() - itemDate.getTime()) <= 7 * 24 * 60 * 60 * 1000;
+    if (dateFilter === '30d') return (now.getTime() - itemDate.getTime()) <= 30 * 24 * 60 * 60 * 1000;
+    if (dateFilter === 'all') return true;
+    if (dateFilter === 'custom' && customRange.start && customRange.end) {
+      const start = new Date(customRange.start);
+      const end = new Date(customRange.end);
+      end.setHours(23, 59, 59);
+      return itemDate >= start && itemDate <= end;
+    }
+    return true;
+  });
+
   const activeHistory = filteredHistory;
+  const activeLinks = filteredTrackingLinks;
 
   const chartData = useMemo(() => {
     const dataByDate: Record<string, any> = {};
-    const sourceData = activeTab === 'links' ? trackingLinks : activeHistory;
+    const sourceData = activeTab === 'links' ? activeLinks : activeHistory;
 
     sourceData.forEach(current => {
       const ts = activeTab === 'links' ? (current.createdAt || current.deployedAt) : current.deployedAt;
@@ -209,23 +227,26 @@ export const Analytics: React.FC = () => {
       const dateB = new Date(b.name + ' ' + year);
       return dateA.getTime() - dateB.getTime();
     });
-  }, [activeTab, trackingLinks, activeHistory]);
+  }, [activeTab, activeLinks, activeHistory]);
 
   const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0, clicks: 0 }];
 
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
   const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
-  const totalClicks = trackingLinks.reduce((a, b) => a + (b.clicks || 0), 0);
-  const activeSubreddits = new Set([...activeHistory, ...trackingLinks].map(r => r.subreddit)).size;
+  const totalClicks = activeLinks.reduce((a, b) => a + (b.clicks || 0), 0);
+  const activeSubreddits = new Set([...activeHistory, ...activeLinks].map(r => r.subreddit)).size;
 
   const sentimentData = [
     { name: 'Supportive', value: activeHistory.filter(h => h.ups > 2).length, color: '#10b981' },
-    { name: 'Neutral', value: activeHistory.filter(h => h.ups <= 2 && h.ups >= 0).length, color: '#94a3b8' },
-    { name: 'Critical', value: activeHistory.filter(h => h.ups < 0).length, color: '#ef4444' },
+    { name: 'Neutral', value: activeHistory.filter(h => (h.ups || 0) <= 2 && (h.ups || 0) >= 0).length, color: '#94a3b8' },
+    { name: 'Critical', value: activeHistory.filter(h => (h.ups || 0) < 0).length, color: '#ef4444' },
   ];
 
-  const subPerformance = activeHistory.reduce((acc: any, curr) => {
-    acc[curr.subreddit] = (acc[curr.subreddit] || 0) + (curr.ups || 0) + (curr.replies || 0);
+  const subPerformance = [...activeHistory, ...activeLinks].reduce((acc: any, curr) => {
+    const sub = curr.subreddit;
+    if (!sub) return acc;
+    const score = (curr.ups || 0) + (curr.replies || 0) + (curr.clicks || 0);
+    acc[sub] = (acc[sub] || 0) + score;
     return acc;
   }, {});
 

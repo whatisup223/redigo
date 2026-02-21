@@ -321,51 +321,71 @@ let plans = savedData.plans || [
 let trackingLinks = savedData.trackingLinks || [];
 
 // ─── Tracking Redirector ──────────────────────────────────────────────────
-app.get('/t/:id', (req, res) => {
+// Robust route to handle both with and without trailing slash
+app.get(['/t/:id', '/t/:id/'], (req, res) => {
   const { id } = req.params;
-  const link = trackingLinks.find(l => l.id === id);
+
+  // Case-insensitive lookup and cleanup (remove trailing slash from param if any)
+  const cleanId = id.replace(/\/$/, '');
+  const link = trackingLinks.find(l => l.id.toLowerCase() === cleanId.toLowerCase());
 
   if (!link) {
+    console.error(`[TRACKING] Link not found: ${id}`);
+    addSystemLog('WARN', `Tracking link not found: ${id}`, { ip: req.ip });
     return res.status(404).send('Tracking link not found or expired.');
   }
 
   // Log the click
-  link.clicks = (link.clicks || 0) + 1;
+  link.clicks = (Number(link.clicks) || 0) + 1;
   link.lastClickedAt = new Date().toISOString();
 
-  // Optional: Capture more data from headers/ip if needed
+  // Optimized click details (keep it lean)
   if (!link.clickDetails) link.clickDetails = [];
   link.clickDetails.push({
     timestamp: new Date().toISOString(),
     userAgent: req.headers['user-agent'],
+    referer: req.headers['referer'],
+    ip: req.ip
+  });
+
+  // Limit click history to last 50 entries to avoid bloating settings file
+  if (link.clickDetails.length > 100) {
+    link.clickDetails = link.clickDetails.slice(-100);
+  }
+
+  // Save changes for persistency - explicitly use the array reference
+  saveSettings({ trackingLinks });
+
+  addSystemLog('INFO', `Tracking Click: ${cleanId} -> ${link.originalUrl}`, {
+    subreddit: link.subreddit,
+    userId: link.userId,
+    clicks: link.clicks,
     referer: req.headers['referer']
   });
 
-  // Save changes for persistency
-  saveSettings({ trackingLinks });
+  console.log(`[TRACKING] ID ${cleanId} clicked. Total clicks: ${link.clicks}`);
 
-  addSystemLog('INFO', `Tracking Click: ${id} -> ${link.originalUrl}`, {
-    subreddit: link.subreddit,
-    userId: link.userId,
-    clicks: link.clicks
-  });
-
-  // Premium feel: Meta refresh or simple redirect
+  // Premium feel: Meta refresh and JS fallback
   res.send(`
     <html>
       <head>
         <title>Redirecting...</title>
         <meta http-equiv="refresh" content="0;url=${link.originalUrl}">
         <style>
-          body { font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc; color: #64748b; }
-          .loader { border: 3px solid #f3f3f3; border-top: 3px solid #f97316; border-radius: 50%; width: 24px; height: 24px; animate: spin 1s linear infinite; margin-right: 12px; }
+          body { font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc; color: #64748b; margin: 0; }
+          .container { text-align: center; }
+          .loader { border: 3px solid #f3f3f3; border-top: 3px solid #f97316; border-radius: 50%; width: 32px; height: 32px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
           @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          h2 { font-weight: 800; color: #0f172a; margin-bottom: 8px; }
         </style>
       </head>
       <body>
-        <div class="loader"></div>
-        <p>Redirecting you safely...</p>
-        <script>window.location.href = "${link.originalUrl}";</script>
+        <div class="container">
+          <div class="loader"></div>
+          <h2>Redirecting you safely</h2>
+          <p>Please wait while we take you to your destination...</p>
+        </div>
+        <script>setTimeout(function(){ window.location.href = "${link.originalUrl}"; }, 100);</script>
       </body>
     </html>
   `);
@@ -980,17 +1000,71 @@ const adminAuth = (req, res, next) => {
 
 // Admin Stats
 app.get('/api/admin/stats', adminAuth, (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  // 1. Active Subscriptions: Users with status 'Active' who are NOT on 'Starter' plan
+  const activeSubs = users.filter(u =>
+    u.status === 'Active' &&
+    u.plan !== 'Starter' &&
+    (u.role !== 'admin' || (u.email !== process.env.ADMIN_EMAIL))
+  ).length;
+
+  // 2. API Usage: Total credits spent today by all users vs total capacity
+  let totalPointsSpentToday = 0;
+  let totalDailyCapacity = 0;
+
+  users.forEach(u => {
+    // Credit usage
+    if (u.lastUsageDate === today) {
+      totalPointsSpentToday += (u.dailyUsagePoints || 0);
+    }
+
+    // Capacity calculation
+    if (u.status === 'Active') {
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (u.plan || '').toLowerCase());
+      const planLimit = u.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const effectiveLimit = (Number(u.customDailyLimit) > 0) ? Number(u.customDailyLimit) : (Number(planLimit) || 0);
+      totalDailyCapacity += effectiveLimit;
+    }
+  });
+
+  // Calculate percentage (default to 0 if no capacity defined yet)
+  const apiUsagePercent = totalDailyCapacity > 0
+    ? Math.min(100, Math.round((totalPointsSpentToday / totalDailyCapacity) * 100))
+    : 0;
+
+  // 3. System Health: Based on ERROR logs in the last hour
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const recentErrors = systemLogs.filter(log =>
+    log.level === 'ERROR' && log.timestamp > oneHourAgo
+  ).length;
+
+  let healthStatus = 'Healthy';
+  let healthPercent = '100%';
+
+  if (recentErrors > 15) {
+    healthStatus = 'Critical';
+    healthPercent = '65%';
+  } else if (recentErrors > 5) {
+    healthStatus = 'Degraded';
+    healthPercent = '88%';
+  } else if (recentErrors > 0) {
+    healthStatus = 'Stable';
+    healthPercent = '99%';
+  }
+
   res.json({
     totalUsers: users.length,
-    activeSubscriptions: users.filter(u => u.status === 'Active').length,
-    apiUsage: Math.floor(Math.random() * 100), // Mock percentage
-    systemHealth: '98%',
+    activeSubscriptions: activeSubs,
+    apiUsage: apiUsagePercent,
+    systemHealth: healthPercent,
+    healthLabel: healthStatus,
     ticketStats: {
-      total: tickets.length,
-      open: tickets.filter(t => t.status === 'open').length,
-      inProgress: tickets.filter(t => t.status === 'in_progress').length,
-      resolved: tickets.filter(t => t.status === 'resolved').length,
-      closed: tickets.filter(t => t.status === 'closed').length
+      total: (tickets || []).length,
+      open: (tickets || []).filter(t => t.status === 'open').length,
+      inProgress: (tickets || []).filter(t => t.status === 'in_progress').length,
+      resolved: (tickets || []).filter(t => t.status === 'resolved').length,
+      closed: (tickets || []).filter(t => t.status === 'closed').length
     }
   });
 });

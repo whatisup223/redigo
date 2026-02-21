@@ -229,7 +229,24 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         </div>
 
         <div className="shrink-0 px-4 pb-20 pt-3 border-t border-slate-200/60 space-y-3">
-          {user?.plan === 'Starter' && (
+          {isAdmin && (
+            <Link
+              to="/admin"
+              onClick={() => setIsOpen(false)}
+              className="block bg-slate-900 p-4 rounded-3xl shadow-lg shadow-slate-200 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -mr-6 -mt-6 group-hover:scale-150 transition-transform duration-500" />
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield size={16} className="text-orange-500 fill-orange-500 animate-pulse" />
+                  <span className="font-bold text-sm tracking-wide">Back to Admin</span>
+                </div>
+                <p className="text-slate-400 text-[10px] leading-relaxed font-medium">Access system controls and management.</p>
+              </div>
+            </Link>
+          )}
+
+          {user?.plan === 'Starter' && !isAdmin && (
             <Link
               to="/pricing"
               onClick={() => setIsOpen(false)}
