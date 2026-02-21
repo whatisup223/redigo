@@ -106,6 +106,12 @@ const DEFAULT_EMAIL_TEMPLATES = {
     subject: 'Action Required: Verify your email - Redditgo',
     body: `<h1>Welcome to Redditgo, {{name}}!</h1><p>Please confirm your email address to activate your account and start your outreach journey.</p><p><a href="{{verify_link}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">Verify Email</a></p><p>This link will expire in 24 hours.</p>`,
     active: true
+  },
+  'two_factor_code': {
+    name: '2FA Verification Code',
+    subject: 'Your Verification Code - Redditgo',
+    body: `<h1>Verification Code</h1><p>Hi {{name}},</p><p>We received a login attempt for your account. Use the following code to complete your login:</p><div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #EA580C; margin: 20px 0;">{{code}}</div><p>This code will expire in 10 minutes. If you did not attempt to log in, please ignore this email or change your password.</p>`,
+    active: true
   }
 };
 
@@ -116,6 +122,24 @@ const getEmailTemplates = () => {
     if (cached[key]) merged[key] = { ...merged[key], ...cached[key] };
   }
   return merged;
+};
+
+// --- Helper: Check for Low Credits ---
+const checkLowCredits = async (user) => {
+  if (user.role === 'admin') return;
+  const credits = user.credits || 0;
+  if (credits <= 20 && !user.lowCreditsNotified) {
+    await sendEmail('low_credits', user.email, {
+      name: user.name || 'there',
+      balance: credits.toString()
+    });
+    user.lowCreditsNotified = true;
+    await user.save();
+    addSystemLog('INFO', `Low credits alert sent to ${user.email}`);
+  } else if (credits > 20 && user.lowCreditsNotified) {
+    user.lowCreditsNotified = false;
+    await user.save();
+  }
 };
 
 const sendEmail = async (templateId, to, variables = {}) => {
@@ -248,6 +272,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
           dbUser.billingCycle = billingCycle || 'monthly';
           dbUser.status = 'Active';
           dbUser.credits = currentCredits + creditsToAdd;
+          dbUser.lowCreditsNotified = false; // Reset warning on top-up
           dbUser.subscriptionStart = now.toISOString();
           dbUser.subscriptionEnd = expirationDate.toISOString();
 
@@ -515,7 +540,7 @@ const generalAuth = async (req, res, next) => {
   const path = req.path.replace(/\/$/, '');
 
   // Exempt public routes explicitly
-  const publicRoutes = ['/api/auth/login', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
+  const publicRoutes = ['/api/auth/login', '/api/auth/verify-2fa', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
   if (publicRoutes.includes(path)) return next();
 
   // Try to extract user from token or ID
@@ -648,6 +673,23 @@ app.post('/api/auth/login', async (req, res) => {
 
       if (updated) {
         await user.save();
+      }
+
+      // Check for 2FA
+      if (user.twoFactorEnabled) {
+        const crypto = await import('crypto');
+        const mfaCode = Math.floor(100000 + Math.random() * 900000).toString();
+        user.twoFactorCode = mfaCode;
+        user.twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+        await user.save();
+
+        await sendEmail('two_factor_code', user.email, {
+          name: user.name || 'there',
+          code: mfaCode
+        });
+
+        addSystemLog('INFO', `2FA Code sent to ${user.email}`);
+        return res.json({ requires2fa: true, email: user.email });
       }
 
       addSystemLog('INFO', `User logged in: ${user.email}`, { userId: user.id || user._id, role: user.role });
@@ -798,6 +840,43 @@ app.post('/api/auth/verify-email', async (req, res) => {
     res.json({ success: true, message: 'Email successfully verified. You can now log in.' });
   } catch (err) {
     console.error('Verify email error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/verify-2fa', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
+
+    const user = await User.findOne({
+      email: new RegExp('^' + email + '$', 'i'),
+      twoFactorCode: code,
+      twoFactorExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      addSystemLog('WARN', `Invalid 2FA attempt for ${email}`);
+      return res.status(400).json({ error: 'Invalid or expired verification code' });
+    }
+
+    // Clear code
+    user.twoFactorCode = undefined;
+    user.twoFactorExpires = undefined;
+    await user.save();
+
+    addSystemLog('INFO', `2FA Login successful: ${user.email}`);
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    userObj.id = user.id || user._id.toString();
+
+    const payload = { id: userObj.id, email: userObj.email, role: userObj.role };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({ user: userObj, token });
+  } catch (err) {
+    console.error('2FA Verify error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1728,6 +1807,25 @@ app.put('/api/users/:id/password', async (req, res) => {
   }
 });
 
+app.put('/api/users/:id/2fa', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    const user = await User.findOne({ id: id.toString() });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.twoFactorEnabled = !!enabled;
+    await user.save();
+
+    addSystemLog('INFO', `User ${user.email} ${enabled ? 'enabled' : 'disabled'} 2FA`);
+    res.json({ success: true, twoFactorEnabled: user.twoFactorEnabled });
+  } catch (err) {
+    console.error('2FA Toggle error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.delete('/api/admin/users/:id', adminAuth, async (req, res) => {
   try {
     await User.deleteOne({ id: req.params.id.toString() });
@@ -2277,6 +2375,9 @@ app.post('/api/generate', async (req, res) => {
     await user.save();
     addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
 
+    // Check low credits (fire and forget)
+    checkLowCredits(user).catch(e => console.error('Low credits check error:', e));
+
     res.json({
       text,
       credits: user.credits,
@@ -2384,6 +2485,9 @@ app.post('/api/generate-image', async (req, res) => {
 
     await user.save();
     addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
+
+    // Check low credits
+    checkLowCredits(user).catch(e => console.error('Low credits check error:', e));
 
     res.json({
       url: data.data[0].url,

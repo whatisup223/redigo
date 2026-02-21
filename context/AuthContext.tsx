@@ -17,6 +17,7 @@ interface User {
     lastUsageDate?: string;
     avatar?: string;
     brandProfile?: any;
+    twoFactorEnabled?: boolean;
     transactions?: any[];
     connectedAccounts?: any[];
     usageStats?: {

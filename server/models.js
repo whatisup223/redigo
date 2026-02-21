@@ -39,7 +39,11 @@ const UserSchema = new mongoose.Schema({
     resetPasswordExpires: Date,
     isVerified: { type: Boolean, default: false },
     verificationToken: String,
-    verificationExpires: Date
+    verificationExpires: Date,
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorCode: String,
+    twoFactorExpires: Date,
+    lowCreditsNotified: { type: Boolean, default: false }
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const TrackingLinkSchema = new mongoose.Schema({

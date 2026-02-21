@@ -600,6 +600,42 @@ export const Settings: React.FC = () => {
 
                     <section className="space-y-4">
                         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                            <Shield className="text-emerald-600" size={20} /> Two-Factor Authentication (2FA)
+                        </h2>
+                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-6">
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                                <div className="space-y-1">
+                                    <p className="font-bold text-slate-900">Email Verification</p>
+                                    <p className="text-xs text-slate-500 font-medium">Receive a unique code via email whenever you log in.</p>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        if (!user?.id) return;
+                                        try {
+                                            const res = await fetch(`/api/users/${user.id}/2fa`, {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ enabled: !user.twoFactorEnabled })
+                                            });
+                                            if (res.ok) {
+                                                updateUser({ twoFactorEnabled: !user.twoFactorEnabled });
+                                                setProfileMessage({ type: 'success', text: `2FA ${!user.twoFactorEnabled ? 'enabled' : 'disabled'} successfully!` });
+                                                setTimeout(() => setProfileMessage(null), 3000);
+                                            }
+                                        } catch (err) {
+                                            setProfileMessage({ type: 'error', text: 'Failed to update 2FA settings' });
+                                        }
+                                    }}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${user.twoFactorEnabled ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${user.twoFactorEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="space-y-4">
+                        <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
                             <LinkIcon className="text-blue-600" size={20} /> Connected Accounts
                         </h2>
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">

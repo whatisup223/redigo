@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Zap, Bot, BarChart, ArrowRight, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Zap, Bot, BarChart, ArrowRight, Loader2, AlertTriangle, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginPage: React.FC = () => {
@@ -10,6 +10,10 @@ export const LoginPage: React.FC = () => {
     const [errorReason, setErrorReason] = useState<string | null>(null);
     const [isBlocked, setIsBlocked] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isMfaRequired, setIsMfaRequired] = useState(false);
+    const [mfaCode, setMfaCode] = useState('');
+    const [isMfaLoading, setIsMfaLoading] = useState(false);
+
     const { login } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -46,6 +50,11 @@ export const LoginPage: React.FC = () => {
                 return;
             }
 
+            if (data.requires2fa) {
+                setIsMfaRequired(true);
+                return;
+            }
+
             login(data.token, data.user);
 
             // Redirect based on role
@@ -58,6 +67,34 @@ export const LoginPage: React.FC = () => {
             setError(err.message || 'An unexpected error occurred');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleVerifyMfa = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+        setIsMfaLoading(true);
+
+        try {
+            const response = await fetch('/api/auth/verify-2fa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, code: mfaCode }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setError(data.error || 'Verification failed');
+                return;
+            }
+
+            login(data.token, data.user);
+            navigate(data.user?.role?.toLowerCase() === 'admin' ? '/admin' : '/dashboard');
+        } catch (err: any) {
+            setError(err.message || 'Verification failed');
+        } finally {
+            setIsMfaLoading(false);
         }
     };
 
@@ -124,63 +161,102 @@ export const LoginPage: React.FC = () => {
                 <div className="w-full md:w-7/12 bg-white p-10 flex flex-col justify-center">
                     <div className="max-w-sm mx-auto w-full space-y-6">
                         <div className="space-y-1">
-                            <h2 className="text-2xl font-extrabold text-slate-900">Sign in to your account</h2>
-                            <p className="text-slate-500 text-base">Check on your agent and growth metrics.</p>
+                            <h2 className="text-2xl font-extrabold text-slate-900">
+                                {isMfaRequired ? 'Enter Verification Code' : 'Sign in to your account'}
+                            </h2>
+                            <p className="text-slate-500 text-base">
+                                {isMfaRequired ? `We've sent a 6-digit code to your email.` : 'Check on your agent and growth metrics.'}
+                            </p>
                         </div>
 
-                        <form className="space-y-5" onSubmit={handleSubmit}>
-                            {error && (
-                                <div className={`p-4 rounded-2xl border font-medium ${isBlocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-50 text-red-600 border-red-100'} animate-in fade-in slide-in-from-top-2 duration-300`}>
-                                    <div className="flex items-start gap-3">
-                                        <AlertTriangle className="shrink-0 mt-0.5" size={18} />
-                                        <div className="space-y-1">
-                                            <p className="font-extrabold">{error}</p>
-                                            {errorReason && (
-                                                <p className="text-xs opacity-80 bg-red-100/50 p-2 rounded-lg mt-2 border border-red-200/50">
-                                                    <span className="font-black uppercase tracking-widest text-[10px]">Reason:</span> {errorReason}
-                                                </p>
-                                            )}
-                                        </div>
+                        {error && (
+                            <div className={`p-4 rounded-2xl border font-medium ${isBlocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-red-50 text-red-600 border-red-100'} animate-in fade-in slide-in-from-top-2 duration-300`}>
+                                <div className="flex items-start gap-3">
+                                    <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+                                    <div className="space-y-1">
+                                        <p className="font-extrabold">{error}</p>
+                                        {errorReason && (
+                                            <p className="text-xs opacity-80 bg-red-100/50 p-2 rounded-lg mt-2 border border-red-200/50">
+                                                <span className="font-black uppercase tracking-widest text-[10px]">Reason:</span> {errorReason}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
-                            )}
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-bold text-slate-700" htmlFor="email">Email address</label>
-                                <input
-                                    type="email"
-                                    id="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                                    placeholder="name@company.com"
-                                    required
-                                />
                             </div>
+                        )}
 
-                            <div className="space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-bold text-slate-700" htmlFor="password">Password</label>
-                                    <Link to="/forgot-password" className="text-sm font-bold text-orange-600 hover:text-orange-700">Forgot password?</Link>
+                        {!isMfaRequired ? (
+                            <form className="space-y-5" onSubmit={handleSubmit}>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-bold text-slate-700" htmlFor="email">Email address</label>
+                                    <input
+                                        type="email"
+                                        id="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                        placeholder="name@company.com"
+                                        required
+                                    />
                                 </div>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
-                                    placeholder="••••••••"
-                                    required
-                                />
-                            </div>
 
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                            >
-                                {isLoading ? <Loader2 className="animate-spin" size={20} /> : <>Sign In <ArrowRight size={20} /></>}
-                            </button>
-                        </form>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-bold text-slate-700" htmlFor="password">Password</label>
+                                        <Link to="/forgot-password" className="text-sm font-bold text-orange-600 hover:text-orange-700">Forgot password?</Link>
+                                    </div>
+                                    <input
+                                        type="password"
+                                        id="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-900 placeholder:text-slate-400"
+                                        placeholder="••••••••"
+                                        required
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {isLoading ? <Loader2 className="animate-spin" size={20} /> : <>Sign In <ArrowRight size={20} /></>}
+                                </button>
+                            </form>
+                        ) : (
+                            <form className="space-y-5" onSubmit={handleVerifyMfa}>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-bold text-slate-700" htmlFor="mfaCode">Verification Code</label>
+                                    <input
+                                        type="text"
+                                        id="mfaCode"
+                                        value={mfaCode}
+                                        onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-black text-2xl text-center tracking-[10px] text-slate-900 placeholder:text-slate-300 placeholder:tracking-normal placeholder:text-sm placeholder:font-medium"
+                                        placeholder="Enter 6-digit code"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isMfaLoading}
+                                    className="w-full py-3.5 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-700 transition-colors shadow-lg shadow-orange-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {isMfaLoading ? <Loader2 className="animate-spin" size={20} /> : <>Verify & Login <Check size={20} /></>}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMfaRequired(false)}
+                                    className="w-full py-2.5 text-slate-500 font-bold text-sm hover:text-slate-800 transition-colors"
+                                >
+                                    Go back to Login
+                                </button>
+                            </form>
+                        )}
 
                         <div className="text-center">
                             <p className="text-slate-500 font-medium text-sm">
