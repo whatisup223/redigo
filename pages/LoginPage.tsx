@@ -70,6 +70,38 @@ export const LoginPage: React.FC = () => {
         }
     };
 
+    const [resendTimer, setResendTimer] = useState(0);
+
+    useEffect(() => {
+        let interval: any;
+        if (resendTimer > 0) {
+            interval = setInterval(() => {
+                setResendTimer(prev => prev - 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [resendTimer]);
+
+    const handleResend2FA = async () => {
+        if (resendTimer > 0) return;
+        setError(null);
+        try {
+            const response = await fetch('/api/auth/resend-2fa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            const data = await response.json();
+            if (response.ok) {
+                setResendTimer(60); // 1 minute cooldown
+            } else {
+                setError(data.error || 'Failed to resend code');
+            }
+        } catch (err) {
+            setError('Failed to resend code');
+        }
+    };
+
     const handleVerifyMfa = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
@@ -247,6 +279,17 @@ export const LoginPage: React.FC = () => {
                                 >
                                     {isMfaLoading ? <Loader2 className="animate-spin" size={20} /> : <>Verify & Login <Check size={20} /></>}
                                 </button>
+
+                                <div className="text-center">
+                                    <button
+                                        type="button"
+                                        onClick={handleResend2FA}
+                                        disabled={resendTimer > 0}
+                                        className="text-orange-600 font-bold text-sm hover:text-orange-700 disabled:text-slate-400 transition-colors"
+                                    >
+                                        {resendTimer > 0 ? `Resend code in ${resendTimer}s` : "Didn't receive code? Resend"}
+                                    </button>
+                                </div>
 
                                 <button
                                     type="button"
