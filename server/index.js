@@ -12,6 +12,17 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// MongoDB Integration
+import mongoose from 'mongoose';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting } from './models.js';
+
+// Connect to MongoDB
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('✅ Connected to MongoDB!'))
+    .catch(err => console.error('❌ Failed to connect to MongoDB:', err));
+}
+
 const SETTINGS_FILE = path.join(__dirname, '../settings.storage.json');
 
 const loadSettings = () => {
@@ -545,140 +556,165 @@ app.get('/api/health', (req, res) => {
 });
 
 // Authentication Endpoints
-app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i'), password });
 
-  if (user) {
-    // Check if user is banned or suspended
-    if (user.status === 'Banned' || user.status === 'Suspended') {
-      addSystemLog('WARN', `[LOGIN] Blocked ${user.status} user: ${user.email}`);
-      console.log(`[LOGIN] Blocked ${user.status} user: ${user.email}`);
-      return res.status(403).json({
-        error: `Your account has been ${user.status.toLowerCase()}.`,
-        reason: user.statusMessage || 'No specific reason provided.'
-      });
+    if (user) {
+      // Check if user is banned or suspended
+      if (user.status === 'Banned' || user.status === 'Suspended') {
+        addSystemLog('WARN', `[LOGIN] Blocked ${user.status} user: ${user.email}`);
+        console.log(`[LOGIN] Blocked ${user.status} user: ${user.email}`);
+        return res.status(403).json({
+          error: `Your account has been ${user.status.toLowerCase()}.`,
+          reason: user.statusMessage || 'No specific reason provided.'
+        });
+      }
+
+      let updated = false;
+      if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
+        addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
+        console.log(`[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
+
+        // Find Starter Plan
+        const starterPlan = await Plan.findOne({ id: 'starter' }) || { credits: 100 };
+
+        user.plan = 'Starter';
+        const now = new Date();
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+        user.credits = starterPlan.credits;
+        user.subscriptionStart = now.toISOString();
+        user.subscriptionEnd = nextMonth.toISOString();
+        updated = true;
+      }
+
+      if (updated) {
+        await user.save();
+      }
+
+      addSystemLog('INFO', `User logged in: ${user.email}`, { userId: user.id || user._id, role: user.role });
+
+      // In a real app, generate a JWT token here
+      const userObj = user.toObject();
+      delete userObj.password;
+      const token = user.role === 'admin' ? 'mock-jwt-token-123' : `mock-user-token-${user.id || user._id}`;
+      // Send the id explicitely to match frontend expectations
+      userObj.id = user.id || user._id.toString();
+
+      res.json({ user: userObj, token });
+    } else {
+      addSystemLog('WARN', `Failed login attempt for: ${email}`);
+      res.status(401).json({ error: 'Invalid email or password' });
     }
-
-    if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
-      addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
-      console.log(`[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
-      user.plan = 'Starter';
-      const freePlan = plans.find(p => p.id === 'starter');
-      const now = new Date();
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-      user.credits = freePlan ? freePlan.credits : 100;
-      user.subscriptionStart = now.toISOString();
-      user.subscriptionEnd = nextMonth.toISOString();
-      saveSettings({ users });
-    }
-
-    addSystemLog('INFO', `User logged in: ${user.email}`, { userId: user.id, role: user.role });
-
-    // In a real app, generate a JWT token here
-    const { password, ...userWithoutPassword } = user;
-    const token = user.role === 'admin' ? 'mock-jwt-token-123' : `mock-user-token-${user.id}`;
-    res.json({ user: userWithoutPassword, token });
-  } else {
-    addSystemLog('WARN', `Failed login attempt for: ${email}`);
-    res.status(401).json({ error: 'Invalid email or password' });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.post('/api/auth/signup', (req, res) => {
-  const { name, email, password } = req.body;
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
 
-  const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (existingUser) {
-    if (existingUser.status === 'Banned' || existingUser.status === 'Suspended') {
-      addSystemLog('WARN', `[SIGNUP] Blocked signup attempt for banned email: ${email}`);
-      console.log(`[SIGNUP] Blocked ${existingUser.status} user: ${existingUser.email}`);
-      return res.status(403).json({
-        error: `Your account has been ${existingUser.status.toLowerCase()}.`,
-        reason: existingUser.statusMessage || 'Contact support for details.'
-      });
-    }
-    addSystemLog('WARN', `Signup failed: Email already exists (${email})`);
-    return res.status(400).json({ error: 'User already exists' });
-  }
-
-  const newUser = {
-    id: users.length + 1,
-    name,
-    email,
-    password, // In a real app, hash this!
-    role: 'user',
-    plan: 'Starter',
-    billingCycle: 'monthly',
-    status: 'Active',
-    credits: 100, // Grant initial credits upon signup
-    subscriptionStart: new Date().toISOString(),
-    subscriptionEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
-    hasCompletedOnboarding: false,
-    dailyUsage: 0,
-    dailyUsagePoints: 0,
-    customDailyLimit: 0,
-    lastUsageDate: new Date().toISOString().split('T')[0],
-    transactions: [],
-    usageStats: {
-      posts: 0,
-      comments: 0,
-      images: 0,
-      postsCredits: 0,
-      commentsCredits: 0,
-      imagesCredits: 0,
-      totalSpent: 0,
-      history: []
-    }
-  };
-
-  users.push(newUser);
-  saveSettings({ users }); // Persist new user
-  addSystemLog('SUCCESS', `New user registered: ${email}`, { userId: newUser.id });
-
-  const { password: _, ...userWithoutPassword } = newUser;
-  res.status(201).json({ user: userWithoutPassword, token: `mock-user-token-${newUser.id}` });
-});
-
-app.post('/api/auth/forgot-password', (req, res) => {
-  const { email } = req.body;
-  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-  if (user) {
-    // Check if user is banned or suspended
-    if (user.status === 'Banned' || user.status === 'Suspended') {
-      console.log(`[FORGOT-PASSWORD] Blocked ${user.status} user: ${user.email}`);
-      return res.status(403).json({
-        error: `Your account has been ${user.status.toLowerCase()}.`,
-        reason: user.statusMessage || 'Contact support for details.'
-      });
+    const existingUser = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
+    if (existingUser) {
+      if (existingUser.status === 'Banned' || existingUser.status === 'Suspended') {
+        addSystemLog('WARN', `[SIGNUP] Blocked signup attempt for banned email: ${email}`);
+        console.log(`[SIGNUP] Blocked ${existingUser.status} user: ${existingUser.email}`);
+        return res.status(403).json({
+          error: `Your account has been ${existingUser.status.toLowerCase()}.`,
+          reason: existingUser.statusMessage || 'Contact support for details.'
+        });
+      }
+      addSystemLog('WARN', `Signup failed: Email already exists (${email})`);
+      return res.status(400).json({ error: 'User already exists' });
     }
 
-    console.log(`[Mock Email] Password reset link sent to ${email}`);
-    res.json({ message: 'If an account exists, a reset link has been sent.' });
-  } else {
-    // For security, generic message
-    res.json({ message: 'If an account exists, a reset link has been sent.' });
-  }
-});
-
-app.post('/api/user/complete-onboarding', (req, res) => {
-  const { userId } = req.body;
-  const index = users.findIndex(u => u.id == userId);
-  if (index !== -1) {
-    // We already gave 100 at signup, so we just mark it as complete
-    users[index].hasCompletedOnboarding = true;
-    saveSettings({ users });
-    addSystemLog('INFO', `User completed onboarding: ${users[index].email}`);
-    res.json({
-      success: true,
-      hasCompletedOnboarding: true,
-      credits: users[index].credits
+    const newUser = new User({
+      id: Math.random().toString(36).substring(2, 9), // Temp ID string
+      name,
+      email,
+      password, // In a real app, hash this!
+      role: 'user',
+      plan: 'Starter',
+      billingCycle: 'monthly',
+      status: 'Active',
+      credits: 100, // Grant initial credits upon signup
+      subscriptionStart: new Date().toISOString(),
+      subscriptionEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
+      hasCompletedOnboarding: false,
+      dailyUsage: 0,
+      dailyUsagePoints: 0,
+      customDailyLimit: 0,
+      lastUsageDate: new Date().toISOString().split('T')[0],
+      transactions: [],
+      usageStats: { fill: true }
     });
-  } else {
-    res.status(404).json({ error: 'User not found' });
+
+    await newUser.save();
+    addSystemLog('SUCCESS', `New user registered: ${email}`, { userId: newUser.id || newUser._id });
+
+    const userObj = newUser.toObject();
+    delete userObj.password;
+    userObj.id = newUser.id || newUser._id.toString();
+
+    res.status(201).json({ user: userObj, token: `mock-user-token-${userObj.id}` });
+  } catch (err) {
+    console.error('Signup error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
+
+    if (user) {
+      // Check if user is banned or suspended
+      if (user.status === 'Banned' || user.status === 'Suspended') {
+        console.log(`[FORGOT-PASSWORD] Blocked ${user.status} user: ${user.email}`);
+        return res.status(403).json({
+          error: `Your account has been ${user.status.toLowerCase()}.`,
+          reason: user.statusMessage || 'Contact support for details.'
+        });
+      }
+
+      console.log(`[Mock Email] Password reset link sent to ${email}`);
+      res.json({ message: 'If an account exists, a reset link has been sent.' });
+    } else {
+      // For security, generic message
+      res.json({ message: 'If an account exists, a reset link has been sent.' });
+    }
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/user/complete-onboarding', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await User.findOne({ id: userId.toString() });
+
+    if (user) {
+      user.hasCompletedOnboarding = true;
+      await user.save();
+      addSystemLog('INFO', `User completed onboarding: ${user.email}`);
+      res.json({
+        success: true,
+        hasCompletedOnboarding: true,
+        credits: user.credits
+      });
+    } else {
+      res.status(404).json({ error: 'User not found' });
+    }
+  } catch (err) {
+    console.error('Onboarding error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
