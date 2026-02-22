@@ -600,6 +600,12 @@ export const LandingPage: React.FC = () => {
                   {plan.isPopular && (
                     <div className="absolute top-0 right-0 w-48 h-48 bg-orange-50 rounded-bl-[160px] -mr-12 -mt-12 pointer-events-none transition-transform hover:scale-110"></div>
                   )}
+
+                  {!isFree && plan.purchaseEnabled === false && (
+                    <div className="absolute top-0 left-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-200 border border-orange-500 z-20">
+                      Max Capacity
+                    </div>
+                  )}
                   {plan.isPopular && (
                     <div className="absolute top-6 right-6 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
                       Most Popular
@@ -708,13 +714,13 @@ export const LandingPage: React.FC = () => {
                       to={plan.purchaseEnabled !== false ? "/signup" : "#"}
                       onClick={(e) => plan.purchaseEnabled === false && e.preventDefault()}
                       className={`w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 text-center block ${plan.purchaseEnabled === false
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
+                        ? 'bg-slate-50 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
                         : plan.isPopular
                           ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-orange-200'
                           : 'bg-slate-900 text-white hover:bg-slate-800'
                         }`}
                     >
-                      {plan.purchaseEnabled === false ? 'Currently Unavailable' : plan.monthlyPrice === 0 ? 'Start Free' : 'Choose Plan'}
+                      {plan.purchaseEnabled === false ? 'Capacity Reached' : plan.monthlyPrice === 0 ? 'Start Free' : 'Choose Plan'}
                     </Link>
                   </div>
                 </div>

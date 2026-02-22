@@ -153,6 +153,12 @@ export const PricingPage: React.FC = () => {
                                 </div>
                             )}
 
+                            {!isFree && plan.purchaseEnabled === false && (
+                                <div className="absolute top-0 right-8 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-200 border border-orange-500">
+                                    Max Capacity
+                                </div>
+                            )}
+
                             <div className="mb-8">
                                 <div className="flex flex-col gap-1.5">
                                     <h3 className={`text-2xl font-bold ${plan.isPopular ? 'text-orange-600' : 'text-slate-900'}`}>{plan.name}</h3>
@@ -256,7 +262,7 @@ export const PricingPage: React.FC = () => {
                                 className={`w-full py-4 rounded-xl font-bold text-center transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 ${isCurrentPlan
                                     ? 'bg-slate-100 text-slate-400 cursor-default shadow-none border border-slate-200'
                                     : plan.purchaseEnabled === false
-                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
+                                        ? 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
                                         : plan.isPopular
                                             ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-orange-200'
                                             : 'bg-white text-slate-900 border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50'
@@ -267,7 +273,7 @@ export const PricingPage: React.FC = () => {
                                 ) : isCurrentPlan ? (
                                     <>Current Plan</>
                                 ) : plan.purchaseEnabled === false ? (
-                                    <>Currently Unavailable</>
+                                    <>Capacity Reached</>
                                 ) : (
                                     <>Choose {plan.name} <ArrowRight size={18} /></>
                                 )}
