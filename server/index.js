@@ -1343,25 +1343,10 @@ app.delete('/api/plans/:id', async (req, res) => {
   }
 });
 
-app.post('/api/generate', async (req, res) => {
+app.post('/api/user/subscribe', async (req, res) => {
   try {
-    const { prompt, context, userId, type } = req.body;
-    if (!userId || !prompt) return res.status(400).json({ error: 'Missing required field' });
-
-    // SAFETY: Anti-Spam pre-check (Only for comments)
-    if (redditSettings.antiSpam && type === 'comment') {
-      // Logic: If context contains a postId, check if this user has already replied to it
-      const postId = context?.postId || (typeof context === 'string' && context.match(/post_id: (\w+)/)?.[1]);
-      if (postId) {
-        const alreadyReplied = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
-        if (alreadyReplied) {
-          return res.status(409).json({
-            error: 'DOUBLE_POST_PREVENTION',
-            message: 'You have already replied to this post with this account. Double-posting is blocked to protect your account from Reddit bans.'
-          });
-        }
-      }
-    }
+    const { userId, planId, billingCycle } = req.body;
+    if (!userId || !planId) return res.status(400).json({ error: 'Missing required fields' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) {
@@ -2515,6 +2500,20 @@ app.post('/api/generate', async (req, res) => {
 
     if (!keyToUse) {
       return res.status(500).json({ error: 'AI provider is not configured. Please contact the administrator.' });
+    }
+
+    // SAFETY: Anti-Spam pre-check (Only for comments)
+    if (redditSettings.antiSpam && type === 'comment') {
+      const postId = context?.postId || (typeof context === 'string' && context.match(/post_id: (\w+)/)?.[1]);
+      if (postId) {
+        const alreadyReplied = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
+        if (alreadyReplied) {
+          return res.status(409).json({
+            error: 'DOUBLE_POST_PREVENTION',
+            message: 'You have already replied to this post with this account. Double-posting is blocked to protect your account from Reddit bans.'
+          });
+        }
+      }
     }
 
     const user = await User.findOne({ id: userId.toString() });
