@@ -108,6 +108,9 @@ interface RedditSettings {
     clientSecret: string;
     redirectUri: string;
     userAgent: string;
+    minDelay?: number;
+    maxDelay?: number;
+    antiSpam?: boolean;
 }
 
 interface SMTPSettings {
@@ -185,7 +188,10 @@ export const Admin: React.FC = () => {
         clientId: '',
         clientSecret: '',
         redirectUri: '',
-        userAgent: 'RedigoApp/1.0'
+        userAgent: 'RedigoApp/1.0',
+        minDelay: 5,
+        maxDelay: 15,
+        antiSpam: true
     });
     const [smtpSettings, setSmtpSettings] = useState<SMTPSettings>({
         host: '',
@@ -967,7 +973,7 @@ export const Admin: React.FC = () => {
                                                                         </td>
                                                                         <td className="px-4 py-4">
                                                                             <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase shadow-sm ${u.plan === 'Pro' ? 'bg-indigo-50 text-indigo-600' :
-                                                                                    u.plan === 'Enterprise' ? 'bg-purple-50 text-purple-600' : 'bg-slate-100 text-slate-500'
+                                                                                u.plan === 'Enterprise' ? 'bg-purple-50 text-purple-600' : 'bg-slate-100 text-slate-500'
                                                                                 }`}>
                                                                                 {u.plan}
                                                                             </span>
@@ -1002,7 +1008,7 @@ export const Admin: React.FC = () => {
                                                         {analytics.recentActivity?.map((act: any, i: number) => (
                                                             <div key={i} className="group p-4 bg-white hover:bg-slate-50 rounded-2xl border border-slate-100/50 transition-all flex items-start gap-4">
                                                                 <div className={`p-3 rounded-xl shrink-0 ${act.type === 'post' ? 'bg-blue-50 text-blue-600' :
-                                                                        act.type === 'comment' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'
+                                                                    act.type === 'comment' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'
                                                                     }`}>
                                                                     {act.type === 'post' ? <FileText size={18} /> :
                                                                         act.type === 'comment' ? <MessageSquare size={18} /> : <Image size={18} />}
@@ -1585,6 +1591,48 @@ export const Admin: React.FC = () => {
                                                                 onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
                                                             />
                                                         </label>
+
+                                                        {/* Safety & Anti-Spam Section */}
+                                                        <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <Shield size={18} className="text-orange-600" />
+                                                                <h3 className="text-sm font-bold text-slate-900">Safety & Anti-Spam</h3>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <label className="block">
+                                                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Min Delay (sec)</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={redditSettings.minDelay || 5}
+                                                                        onChange={(e) => setRedditSettings({ ...redditSettings, minDelay: parseInt(e.target.value) })}
+                                                                    />
+                                                                </label>
+                                                                <label className="block">
+                                                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Max Delay (sec)</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={redditSettings.maxDelay || 15}
+                                                                        onChange={(e) => setRedditSettings({ ...redditSettings, maxDelay: parseInt(e.target.value) })}
+                                                                    />
+                                                                </label>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-slate-900">Anti-Spam Guard</p>
+                                                                    <p className="text-[10px] text-slate-500">Prevent double-replying to the same post</p>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => setRedditSettings({ ...redditSettings, antiSpam: !redditSettings.antiSpam })}
+                                                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.antiSpam ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.antiSpam ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <button
                                                         onClick={handleSaveRedditSettings}

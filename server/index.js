@@ -1201,8 +1201,18 @@ let stripeSettings = savedData.stripe || {
 let redditSettings = savedData.reddit || {
   clientId: '',
   clientSecret: '',
-  redirectUri: '', // Dynamically handled in /url endpoint
-  userAgent: 'RedditgoApp/1.0'
+  redirectUri: '',
+  userAgent: 'RedigoApp/1.0',
+  minDelay: 5,
+  maxDelay: 15,
+  antiSpam: true
+};
+
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+const getDynamicUserAgent = (userId) => {
+  const base = redditSettings.userAgent || 'RedigoApp/1.0';
+  return userId ? `${base} (UID: ${userId})` : base;
 };
 
 // SMTP Settings (In-memory)
@@ -1333,9 +1343,25 @@ app.delete('/api/plans/:id', async (req, res) => {
   }
 });
 
-app.post('/api/user/subscribe', async (req, res) => {
+app.post('/api/generate', async (req, res) => {
   try {
-    const { userId, planId, billingCycle } = req.body;
+    const { prompt, context, userId, type } = req.body;
+    if (!userId || !prompt) return res.status(400).json({ error: 'Missing required field' });
+
+    // SAFETY: Anti-Spam pre-check (Only for comments)
+    if (redditSettings.antiSpam && type === 'comment') {
+      // Logic: If context contains a postId, check if this user has already replied to it
+      const postId = context?.postId || (typeof context === 'string' && context.match(/post_id: (\w+)/)?.[1]);
+      if (postId) {
+        const alreadyReplied = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
+        if (alreadyReplied) {
+          return res.status(409).json({
+            error: 'DOUBLE_POST_PREVENTION',
+            message: 'You have already replied to this post with this account. Double-posting is blocked to protect your account from Reddit bans.'
+          });
+        }
+      }
+    }
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) {
@@ -2094,6 +2120,11 @@ app.get('/api/admin/reddit-settings', adminAuth, (req, res) => {
 app.post('/api/admin/reddit-settings', adminAuth, (req, res) => {
   const newSettings = { ...req.body };
   if (newSettings.clientSecret && newSettings.clientSecret.includes('****')) delete newSettings.clientSecret;
+
+  // Convert numeric strings to numbers for safety
+  if (newSettings.minDelay) newSettings.minDelay = Number(newSettings.minDelay);
+  if (newSettings.maxDelay) newSettings.maxDelay = Number(newSettings.maxDelay);
+
   redditSettings = { ...redditSettings, ...newSettings };
   saveSettings({ reddit: redditSettings });
   console.log('[Reddit] Configuration updated');
@@ -2278,7 +2309,7 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': redditSettings.userAgent || 'RedditgoApp/1.0'
+        'User-Agent': getDynamicUserAgent(userId)
       },
       body: params
     });
@@ -2289,7 +2320,7 @@ app.post('/api/auth/reddit/callback', async (req, res) => {
     const meRes = await fetch('https://oauth.reddit.com/api/v1/me', {
       headers: {
         'Authorization': `Bearer ${data.access_token}`,
-        'User-Agent': redditSettings.userAgent
+        'User-Agent': getDynamicUserAgent(userId)
       }
     });
 
@@ -2726,12 +2757,25 @@ app.post('/api/reddit/reply', async (req, res) => {
 
     // If it's a real Reddit post (not from MOCK_POSTS), attempt real API call
     if (token && postId && !['1', '2', '3', '4'].includes(postId)) {
+      // SAFETY: Double-Reply Check (Final Guard before API call)
+      if (redditSettings.antiSpam) {
+        const doubleCheck = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
+        if (doubleCheck) throw new Error('You have already replied to this post. Double-replying is blocked.');
+      }
+
+      // SAFETY: Randomized Delay (Human Touch)
+      const min = redditSettings.minDelay || 5;
+      const max = redditSettings.maxDelay || 15;
+      const waitTime = Math.floor(Math.random() * (max - min + 1) + min) * 1000;
+      console.log(`[Reddit] Humanizing... waiting ${waitTime / 1000}s before sending reply.`);
+      await sleep(waitTime);
+
       const response = await fetch('https://oauth.reddit.com/api/comment', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': redditSettings.userAgent
+          'User-Agent': getDynamicUserAgent(userId)
         },
         body: new URLSearchParams({
           api_type: 'json',
@@ -2810,6 +2854,17 @@ app.post('/api/reddit/post', async (req, res) => {
     const token = await getValidToken(userId, redditUsername);
     if (!token) return res.status(401).json({ error: 'Reddit account not linked' });
 
+    // SAFETY: Anti-Spam / Double-Post Check
+    if (redditSettings.antiSpam) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentPost = await RedditPost.findOne({
+        userId: userId.toString(),
+        postTitle: title,
+        deployedAt: { $gt: oneHourAgo }
+      });
+      if (recentPost) throw new Error('You have already posted a topic with this exact title recently. Please wait a bit or change the title.');
+    }
+
     const bodyParams = new URLSearchParams({
       api_type: 'json',
       sr: subreddit,
@@ -2820,12 +2875,19 @@ app.post('/api/reddit/post', async (req, res) => {
     if (kind === 'link') bodyParams.append('url', text);
     else bodyParams.append('text', text);
 
+    // SAFETY: Randomized Delay (Human Touch)
+    const min = redditSettings.minDelay || 5;
+    const max = redditSettings.maxDelay || 15;
+    const waitTime = Math.floor(Math.random() * (max - min + 1) + min) * 1000;
+    console.log(`[Reddit] Humanizing... waiting ${waitTime / 1000}s before submitting post.`);
+    await sleep(waitTime);
+
     const response = await fetch('https://oauth.reddit.com/api/submit', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': redditSettings.userAgent
+        'User-Agent': getDynamicUserAgent(userId)
       },
       body: bodyParams
     });
@@ -3005,7 +3067,7 @@ app.get('/api/reddit/posts', async (req, res) => {
       url = `https://oauth.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&limit=25`;
       headers = {
         'Authorization': `Bearer ${token}`,
-        'User-Agent': redditSettings.userAgent
+        'User-Agent': getDynamicUserAgent(userId)
       };
     } else {
       return res.status(401).json({ error: 'Reddit account not linked. Please go to Settings to link your account.' });
