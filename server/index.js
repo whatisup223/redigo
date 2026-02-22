@@ -55,6 +55,42 @@ const initSettings = async () => {
 
 await initSettings();
 
+const seedAdmin = async () => {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    console.log('ℹ️ Admin credentials not found in environment, skipping seeder.');
+    return;
+  }
+
+  try {
+    const adminExists = await User.findOne({ role: 'admin' });
+    if (!adminExists) {
+      console.log('🚀 Seeding default admin user...');
+      const hashedPassword = await bcrypt.hash(adminPassword, 10);
+      const newAdmin = new User({
+        id: 'admin-' + Math.random().toString(36).substring(2, 7),
+        name: 'Super Admin',
+        email: adminEmail.toLowerCase(),
+        password: hashedPassword,
+        role: 'admin',
+        isVerified: true,
+        status: 'Active',
+        plan: 'Professional',
+        credits: 100000,
+        hasCompletedOnboarding: true
+      });
+      await newAdmin.save();
+      console.log(`✅ Default Admin user (${adminEmail}) created successfully!`);
+    }
+  } catch (err) {
+    console.error('❌ Failed to seed admin user:', err);
+  }
+};
+
+await seedAdmin();
+
 const loadSettings = () => settingsCache;
 
 const saveSettings = (data) => {
