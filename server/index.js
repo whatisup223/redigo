@@ -1412,7 +1412,7 @@ const createPaypalOrder = async (plan, billingCycle, user) => {
   const url = isSandbox ? "https://api-m.sandbox.paypal.com/v2/checkout/orders" : "https://api-m.paypal.com/v2/checkout/orders";
 
   const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-  const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000';
 
   const payload = {
     intent: "CAPTURE",
@@ -1774,7 +1774,7 @@ app.post('/api/user/subscribe', async (req, res) => {
 
     try {
       const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = process.env.BASE_URL || process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
 
       addSystemLog('INFO', `User initiated Stripe checkout: ${user.email} for ${plan.name} (${billingCycle})`);
 
@@ -2506,7 +2506,7 @@ app.get('/api/users/:id', async (req, res) => {
 
         sendEmail('plan_expired', user.email, {
           name: user.name || 'there',
-          upgrade_link: `${process.env.APP_URL || 'http://localhost:3000'}/pricing`
+          upgrade_link: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/pricing`
         });
       }
 
