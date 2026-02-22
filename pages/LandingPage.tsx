@@ -602,7 +602,7 @@ export const LandingPage: React.FC = () => {
                   )}
 
                   {!isFree && plan.purchaseEnabled === false && (
-                    <div className="absolute top-0 left-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-200 border border-orange-500 z-20">
+                    <div className="absolute top-4 left-6 bg-orange-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-200 border border-orange-500 z-20">
                       Max Capacity
                     </div>
                   )}
