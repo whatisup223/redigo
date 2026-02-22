@@ -96,6 +96,15 @@ interface StripeSettings {
     secretKey: string;
     webhookSecret: string;
     isSandbox: boolean;
+    enabled: boolean;
+}
+
+interface PayPalSettings {
+    clientId: string;
+    secretKey: string;
+    webhookId: string;
+    isSandbox: boolean;
+    enabled: boolean;
 }
 
 interface Plan {
@@ -197,7 +206,15 @@ export const Admin: React.FC = () => {
         publishableKey: '',
         secretKey: '',
         webhookSecret: '',
-        isSandbox: true
+        isSandbox: true,
+        enabled: true
+    });
+    const [paypalSettings, setPaypalSettings] = useState<PayPalSettings>({
+        clientId: '',
+        secretKey: '',
+        webhookId: '',
+        isSandbox: true,
+        enabled: false
     });
     const [redditSettings, setRedditSettings] = useState<RedditSettings>({
         clientId: '',
@@ -326,6 +343,8 @@ export const Admin: React.FC = () => {
             if (usersRes.ok) setUsers(await usersRes.json());
             if (aiRes.ok) setAiSettings(await aiRes.json());
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
+            const paypalRes = await fetch('/api/admin/paypal-settings', { headers });
+            if (paypalRes.ok) setPaypalSettings(await paypalRes.json());
             if (redditRes.ok) setRedditSettings(await redditRes.json());
             if (smtpRes.ok) setSmtpSettings(await smtpRes.json());
             if (emailRes.ok) setEmailTemplates(await emailRes.json());
@@ -483,6 +502,28 @@ export const Admin: React.FC = () => {
         } catch (e) {
             console.error(e);
             alert('Error saving Stripe settings.');
+        }
+    };
+
+    const handleSavePayPalSettings = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/paypal-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(paypalSettings)
+            });
+            if (res.ok) {
+                alert('PayPal settings saved successfully!');
+            } else {
+                alert('Failed to save PayPal settings.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving PayPal settings.');
         }
     };
 
@@ -1902,80 +1943,183 @@ export const Admin: React.FC = () => {
 
                                     {
                                         settingsTab === 'payments' && (
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                                <div className="space-y-6">
-                                                    <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-                                                        <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100">
-                                                            <CreditCard size={24} />
-                                                        </div>
-                                                        <div>
-                                                            <h2 className="text-xl font-bold text-slate-900">Stripe Payment Gateway</h2>
-                                                            <p className="text-slate-400 text-sm">Configure API keys and billing settings.</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-6">
-                                                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                                                            <div>
-                                                                <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
-                                                                <p className="text-slate-500 text-xs">Enable for testing payments.</p>
+                                            <div className="space-y-8">
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                    {/* Stripe Section */}
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                                                                    <CreditCard size={24} />
+                                                                </div>
+                                                                <div>
+                                                                    <h2 className="text-xl font-bold text-slate-900">Stripe Gateway</h2>
+                                                                    <p className="text-slate-400 text-sm">Credit/Debit Cards</p>
+                                                                </div>
                                                             </div>
                                                             <button
-                                                                onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
-                                                                className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                onClick={() => setStripeSettings({ ...stripeSettings, enabled: !stripeSettings.enabled })}
+                                                                className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
                                                             >
-                                                                <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
                                                             </button>
                                                         </div>
 
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key</span>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={stripeSettings.publishableKey}
-                                                                onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
-                                                                placeholder="pk_test_..."
-                                                            />
-                                                        </label>
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
-                                                            <input
-                                                                type="password"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={stripeSettings.secretKey}
-                                                                onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
-                                                                placeholder="sk_test_..."
-                                                            />
-                                                        </label>
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Secret</span>
-                                                            <input
-                                                                type="password"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-emerald-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={stripeSettings.webhookSecret}
-                                                                onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
-                                                                placeholder="whsec_..."
-                                                            />
-                                                        </label>
-                                                    </div>
-                                                    <button
-                                                        onClick={handleSaveStripeSettings}
-                                                        className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-emerald-600 hover:shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                    >
-                                                        <Save size={20} />
-                                                        Save Payment Config
-                                                    </button>
-                                                </div>
-                                                {/* Helper content or stats could go here */}
-                                                <div className="bg-emerald-50/50 p-8 rounded-[2rem] border border-emerald-100 flex items-center justify-center">
-                                                    <div className="text-center space-y-4">
-                                                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-emerald-600">
-                                                            <CreditCard size={32} />
+                                                        <div className={`space-y-6 transition-opacity duration-300 ${stripeSettings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                                            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                                                                <div>
+                                                                    <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
+                                                                    <p className="text-slate-500 text-xs">Enable for test payments.</p>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
+                                                                    className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                </button>
+                                                            </div>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key</span>
+                                                                <input
+                                                                    type="text"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={stripeSettings.publishableKey}
+                                                                    onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
+                                                                    placeholder="pk_test_..."
+                                                                />
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
+                                                                <input
+                                                                    type="password"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={stripeSettings.secretKey}
+                                                                    onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
+                                                                    placeholder="sk_test_..."
+                                                                />
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Secret</span>
+                                                                <input
+                                                                    type="password"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={stripeSettings.webhookSecret}
+                                                                    onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
+                                                                    placeholder="whsec_..."
+                                                                />
+                                                            </label>
+
+                                                            <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                                                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Webhook URL</p>
+                                                                <p className="text-xs font-mono text-emerald-900 break-all">{window.location.origin}/api/webhook</p>
+                                                            </div>
+
+                                                            <button
+                                                                onClick={handleSaveStripeSettings}
+                                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-indigo-600 hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                            >
+                                                                <Save size={20} />
+                                                                Save Stripe Configuration
+                                                            </button>
                                                         </div>
-                                                        <h3 className="font-bold text-slate-900">Payment Security</h3>
-                                                        <p className="text-slate-500 text-sm max-w-xs mx-auto">
-                                                            Keys are stored securely. Ensure you are using restricted API keys for production environments.
+                                                    </div>
+
+                                                    {/* PayPal Section */}
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                                                                    <Globe size={24} />
+                                                                </div>
+                                                                <div>
+                                                                    <h2 className="text-xl font-bold text-slate-900">PayPal Gateway</h2>
+                                                                    <p className="text-slate-400 text-sm">PayPal & Pay Later</p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setPaypalSettings({ ...paypalSettings, enabled: !paypalSettings.enabled })}
+                                                                className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${paypalSettings.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                                            >
+                                                                <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${paypalSettings.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                            </button>
+                                                        </div>
+
+                                                        <div className={`space-y-6 transition-opacity duration-300 ${paypalSettings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                                            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                                                                <div>
+                                                                    <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
+                                                                    <p className="text-slate-500 text-xs">Enable for test payments.</p>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => setPaypalSettings({ ...paypalSettings, isSandbox: !paypalSettings.isSandbox })}
+                                                                    className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${paypalSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${paypalSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                </button>
+                                                            </div>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
+                                                                <input
+                                                                    type="text"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={paypalSettings.clientId}
+                                                                    onChange={(e) => setPaypalSettings({ ...paypalSettings, clientId: e.target.value })}
+                                                                    placeholder="PayPal Client ID"
+                                                                />
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
+                                                                <input
+                                                                    type="password"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={paypalSettings.secretKey}
+                                                                    onChange={(e) => setPaypalSettings({ ...paypalSettings, secretKey: e.target.value })}
+                                                                    placeholder="PayPal Secret Key"
+                                                                />
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook ID</span>
+                                                                <input
+                                                                    type="password"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={paypalSettings.webhookId}
+                                                                    onChange={(e) => setPaypalSettings({ ...paypalSettings, webhookId: e.target.value })}
+                                                                    placeholder="Webhook ID"
+                                                                />
+                                                            </label>
+
+                                                            <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Webhook URL</p>
+                                                                <p className="text-xs font-mono text-blue-900 break-all">{window.location.origin}/api/paypal/webhook</p>
+                                                            </div>
+
+                                                            <button
+                                                                onClick={handleSavePayPalSettings}
+                                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-blue-600 hover:shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                            >
+                                                                <Save size={20} />
+                                                                Save PayPal Configuration
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center gap-8">
+                                                    <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center flex-shrink-0">
+                                                        <Shield size={40} className="text-emerald-400" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-xl font-bold mb-2">Multi-Gateway Logic</h3>
+                                                        <p className="text-slate-400 text-sm max-w-2xl">
+                                                            When both gateways are enabled, users will be presented with a choice during checkout.
+                                                            If only one is enabled, users will be redirected to that gateway immediately.
+                                                            Disabling both will effectively pause all payments on the platform.
                                                         </p>
                                                     </div>
                                                 </div>

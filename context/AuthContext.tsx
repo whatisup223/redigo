@@ -18,6 +18,8 @@ interface User {
     avatar?: string;
     brandProfile?: any;
     twoFactorEnabled?: boolean;
+    subscriptionStart?: string;
+    subscriptionEnd?: string;
     transactions?: any[];
     connectedAccounts?: any[];
     usageStats?: {

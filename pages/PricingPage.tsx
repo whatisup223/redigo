@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Shield, Crown, Zap, ArrowRight, Loader2, X, Users } from 'lucide-react';
+import { Check, Shield, Crown, Zap, ArrowRight, Loader2, X, Users, CreditCard, Globe } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -29,44 +29,69 @@ export const PricingPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState<string | null>(null);
     const [plans, setPlans] = useState<Plan[]>([]);
     const [loadingPlans, setLoadingPlans] = useState(true);
+    const [gateways, setGateways] = useState<{ stripe: boolean; paypal: boolean }>({ stripe: true, paypal: false });
+    const [showGatewayModal, setShowGatewayModal] = useState(false);
+    const [selectedPlanForModal, setSelectedPlanForModal] = useState<Plan | null>(null);
 
     React.useEffect(() => {
-        const fetchPlans = async () => {
+        const fetchData = async () => {
             try {
-                const res = await fetch('/api/plans');
-                if (res.ok) {
-                    const data = await res.json();
-                    setPlans(data);
+                const [plansRes, configRes] = await Promise.all([
+                    fetch('/api/plans'),
+                    fetch('/api/config')
+                ]);
+                if (plansRes.ok) setPlans(await plansRes.json());
+                if (configRes.ok) {
+                    const config = await configRes.json();
+                    if (config.gateways) setGateways(config.gateways);
                 }
             } catch (error) {
-                console.error('Failed to fetch plans', error);
+                console.error('Failed to fetch pricing data', error);
             } finally {
                 setLoadingPlans(false);
             }
         };
-        fetchPlans();
+        fetchData();
     }, []);
 
-    const handleSubscribe = async (plan: Plan) => {
+    const handleSubscribe = async (plan: Plan, gatewayOverride?: 'stripe' | 'paypal') => {
         if (!user) {
             window.location.href = '/signup';
             return;
         }
 
+        // If gateway not specified and multiple enabled, show modal
+        if (!gatewayOverride && gateways.stripe && gateways.paypal) {
+            setSelectedPlanForModal(plan);
+            setShowGatewayModal(true);
+            return;
+        }
+
+        const gateway = gatewayOverride || (gateways.paypal && !gateways.stripe ? 'paypal' : 'stripe');
+
         setIsLoading(plan.id);
+        setShowGatewayModal(false);
         try {
             const res = await fetch('/api/user/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, planId: plan.id, billingCycle })
+                body: JSON.stringify({
+                    userId: user.id,
+                    planId: plan.id,
+                    billingCycle,
+                    gateway
+                })
             });
 
             if (res.ok) {
                 const data = await res.json();
 
                 if (data.checkoutUrl) {
-                    // Redirect to Stripe Checkout
+                    // Redirect to Stripe or PayPal Checkout
                     window.location.href = data.checkoutUrl;
+                } else if (data.paypalOrderId) {
+                    // Handle PayPal specifically if needed (though usually we'd use checkoutUrl)
+                    window.location.href = `https://www.paypal.com/checkoutnow?token=${data.paypalOrderId}`;
                 } else {
                     // Instant activation (Free plan or Dev mode fallback)
                     alert(`Successfully subscribed to ${plan.name}!`);
@@ -289,15 +314,75 @@ export const PricingPage: React.FC = () => {
                 })}
             </div>
 
-            <div className="mt-16 text-center space-y-4">
-                <p className="text-slate-400 text-sm font-medium">
-                    Secure checkout powered by Stripe. All plans come with a 14-day money-back guarantee.
-                </p>
-                <div className="flex items-center justify-center gap-2 text-slate-300">
-                    <Shield size={16} />
-                    <span className="text-xs font-bold uppercase tracking-wider">Enterprise-Grade Security</span>
+            {/* Payment Method Selection Modal */}
+            {showGatewayModal && selectedPlanForModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowGatewayModal(false)} />
+                    <div className="relative bg-white rounded-[3rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+                        <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Select Payment Method</h3>
+                                <button onClick={() => setShowGatewayModal(false)} className="p-2 hover:bg-white rounded-2xl transition-colors">
+                                    <X size={20} className="text-slate-400" />
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-200">
+                                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600">
+                                    <Zap size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Plan Selected</p>
+                                    <p className="text-lg font-black text-slate-900">{selectedPlanForModal.name} <span className="text-slate-400 font-medium">({billingCycle})</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8 space-y-4">
+                            {gateways.stripe && (
+                                <button
+                                    onClick={() => handleSubscribe(selectedPlanForModal, 'stripe')}
+                                    className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2rem] flex items-center gap-6 hover:border-indigo-600 hover:bg-indigo-50/30 transition-all group relative overflow-hidden"
+                                >
+                                    <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                                        <CreditCard size={28} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-xl font-bold text-slate-900">Secure Card Payment</p>
+                                        <p className="text-slate-500 text-sm">Credit, Debit, Apple Pay</p>
+                                    </div>
+                                    <div className="ml-auto p-2 rounded-xl group-hover:bg-indigo-600 group-hover:text-white text-slate-200 transition-colors">
+                                        <ArrowRight size={20} />
+                                    </div>
+                                </button>
+                            )}
+
+                            {gateways.paypal && (
+                                <button
+                                    onClick={() => handleSubscribe(selectedPlanForModal, 'paypal')}
+                                    className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2rem] flex items-center gap-6 hover:border-blue-600 hover:bg-blue-50/30 transition-all group"
+                                >
+                                    <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                                        <Globe size={28} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-xl font-bold text-slate-900">PayPal Checkout</p>
+                                        <p className="text-slate-500 text-sm">PayPal, Venmo, Pay Later</p>
+                                    </div>
+                                    <div className="ml-auto p-2 rounded-xl group-hover:bg-blue-600 group-hover:text-white text-slate-200 transition-colors">
+                                        <ArrowRight size={20} />
+                                    </div>
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="p-8 pt-0 text-center">
+                            <p className="text-xs text-slate-400 font-medium">
+                                Secure multi-gateway processing. Your data is never stored on our servers.
+                            </p>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
         </div >
     );
 };

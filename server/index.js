@@ -126,10 +126,16 @@ const DEFAULT_EMAIL_TEMPLATES = {
     body: `<h1>Account Status Update</h1><p>Hi {{name}},</p><p>Your account status has been changed to: <strong>{{status}}</strong></p><p><strong>Reason:</strong> {{reason}}</p><p>If you believe this is a mistake, please contact our support team.</p>`,
     active: true
   },
-  'plan_upgraded': {
-    name: 'Plan Upgrade Confirmation',
-    subject: 'Your plan has been upgraded! 🚀',
-    body: `<h1>Success, {{name}}!</h1><p>An admin has upgraded your account to the <strong>{{plan_name}}</strong> plan.</p><p>Your new credit balance is: <strong>{{credits}}</strong></p><p>Enjoy your new features!</p>`,
+  'plan_expired': {
+    name: 'Subscription Expired',
+    subject: 'Your subscription has expired - Redditgo',
+    body: `<h1>Subscription Expired</h1><p>Hi {{name}}, your premium subscription has expired. You have been returned to the <strong>Starter</strong> plan.</p><p>To continue using premium features and higher limits, please upgrade your plan.</p><p><a href="{{upgrade_link}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">Upgrade Plan</a></p>`,
+    active: true
+  },
+  'refund_processed': {
+    name: 'Refund Success',
+    subject: 'Refund Processed - Redditgo',
+    body: `<h1>Refund Processed</h1><p>Hi {{name}}, we have successfully processed your refund for transaction <strong>{{transaction_id}}</strong>.</p><p>As a result, your account has been returned to the Starter plan. If you have any questions, please reply to this email.</p>`,
     active: true
   }
 };
@@ -292,83 +298,157 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-
     const { userEmail, plan, credits, billingCycle } = session.metadata || {};
     const stripeCustomerEmail = session.customer_details?.email;
     const emailToSearch = userEmail || stripeCustomerEmail;
 
-    addSystemLog('INFO', `[Webhook] Processing: ${emailToSearch} | Plan: ${plan} | Cycle: ${billingCycle}`);
-    console.log(`[Webhook] Processing: ${emailToSearch} | Plan: ${plan} | Cycle: ${billingCycle}`);
+    await applyPlanToUser({
+      email: emailToSearch,
+      planName: plan,
+      billingCycle: billingCycle,
+      transactionId: session.id,
+      gateway: 'stripe',
+      amount: (session.amount_total || 0) / 100,
+      currency: session.currency || 'USD',
+      metadata: { credits }
+    });
+  } else if (event.type === 'charge.refunded') {
+    const charge = event.data.object;
+    const email = charge.billing_details?.email || charge.receipt_email;
+    const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
 
-    if (emailToSearch && plan) {
-      try {
-        const dbUser = await User.findOne({ email: new RegExp('^' + emailToSearch + '$', 'i') });
-
-        if (dbUser) {
-          let creditsToAdd = credits ? parseInt(credits) : await getPlanCredits(plan);
-
-          // UPFRONT CREDITS FOR YEARLY
-          if (billingCycle === 'yearly') {
-            creditsToAdd = creditsToAdd * 12;
-            addSystemLog('INFO', `[Webhook] Yearly billing detected. Multiplying credits by 12: ${creditsToAdd}`);
-          }
-
-          const currentCredits = dbUser.credits || 0;
-          const now = new Date();
-          const expirationDate = new Date(now);
-          if (billingCycle === 'yearly') expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-          else expirationDate.setMonth(expirationDate.getMonth() + 1);
-
-          dbUser.plan = plan;
-          dbUser.billingCycle = billingCycle || 'monthly';
-          dbUser.status = 'Active';
-          dbUser.credits = currentCredits + creditsToAdd;
-          dbUser.lowCreditsNotified = false; // Reset warning on top-up
-          dbUser.subscriptionStart = now.toISOString();
-          dbUser.subscriptionEnd = expirationDate.toISOString();
-
-          if (!dbUser.transactions) dbUser.transactions = [];
-          const newBalance = currentCredits + creditsToAdd;
-
-          dbUser.transactions.push({
-            id: session.id || `tx_stripe_${Date.now()}`,
-            date: new Date().toISOString(),
-            amount: (session.amount_total || 0) / 100,
-            currency: session.currency || 'USD',
-            type: 'stripe_payment',
-            description: `Payment for ${plan} (${billingCycle}) plan successful.`,
-            subDescription: `Previous: ${currentCredits} + New: ${creditsToAdd} = ${newBalance} Credits`,
-            creditsAdded: creditsToAdd,
-            previousBalance: currentCredits,
-            finalBalance: newBalance,
-            planName: plan
-          });
-
-          await dbUser.save();
-          addSystemLog('SUCCESS', `[Webhook] User ${emailToSearch} upgraded to ${plan}`);
-          console.log(`[Webhook] SUCCESS: ${emailToSearch} upgraded.`);
-
-          // Send Payment Success Email
-          sendEmail('payment_success', emailToSearch, {
-            plan_name: plan,
-            credits_added: creditsToAdd.toString(),
-            final_balance: (currentCredits + creditsToAdd).toString()
-          });
-        } else {
-          addSystemLog('ERROR', `[Webhook] User ${emailToSearch} not found.`);
-          console.warn(`[Webhook] ERROR: User ${emailToSearch} not found.`);
-        }
-      } catch (err) {
-        addSystemLog('ERROR', `[Webhook] DB Error modifying user ${emailToSearch}: ${err.message}`);
-        console.error(`[Webhook] DB Error:`, err);
-      }
-    } else {
-      addSystemLog('ERROR', `[Webhook] Missing email or plan information in session.`);
-      console.warn(`[Webhook] ERROR: Missing email or plan information in session.`);
+    // Try to find the session related to this charge if possible, or use email
+    if (email) {
+      await revokePlanFromUser({
+        email: email,
+        transactionId: paymentIntentId, // Usually matches the transaction ID stored
+        gateway: 'stripe',
+        reason: 'refund'
+      });
+    }
+  } else if (event.type === 'charge.dispute.created') {
+    const dispute = event.data.object;
+    // Disputes are serious, we revoke access immediately
+    const email = dispute.billing_details?.email;
+    if (email) {
+      await revokePlanFromUser({
+        email,
+        transactionId: dispute.charge,
+        gateway: 'stripe',
+        reason: 'dispute'
+      });
     }
   }
 
   response.send();
+});
+
+// --- PayPal Webhook ---
+app.post('/api/paypal/webhook', express.json(), async (req, res) => {
+  try {
+    const event = req.body;
+    const { webhookId, isSandbox } = paypalSettings;
+
+    addSystemLog('INFO', `[PayPal Webhook] Received: ${event.event_type}`, { id: event.id });
+
+    // Verify PayPal Webhook Signature
+    if (webhookId && req.headers['paypal-transmission-id']) {
+      try {
+        const accessToken = await getPaypalAccessToken();
+        const verificationUrl = isSandbox
+          ? "https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature"
+          : "https://api-m.paypal.com/v1/notifications/verify-webhook-signature";
+
+        const verificationPayload = {
+          transmission_id: req.headers['paypal-transmission-id'],
+          transmission_time: req.headers['paypal-transmission-time'],
+          cert_url: req.headers['paypal-cert-url'],
+          auth_algo: req.headers['paypal-auth-algo'],
+          transmission_sig: req.headers['paypal-transmission-sig'],
+          webhook_id: webhookId,
+          webhook_event: event
+        };
+
+        const vRes = await fetch(verificationUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(verificationPayload)
+        });
+
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData.verification_status !== 'SUCCESS') {
+            addSystemLog('WARN', '[PayPal Webhook] Signature verification failed', { status: vData.verification_status });
+            if (!isSandbox) {
+              console.warn('[PayPal] Webhook signature verification failed. Rejecting.');
+              return res.status(400).send('Verification Failed');
+            }
+          }
+        }
+      } catch (vErr) {
+        console.error('[PayPal Webhook Verification Error]', vErr);
+        // Continue in sandbox for ease of testing
+        if (!isSandbox) return res.status(500).send('Verification Process Error');
+      }
+    } else if (!isSandbox) {
+      addSystemLog('WARN', '[PayPal Webhook] Received without headers or Webhook ID in Production');
+      return res.status(400).send('Webhook ID missing');
+    }
+
+    if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+      const resource = event.resource;
+      const captureId = resource.id;
+      const orderId = resource.supplementary_data?.related_ids?.order_id;
+
+      // Look for custom_id in the capture resource or supplementary data
+      const customId = resource.custom_id || resource.purchase_units?.[0]?.custom_id;
+
+      if (customId) {
+        try {
+          const { userId, planId, billingCycle } = JSON.parse(customId);
+          const user = await User.findOne({ id: userId });
+          const plan = await Plan.findOne({ id: planId });
+
+          if (user && plan) {
+            await applyPlanToUser({
+              email: user.email,
+              planName: plan.name,
+              billingCycle: billingCycle,
+              transactionId: orderId || captureId,
+              gateway: 'paypal',
+              amount: parseFloat(resource.amount?.value || 0),
+              currency: resource.amount?.currency_code || 'USD',
+              metadata: { credits: plan.credits }
+            });
+          }
+        } catch (parseErr) {
+          console.error('[PayPal Webhook] Success Parse Error:', parseErr);
+        }
+      }
+    } else if (event.event_type === 'PAYMENT.CAPTURE.REFUNDED') {
+      const resource = event.resource;
+      const orderId = resource.supplementary_data?.related_ids?.order_id;
+
+      // For refunds, we need to find the user by transaction ID in our records
+      const userWithTx = await User.findOne({ "transactions.id": orderId });
+      if (userWithTx) {
+        await revokePlanFromUser({
+          email: userWithTx.email,
+          transactionId: orderId,
+          gateway: 'paypal',
+          reason: 'refund'
+        });
+      }
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('[PayPal Webhook Error]', err);
+    res.status(500).send('Webhook Error');
+  }
 });
 
 // --- 3. Body Parsing & Sanitization (AFTER Webhook) ---
@@ -1280,7 +1360,17 @@ let stripeSettings = savedData.stripe || {
   publishableKey: '',
   secretKey: '',
   webhookSecret: '',
-  isSandbox: true
+  isSandbox: true,
+  enabled: true
+};
+
+// PayPal Settings
+let paypalSettings = savedData.paypal || {
+  clientId: '',
+  secretKey: '',
+  webhookId: '',
+  isSandbox: true,
+  enabled: false
 };
 
 // Reddit Settings (In-memory)
@@ -1301,6 +1391,179 @@ const getDynamicUserAgent = (userId) => {
   return userId ? `${base} (UID: ${userId})` : base;
 };
 
+const getPaypalAccessToken = async () => {
+  const { clientId, secretKey, isSandbox } = paypalSettings;
+  const auth = Buffer.from(`${clientId}:${secretKey}`).toString('base64');
+  const url = isSandbox ? "https://api-m.sandbox.paypal.com/v1/oauth2/token" : "https://api-m.paypal.com/v1/oauth2/token";
+  const response = await fetch(url, {
+    method: "POST",
+    body: "grant_type=client_credentials",
+    headers: {
+      Authorization: `Basic ${auth}`,
+    },
+  });
+  const data = await response.json();
+  return data.access_token;
+};
+
+const createPaypalOrder = async (plan, billingCycle, user) => {
+  const accessToken = await getPaypalAccessToken();
+  const { isSandbox } = paypalSettings;
+  const url = isSandbox ? "https://api-m.sandbox.paypal.com/v2/checkout/orders" : "https://api-m.paypal.com/v2/checkout/orders";
+
+  const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+  const baseUrl = process.env.APP_URL || 'http://localhost:3000';
+
+  const payload = {
+    intent: "CAPTURE",
+    purchase_units: [
+      {
+        amount: {
+          currency_code: "USD",
+          value: price.toString(),
+        },
+        description: `${plan.name} Plan (${billingCycle})`,
+        custom_id: JSON.stringify({
+          userId: user.id,
+          planId: plan.id,
+          billingCycle
+        })
+      },
+    ],
+    application_context: {
+      return_url: `${baseUrl}/settings?success=true&gateway=paypal`,
+      cancel_url: `${baseUrl}/pricing?cancel=true`,
+    }
+  };
+
+  const response = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(err);
+  }
+  return response.json();
+};
+
+const getPlanCredits = async (planName) => {
+  const plan = await Plan.findOne({ name: { $regex: new RegExp('^' + planName + '$', 'i') } });
+  return plan ? plan.credits : 0;
+};
+
+const applyPlanToUser = async ({ email, planName, billingCycle, transactionId, gateway, amount, currency, metadata = {} }) => {
+  try {
+    const dbUser = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
+    if (!dbUser) {
+      console.error(`[Activation] User not found: ${email}`);
+      return false;
+    }
+
+    let creditsToAdd = metadata.credits ? parseInt(metadata.credits) : await getPlanCredits(planName);
+
+    // UPFRONT CREDITS FOR YEARLY
+    if (billingCycle === 'yearly') {
+      creditsToAdd = creditsToAdd * 12;
+      addSystemLog('INFO', `[Activation] Yearly billing detected for ${email}. Credits: ${creditsToAdd}`);
+    }
+
+    const currentCredits = dbUser.credits || 0;
+    const now = new Date();
+    const expirationDate = new Date(now);
+    if (billingCycle === 'yearly') expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+    else expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+    dbUser.plan = planName;
+    dbUser.billingCycle = billingCycle || 'monthly';
+    dbUser.status = 'Active';
+    dbUser.credits = currentCredits + creditsToAdd;
+    dbUser.lowCreditsNotified = false;
+    dbUser.subscriptionStart = now.toISOString();
+    dbUser.subscriptionEnd = expirationDate.toISOString();
+
+    if (!dbUser.transactions) dbUser.transactions = [];
+    const newBalance = dbUser.credits;
+
+    dbUser.transactions.push({
+      id: transactionId,
+      date: new Date().toISOString(),
+      amount: amount || 0,
+      currency: currency || 'USD',
+      type: `${gateway}_payment`,
+      description: `Payment for ${planName} (${billingCycle}) plan successful.`,
+      subDescription: `Previous: ${currentCredits} + New: ${creditsToAdd} = ${newBalance} Credits`,
+      creditsAdded: creditsToAdd,
+      previousBalance: currentCredits,
+      finalBalance: newBalance,
+      planName: planName,
+      gateway
+    });
+
+    await dbUser.save();
+    addSystemLog('SUCCESS', `[Activation] User ${email} upgraded to ${planName} via ${gateway}`);
+
+    sendEmail('payment_success', email, {
+      plan_name: planName,
+      credits_added: creditsToAdd.toString(),
+      final_balance: newBalance.toString()
+    });
+
+    return true;
+  } catch (err) {
+    console.error(`[Activation] Error applying plan to ${email}:`, err);
+    return false;
+  }
+};
+
+const revokePlanFromUser = async ({ email, transactionId, gateway, reason = 'refund' }) => {
+  try {
+    const dbUser = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
+    if (!dbUser) return false;
+
+    // Find the original transaction to see how many credits were added
+    const originalTx = dbUser.transactions?.find(t => t.id === transactionId);
+    const creditsToRevoke = originalTx?.creditsAdded || 0;
+
+    const previousCredits = dbUser.credits || 0;
+    dbUser.plan = 'Starter';
+    dbUser.billingCycle = 'monthly';
+    dbUser.credits = Math.max(0, previousCredits - creditsToRevoke);
+    dbUser.subscriptionEnd = null;
+
+    if (!dbUser.transactions) dbUser.transactions = [];
+    dbUser.transactions.push({
+      id: `REV-${Date.now()}`,
+      date: new Date().toISOString(),
+      amount: 0,
+      type: 'plan_revoked',
+      description: `Plan revoked due to ${reason}.`,
+      subDescription: `Revoked ${creditsToRevoke} credits. New balance: ${dbUser.credits}`,
+      gateway
+    });
+
+    await dbUser.save();
+    addSystemLog('WARN', `[Revocation] User ${email} downgraded due to ${reason} on ${gateway}`, { transactionId });
+
+    if (reason === 'refund') {
+      sendEmail('refund_processed', email, {
+        name: dbUser.name || 'there',
+        transaction_id: transactionId
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`[Revocation] Error revoking plan from ${email}:`, err);
+    return false;
+  }
+};
+
 // SMTP Settings (In-memory)
 let smtpSettings = savedData.smtp || {
   host: '',
@@ -1319,7 +1582,11 @@ const userRedditTokens = settingsCache.userRedditTokens;
 // Public configuration for UI
 app.get('/api/config', (req, res) => {
   res.json({
-    creditCosts: aiSettings.creditCosts
+    creditCosts: aiSettings.creditCosts,
+    gateways: {
+      stripe: stripeSettings.enabled,
+      paypal: paypalSettings.enabled
+    }
   });
 });
 
@@ -1437,18 +1704,14 @@ app.delete('/api/plans/:id', async (req, res) => {
 
 app.post('/api/user/subscribe', async (req, res) => {
   try {
-    const { userId, planId, billingCycle } = req.body;
+    const { userId, planId, billingCycle, gateway } = req.body;
     if (!userId || !planId) return res.status(400).json({ error: 'Missing required fields' });
 
     const user = await User.findOne({ id: userId.toString() });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const plan = await Plan.findOne({ id: planId });
-    if (!plan) {
-      return res.status(404).json({ error: 'Plan not found' });
-    }
+    if (!plan) return res.status(404).json({ error: 'Plan not found' });
 
     if (plan.purchaseEnabled === false) {
       return res.status(403).json({ error: 'This plan is currently not available for purchase.' });
@@ -1467,33 +1730,53 @@ app.post('/api/user/subscribe', async (req, res) => {
       return res.json({ success: true, user, message: 'Free plan activated' });
     }
 
-    // If paid plan, create Stripe Session
+    if (gateway === 'paypal') {
+      if (!paypalSettings.enabled || !paypalSettings.clientId) {
+        return res.status(400).json({ error: 'PayPal is currently disabled' });
+      }
+      try {
+        const order = await createPaypalOrder(plan, billingCycle, user);
+        return res.json({
+          paypalOrderId: order.id,
+          checkoutUrl: order.links.find(l => l.rel === 'approve')?.href
+        });
+      } catch (err) {
+        console.error('[PayPal Error]', err);
+        return res.status(500).json({ error: 'PayPal initialization failed' });
+      }
+    }
+
+    // Default to Stripe
     const stripe = getStripe();
-    if (!stripe) {
-      console.warn('[Stripe] Keys missing. Activating plan instantly for testing.');
-      user.plan = plan.name;
-      const currentCredits = user.credits || 0;
-      user.credits = currentCredits + plan.credits;
-      user.status = 'Active';
+    if (!stripe || !stripeSettings.enabled) {
+      if (!stripe) {
+        // Test mode fallback
+        console.warn('[Stripe] Keys missing. Activating plan instantly for testing.');
+        user.plan = plan.name;
+        const currentCredits = user.credits || 0;
+        user.credits = currentCredits + plan.credits;
+        user.status = 'Active';
 
-      const now = new Date();
-      const end = new Date(now);
-      if (billingCycle === 'yearly') end.setFullYear(end.getFullYear() + 1);
-      else end.setMonth(end.getMonth() + 1);
+        const now = new Date();
+        const end = new Date(now);
+        if (billingCycle === 'yearly') end.setFullYear(end.getFullYear() + 1);
+        else end.setMonth(end.getMonth() + 1);
 
-      user.subscriptionStart = now.toISOString();
-      user.subscriptionEnd = end.toISOString();
+        user.subscriptionStart = now.toISOString();
+        user.subscriptionEnd = end.toISOString();
 
-      await user.save();
-      addSystemLog('WARN', `[TEST MODE] User activated plan: ${user.email} -> ${plan.name}`);
-      return res.json({ success: true, user, message: 'Plan activated (Test Mode)' });
+        await user.save();
+        addSystemLog('WARN', `[TEST MODE] User activated plan: ${user.email} -> ${plan.name}`);
+        return res.json({ success: true, user, message: 'Plan activated (Test Mode)' });
+      }
+      return res.status(400).json({ error: 'Stripe is currently disabled' });
     }
 
     try {
       const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
       const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-      addSystemLog('INFO', `User initiated checkout: ${user.email} for ${plan.name} (${billingCycle})`);
+      addSystemLog('INFO', `User initiated Stripe checkout: ${user.email} for ${plan.name} (${billingCycle})`);
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -1502,7 +1785,7 @@ app.post('/api/user/subscribe', async (req, res) => {
             currency: 'usd',
             product_data: {
               name: `${plan.name} Plan (${billingCycle})`,
-              description: `Includes ${plan.credits} new credits. Your existing ${user.credits || 0} credits will be carried over (Total: ${(user.credits || 0) + plan.credits}).`
+              description: `Includes ${plan.credits} new credits. Your existing ${user.credits || 0} credits will be carried over.`
             },
             unit_amount: price * 100, // Cents
           },
@@ -1514,8 +1797,7 @@ app.post('/api/user/subscribe', async (req, res) => {
           userEmail: user.email,
           plan: plan.name,
           billingCycle: billingCycle,
-          credits: plan.credits.toString(),
-          previousCreditsSnap: (user.credits || 0).toString()
+          credits: plan.credits.toString()
         },
         success_url: `${baseUrl}/settings?success=true&plan=${plan.name}`,
         cancel_url: `${baseUrl}/pricing?canceled=true`,
@@ -2196,6 +2478,38 @@ app.get('/api/users/:id', async (req, res) => {
         addSystemLog('SUCCESS', `[Renewal] Monthly credits refilled for Starter user: ${user.email}`);
       }
 
+      // PROACTIVE PAID PLAN EXPIRATION CHECK
+      if (user.plan && user.plan.toLowerCase() !== 'starter' && user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
+        addSystemLog('WARN', `[Expiry] Plan expired for user: ${user.email}. Reverting to Starter.`);
+
+        user.plan = 'Starter';
+        user.billingCycle = 'monthly';
+        const freePlan = await Plan.findOne({ id: 'starter' });
+        // Optional: you can either reset to 100 or keep the remaining credits but lock features.
+        // Here we'll reset to Starter default to encourage upgrade.
+        user.credits = freePlan ? freePlan.credits : 100;
+        user.subscriptionEnd = null;
+
+        if (!user.transactions) user.transactions = [];
+        user.transactions.push({
+          id: `expired_${Date.now()}`,
+          date: new Date().toISOString(),
+          amount: 0,
+          type: 'plan_expired',
+          description: 'Subscription Expired',
+          subDescription: 'Your premium plan has expired. You have been returned to the Starter plan.',
+          creditsAdded: 0,
+          planName: 'Starter'
+        });
+
+        await user.save();
+
+        sendEmail('plan_expired', user.email, {
+          name: user.name || 'there',
+          upgrade_link: `${process.env.APP_URL || 'http://localhost:3000'}/pricing`
+        });
+      }
+
       const safeUser = user.toObject();
       delete safeUser.password;
       res.json(safeUser);
@@ -2367,6 +2681,25 @@ app.post('/api/admin/stripe-settings', adminAuth, (req, res) => {
   saveSettings({ stripe: stripeSettings });
   console.log('[Stripe] Configuration updated');
   res.json({ message: 'Stripe settings updated', settings: stripeSettings });
+});
+
+// PayPal Settings Management
+app.get('/api/admin/paypal-settings', adminAuth, (req, res) => {
+  const safe = { ...paypalSettings };
+  if (safe.secretKey) safe.secretKey = '********' + safe.secretKey.substring(safe.secretKey.length - 4);
+  if (safe.webhookId) safe.webhookId = '********' + safe.webhookId.substring(safe.webhookId.length - 4);
+  res.json(safe);
+});
+
+app.post('/api/admin/paypal-settings', adminAuth, (req, res) => {
+  const newSettings = { ...req.body };
+  if (newSettings.secretKey && newSettings.secretKey.includes('****')) delete newSettings.secretKey;
+  if (newSettings.webhookId && newSettings.webhookId.includes('****')) delete newSettings.webhookId;
+
+  paypalSettings = { ...paypalSettings, ...newSettings };
+  saveSettings({ paypal: paypalSettings });
+  console.log('[PayPal] Configuration updated');
+  res.json({ message: 'PayPal settings updated', settings: paypalSettings });
 });
 
 // Reddit Settings Management
@@ -2747,17 +3080,6 @@ app.post('/api/user/reddit/disconnect', async (req, res) => {
   }
 });
 
-// Helper to get credits for a plan
-const getPlanCredits = async (planName) => {
-  if (!planName) return 0;
-  const p = await Plan.findOne({
-    $or: [
-      { id: { $regex: new RegExp('^' + planName + '$', 'i') } },
-      { name: { $regex: new RegExp('^' + planName + '$', 'i') } }
-    ]
-  });
-  return p ? p.credits : 0;
-};
 
 
 app.post('/api/generate', async (req, res) => {

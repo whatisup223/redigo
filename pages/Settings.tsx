@@ -41,6 +41,9 @@ export const Settings: React.FC = () => {
         if (queryParams.get('success') === 'true') {
             syncUser();
             setActiveTab('billing'); // Automatically switch to billing so user sees the change
+            setProfileMessage({ type: 'success', text: 'Payment successful! Your account has been upgraded.' });
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
     }, [syncUser]);
 
@@ -1037,11 +1040,18 @@ export const Settings: React.FC = () => {
                                         <Shield size={12} /> Current Plan
                                     </div>
                                     <p className="text-4xl font-extrabold mb-2">{user.plan || 'Starter'} Plan ({user.billingCycle || 'monthly'})</p>
-                                    <p className="text-slate-400 text-sm opacity-80">
-                                        {user.plan === 'Starter'
-                                            ? 'Basic access. Upgrade to unlock more power.'
-                                            : 'Your plan serves you well. Keep growing!'}
-                                    </p>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-slate-400 text-sm opacity-80">
+                                            {user.plan === 'Starter'
+                                                ? 'Basic access. Upgrade to unlock more power.'
+                                                : 'Your plan serves you well. Keep growing!'}
+                                        </p>
+                                        {user.subscriptionEnd && user.plan !== 'Starter' && (
+                                            <p className="text-orange-400 text-xs font-bold flex items-center gap-1.5">
+                                                <RefreshCw size={12} /> Renews/Expires on: {new Date(user.subscriptionEnd).toLocaleDateString()}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="text-right">
                                     {user.plan === 'Starter' ? (
@@ -1117,13 +1127,15 @@ export const Settings: React.FC = () => {
                                         [...user.transactions].reverse().map((tx, i) => (
                                             <div key={tx.id || i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-orange-200 transition-all">
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`p-2.5 rounded-xl border border-slate-100 transition-colors ${tx.type === 'stripe_payment' ? 'bg-blue-100 text-blue-600' :
-                                                        tx.type === 'admin_plan_change' ? 'bg-purple-100 text-purple-600' :
-                                                            'bg-orange-100 text-orange-600'
+                                                    <div className={`p-2.5 rounded-xl border border-slate-100 transition-colors ${tx.type === 'stripe_payment' ? 'bg-indigo-100 text-indigo-600' :
+                                                        tx.type === 'paypal_payment' ? 'bg-blue-100 text-blue-600' :
+                                                            tx.type === 'admin_plan_change' ? 'bg-purple-100 text-purple-600' :
+                                                                'bg-orange-100 text-orange-600'
                                                         }`}>
                                                         {tx.type === 'stripe_payment' ? <CreditCard size={18} /> :
-                                                            tx.type === 'admin_plan_change' ? <Shield size={18} /> :
-                                                                <Zap size={18} />}
+                                                            tx.type === 'paypal_payment' ? <Globe size={18} /> :
+                                                                tx.type === 'admin_plan_change' ? <Shield size={18} /> :
+                                                                    <Zap size={18} />}
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
@@ -1140,9 +1152,9 @@ export const Settings: React.FC = () => {
                                                         <p className="text-sm font-black text-slate-900">
                                                             {tx.amount > 0 ? `$${tx.amount.toFixed(2)}` : 'FREE'}
                                                         </p>
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${tx.type === 'stripe_payment' ? 'text-green-600 bg-green-50' : 'text-slate-500 bg-slate-200'
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${(tx.type === 'stripe_payment' || tx.type === 'paypal_payment') ? 'text-green-600 bg-green-50' : 'text-slate-500 bg-slate-200'
                                                             }`}>
-                                                            {tx.type === 'stripe_payment' ? 'PAID' : 'PROCESSED'}
+                                                            {(tx.type === 'stripe_payment' || tx.type === 'paypal_payment') ? 'PAID' : 'PROCESSED'}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
