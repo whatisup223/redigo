@@ -1249,7 +1249,7 @@ app.get('/api/plans', async (req, res) => {
 
 app.post('/api/plans', async (req, res) => {
   try {
-    const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
+    const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking, purchaseEnabled, isVisible, maxAccounts } = req.body;
 
     if (!id || !name || monthlyPrice === undefined || yearlyPrice === undefined || credits === undefined) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1273,6 +1273,9 @@ app.post('/api/plans', async (req, res) => {
       highlightText: highlightText || '',
       allowImages: Boolean(allowImages || false),
       allowTracking: Boolean(allowTracking || false),
+      purchaseEnabled: purchaseEnabled !== undefined ? Boolean(purchaseEnabled) : true,
+      isVisible: isVisible !== undefined ? Boolean(isVisible) : true,
+      maxAccounts: parseInt(maxAccounts) || 1,
       isCustom: true
     });
 
@@ -1294,7 +1297,7 @@ app.put('/api/plans/:id', async (req, res) => {
       return res.status(404).json({ error: 'Plan not found' });
     }
 
-    const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking } = req.body;
+    const { name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking, purchaseEnabled, isVisible, maxAccounts } = req.body;
 
     planDb.name = name || planDb.name;
     if (monthlyPrice !== undefined) planDb.monthlyPrice = parseFloat(monthlyPrice);
@@ -1307,6 +1310,9 @@ app.put('/api/plans/:id', async (req, res) => {
     if (highlightText !== undefined) planDb.highlightText = String(highlightText);
     if (allowImages !== undefined) planDb.allowImages = Boolean(allowImages);
     if (allowTracking !== undefined) planDb.allowTracking = Boolean(allowTracking);
+    if (purchaseEnabled !== undefined) planDb.purchaseEnabled = Boolean(purchaseEnabled);
+    if (isVisible !== undefined) planDb.isVisible = Boolean(isVisible);
+    if (maxAccounts !== undefined) planDb.maxAccounts = parseInt(maxAccounts);
     planDb.isCustom = true;
 
     await planDb.save();
@@ -1356,6 +1362,10 @@ app.post('/api/user/subscribe', async (req, res) => {
     const plan = await Plan.findOne({ id: planId });
     if (!plan) {
       return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    if (plan.purchaseEnabled === false) {
+      return res.status(403).json({ error: 'This plan is currently not available for purchase.' });
     }
 
     // If plan is free, activate immediately

@@ -85,7 +85,10 @@ const PlanSchema = new mongoose.Schema({
     highlightText: String,
     isCustom: Boolean,
     allowImages: Boolean,
-    allowTracking: Boolean
+    allowTracking: Boolean,
+    purchaseEnabled: { type: Boolean, default: true },
+    isVisible: { type: Boolean, default: true },
+    maxAccounts: { type: Number, default: 1 }
 });
 
 const TicketSchema = new mongoose.Schema({

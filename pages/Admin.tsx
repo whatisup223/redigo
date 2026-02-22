@@ -101,6 +101,8 @@ interface Plan {
     allowImages: boolean;
     allowTracking: boolean;
     maxAccounts: number;
+    purchaseEnabled: boolean;
+    isVisible: boolean;
 }
 
 interface RedditSettings {
@@ -1692,7 +1694,9 @@ export const Admin: React.FC = () => {
                                                             features: [''],
                                                             isPopular: false,
                                                             highlightText: '',
-                                                            isCustom: true
+                                                            isCustom: true,
+                                                            purchaseEnabled: true,
+                                                            isVisible: true
                                                         });
                                                         setIsPlanModalOpen(true);
                                                     }}
@@ -2562,6 +2566,38 @@ export const Admin: React.FC = () => {
                                                     </div>
                                                     <div className="flex flex-col">
                                                         <span className="font-bold text-slate-700 text-xs">Allow Tracking</span>
+                                                    </div>
+                                                </label>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <label className="flex items-center gap-3 cursor-pointer group">
+                                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${planForm.purchaseEnabled ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 text-transparent group-hover:border-emerald-400'}`}>
+                                                        <Check size={16} strokeWidth={4} />
+                                                        <input
+                                                            type="checkbox"
+                                                            className="hidden"
+                                                            checked={planForm.purchaseEnabled ?? true}
+                                                            onChange={(e) => setPlanForm({ ...planForm, purchaseEnabled: e.target.checked })}
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700 text-xs text-nowrap">Purchase Enabled</span>
+                                                    </div>
+                                                </label>
+
+                                                <label className="flex items-center gap-3 cursor-pointer group">
+                                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-colors ${planForm.isVisible ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-transparent group-hover:border-indigo-400'}`}>
+                                                        <Check size={16} strokeWidth={4} />
+                                                        <input
+                                                            type="checkbox"
+                                                            className="hidden"
+                                                            checked={planForm.isVisible ?? true}
+                                                            onChange={(e) => setPlanForm({ ...planForm, isVisible: e.target.checked })}
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700 text-xs text-nowrap">Visible in UI</span>
                                                     </div>
                                                 </label>
                                             </div>

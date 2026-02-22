@@ -578,7 +578,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch">
-            {plans.map((plan: any) => {
+            {plans.filter((p: any) => p.isVisible !== false).map((plan: any) => {
               const theme = plan.isPopular ? 'orange' : (plan.name === 'Agency' ? 'slate' : 'slate');
               const isFree = plan.monthlyPrice === 0;
 
@@ -705,13 +705,16 @@ export const LandingPage: React.FC = () => {
                     </ul>
 
                     <Link
-                      to="/signup"
-                      className={`w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 text-center block ${plan.isPopular
-                        ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-orange-200'
-                        : 'bg-slate-900 text-white hover:bg-slate-800'
+                      to={plan.purchaseEnabled !== false ? "/signup" : "#"}
+                      onClick={(e) => plan.purchaseEnabled === false && e.preventDefault()}
+                      className={`w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 text-center block ${plan.purchaseEnabled === false
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none border border-slate-200'
+                        : plan.isPopular
+                          ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-orange-200'
+                          : 'bg-slate-900 text-white hover:bg-slate-800'
                         }`}
                     >
-                      {plan.monthlyPrice === 0 ? 'Start Free' : 'Choose Plan'}
+                      {plan.purchaseEnabled === false ? 'Currently Unavailable' : plan.monthlyPrice === 0 ? 'Start Free' : 'Choose Plan'}
                     </Link>
                   </div>
                 </div>

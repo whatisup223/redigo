@@ -20,6 +20,8 @@ export const PricingPage: React.FC = () => {
         allowImages: boolean;
         allowTracking: boolean;
         maxAccounts: number;
+        purchaseEnabled?: boolean;
+        isVisible?: boolean;
     }
 
     const { user, updateUser } = useAuth();
@@ -128,7 +130,7 @@ export const PricingPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
-                {plans.map((plan) => {
+                {plans.filter(p => p.isVisible !== false).map((plan) => {
                     const isCurrentPlan = user?.plan === plan.name;
                     const isFree = plan.monthlyPrice === 0;
 
@@ -249,19 +251,23 @@ export const PricingPage: React.FC = () => {
                             </ul>
 
                             <button
-                                onClick={() => !isCurrentPlan && handleSubscribe(plan)}
-                                disabled={!!isLoading || isCurrentPlan}
+                                onClick={() => !isCurrentPlan && plan.purchaseEnabled !== false && handleSubscribe(plan)}
+                                disabled={!!isLoading || isCurrentPlan || plan.purchaseEnabled === false}
                                 className={`w-full py-4 rounded-xl font-bold text-center transition-all shadow-lg hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 ${isCurrentPlan
                                     ? 'bg-slate-100 text-slate-400 cursor-default shadow-none border border-slate-200'
-                                    : plan.isPopular
-                                        ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-orange-200'
-                                        : 'bg-white text-slate-900 border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                                    : plan.purchaseEnabled === false
+                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
+                                        : plan.isPopular
+                                            ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-orange-200'
+                                            : 'bg-white text-slate-900 border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                                     }`}
                             >
                                 {isLoading === plan.id ? (
                                     <Loader2 className="animate-spin" size={20} />
                                 ) : isCurrentPlan ? (
                                     <>Current Plan</>
+                                ) : plan.purchaseEnabled === false ? (
+                                    <>Currently Unavailable</>
                                 ) : (
                                     <>Choose {plan.name} <ArrowRight size={18} /></>
                                 )}
