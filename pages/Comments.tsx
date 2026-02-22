@@ -140,6 +140,21 @@ export const Comments: React.FC = () => {
       .catch(console.error);
   }, []);
 
+  // Load reddit status on mount/user change
+  useEffect(() => {
+    if (user?.id) {
+      fetch(`/api/user/reddit/status?userId=${user.id}`)
+        .then(res => res.json())
+        .then(status => {
+          setRedditStatus(status);
+          if (status.accounts?.length > 0 && !selectedAccount) {
+            setSelectedAccount(status.accounts[0].username);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [user]);
+
   // Check for draft on mount
   useEffect(() => {
     const savedDraft = localStorage.getItem('redditgo_comment_draft');
@@ -857,14 +872,56 @@ export const Comments: React.FC = () => {
                           </button>
                         </div>
 
-                        <div className="pt-4 border-t border-slate-100">
+                      </div>
+
+                    {/* Account Selector & Deploy Button (only if reply generated) */}
+                    {(generatedReply || editedComment) && (
+                      <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-500">
+                        {/* Account Selector */}
+                        <div className="pt-4 border-t border-slate-100 space-y-3">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                            <ShieldCheck size={12} className="text-orange-600" /> Deploying as
+                          </label>
+                          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                            <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                              {redditStatus.accounts.find(a => a.username === selectedAccount)?.icon ? (
+                                <img src={redditStatus.accounts.find(a => a.username === selectedAccount)?.icon} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-orange-600 flex items-center justify-center text-white font-black text-xs">R</div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <select
+                                value={selectedAccount}
+                                onChange={(e) => setSelectedAccount(e.target.value)}
+                                className="w-full bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none cursor-pointer"
+                              >
+                                {redditStatus.accounts.length > 0 ? (
+                                  redditStatus.accounts.map(acc => (
+                                    <option key={acc.username} value={acc.username}>u/{acc.username}</option>
+                                  ))
+                                ) : (
+                                  <option value="">No accounts linked</option>
+                                )}
+                              </select>
+                              {redditStatus.accounts.length === 0 && <p className="text-[9px] text-red-500 font-bold">Link an account in settings</p>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Deploy Button */}
+                        <div className="pt-2">
                           <button
                             onClick={handlePost}
-                            disabled={isPosting}
-                            className="w-full bg-slate-900 text-white py-4 rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-slate-100 flex items-center justify-center gap-3 disabled:opacity-50"
+                            disabled={isPosting || !selectedAccount}
+                            className="w-full bg-slate-900 text-white py-4 rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-slate-100 flex items-center justify-center gap-3 disabled:opacity-50 group"
                           >
-                            {isPosting ? <RefreshCw className="animate-spin" size={18} /> : <Send size={18} />}
-                            Deploy To Reddit
+                            {isPosting ? <RefreshCw className="animate-spin" size={18} /> : (
+                              <>
+                                <Send size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                                Deploy To Reddit
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -878,364 +935,368 @@ export const Comments: React.FC = () => {
       </div>
 
       {/* Reply Wizard Overlay */}
-      {isWizardOpen && selectedPost && (
-        <div className="fixed inset-0 z-[1200] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
-            <div className="p-6 md:p-10 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Discussion Wizard</p>
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Step {wizardStep} of 2</h3>
-              </div>
-              <button onClick={() => setIsWizardOpen(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm border border-slate-100">
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="p-6 md:p-10 space-y-8 overflow-y-auto custom-scrollbar">
-              {wizardStep === 1 ? (
-                <div className="space-y-8">
-                  {/* Language Selector */}
-                  <div className="space-y-4">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
-                      🌐 Output Language
-                    </label>
-                    <select
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value)}
-                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
-                    >
-                      <option value="English">🇺🇸 English</option>
-                      <option value="Arabic">🇸🇦 Arabic (العربية)</option>
-                      <option value="French">🇫🇷 French (Français)</option>
-                      <option value="Spanish">🇪🇸 Spanish (Español)</option>
-                      <option value="German">🇩🇪 German (Deutsch)</option>
-                      <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
-                      <option value="Italian">🇮🇹 Italian (Italiano)</option>
-                      <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
-                      <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
-                      <option value="Japanese">🇯🇵 Japanese (日本語)</option>
-                      <option value="Korean">🇰🇷 Korean (한국어)</option>
-                      <option value="Chinese">🇨🇳 Chinese (中文)</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Engagement Strategy</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      {[
-                        { id: 'helpful_peer', label: 'Helpful Peer', desc: 'Friendly Support', icon: Smile },
-                        { id: 'thought_leader', label: 'Thought Leader', desc: 'Expert Insight', icon: Crown },
-                        { id: 'skeptic', label: 'Smart Skeptic', desc: 'Critical Analysis', icon: Zap },
-                        { id: 'storyteller', label: 'Storyteller', desc: 'Personal Narrative', icon: Quote }
-                      ].map(t => (
-                        <button
-                          key={t.id}
-                          onClick={() => setWizardData({ ...wizardData, tone: t.id })}
-                          className={`p-5 rounded-3xl border-2 text-left transition-all ${wizardData.tone === t.id ? 'border-orange-500 bg-orange-50/20' : 'border-slate-50 bg-white hover:border-slate-200'}`}
-                        >
-                          <t.icon size={22} className={wizardData.tone === t.id ? 'text-orange-600' : 'text-slate-300'} />
-                          <p className="font-black text-slate-900 mt-3 text-sm">{t.label}</p>
-                          <p className="text-[10px] text-slate-500 font-bold mt-1 line-clamp-1">{t.desc}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button onClick={() => setWizardStep(2)} className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-3">Next Step <ChevronRight size={20} /></button>
+      {
+        isWizardOpen && selectedPost && (
+          <div className="fixed inset-0 z-[1200] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+              <div className="p-6 md:p-10 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Discussion Wizard</p>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Step {wizardStep} of 2</h3>
                 </div>
-              ) : (
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Response Goal</label>
-                    <div className="flex gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
-                      {['help', 'question', 'feedback', 'pitch'].map(g => (
-                        <button
-                          key={g}
-                          onClick={() => setWizardData({ ...wizardData, goal: g })}
-                          className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${wizardData.goal === g ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                          {g}
-                        </button>
-                      ))}
+                <button onClick={() => setIsWizardOpen(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm border border-slate-100">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-6 md:p-10 space-y-8 overflow-y-auto custom-scrollbar">
+                {wizardStep === 1 ? (
+                  <div className="space-y-8">
+                    {/* Language Selector */}
+                    <div className="space-y-4">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                        🌐 Output Language
+                      </label>
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+                      >
+                        <option value="English">🇺🇸 English</option>
+                        <option value="Arabic">🇸🇦 Arabic (العربية)</option>
+                        <option value="French">🇫🇷 French (Français)</option>
+                        <option value="Spanish">🇪🇸 Spanish (Español)</option>
+                        <option value="German">🇩🇪 German (Deutsch)</option>
+                        <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
+                        <option value="Italian">🇮🇹 Italian (Italiano)</option>
+                        <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
+                        <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
+                        <option value="Japanese">🇯🇵 Japanese (日本語)</option>
+                        <option value="Korean">🇰🇷 Korean (한국어)</option>
+                        <option value="Chinese">🇨🇳 Chinese (中文)</option>
+                      </select>
                     </div>
-                  </div>
 
-                  <div className="space-y-4">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Engagement Context</label>
-
-                    {brandProfile.brandName ? (
-                      <div className="rounded-2xl border-2 border-green-100 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 bg-green-50">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 bg-green-600 rounded-xl flex items-center justify-center">
-                              <Building2 size={13} className="text-white" />
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black text-green-700 uppercase tracking-widest">Brand Profile Active</p>
-                              <p className="font-extrabold text-slate-900 text-xs">{brandProfile.brandName}</p>
-                            </div>
-                            <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-lg text-[9px] font-black">
-                              <Check size={9} /> Auto-applied
-                            </span>
-                          </div>
+                    <div className="space-y-4">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Engagement Strategy</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[
+                          { id: 'helpful_peer', label: 'Helpful Peer', desc: 'Friendly Support', icon: Smile },
+                          { id: 'thought_leader', label: 'Thought Leader', desc: 'Expert Insight', icon: Crown },
+                          { id: 'skeptic', label: 'Smart Skeptic', desc: 'Critical Analysis', icon: Zap },
+                          { id: 'storyteller', label: 'Storyteller', desc: 'Personal Narrative', icon: Quote }
+                        ].map(t => (
                           <button
-                            onClick={() => setShowBrandOverride(v => !v)}
-                            className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors"
+                            key={t.id}
+                            onClick={() => setWizardData({ ...wizardData, tone: t.id })}
+                            className={`p-5 rounded-3xl border-2 text-left transition-all ${wizardData.tone === t.id ? 'border-orange-500 bg-orange-50/20' : 'border-slate-50 bg-white hover:border-slate-200'}`}
                           >
-                            <ChevronDown size={12} className={`transition-transform ${showBrandOverride ? 'rotate-180' : ''}`} />
-                            {showBrandOverride ? 'Hide' : 'Override'}
+                            <t.icon size={22} className={wizardData.tone === t.id ? 'text-orange-600' : 'text-slate-300'} />
+                            <p className="font-black text-slate-900 mt-3 text-sm">{t.label}</p>
+                            <p className="text-[10px] text-slate-500 font-bold mt-1 line-clamp-1">{t.desc}</p>
                           </button>
-                        </div>
-                        {showBrandOverride && (
-                          <div className="p-4 bg-white border-t border-green-100 space-y-3">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Override for this comment only</p>
-                            <div className="grid grid-cols-2 gap-3">
+                        ))}
+                      </div>
+                    </div>
+                    <button onClick={() => setWizardStep(2)} className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-3">Next Step <ChevronRight size={20} /></button>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Response Goal</label>
+                      <div className="flex gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
+                        {['help', 'question', 'feedback', 'pitch'].map(g => (
+                          <button
+                            key={g}
+                            onClick={() => setWizardData({ ...wizardData, goal: g })}
+                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${wizardData.goal === g ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                          >
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Engagement Context</label>
+
+                      {brandProfile.brandName ? (
+                        <div className="rounded-2xl border-2 border-green-100 overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-3 bg-green-50">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 bg-green-600 rounded-xl flex items-center justify-center">
+                                <Building2 size={13} className="text-white" />
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-black text-green-700 uppercase tracking-widest">Brand Profile Active</p>
+                                <p className="font-extrabold text-slate-900 text-xs">{brandProfile.brandName}</p>
+                              </div>
+                              <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-lg text-[9px] font-black">
+                                <Check size={9} /> Auto-applied
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => setShowBrandOverride(v => !v)}
+                              className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors"
+                            >
+                              <ChevronDown size={12} className={`transition-transform ${showBrandOverride ? 'rotate-180' : ''}`} />
+                              {showBrandOverride ? 'Hide' : 'Override'}
+                            </button>
+                          </div>
+                          {showBrandOverride && (
+                            <div className="p-4 bg-white border-t border-green-100 space-y-3">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Override for this comment only</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Brand Name</label>
+                                  <input
+                                    type="text"
+                                    value={wizardData.productMention}
+                                    onChange={(e) => setWizardData({ ...wizardData, productMention: e.target.value })}
+                                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
+                                    placeholder={brandProfile.brandName || 'Product Name'}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><LinkIcon size={10} /> Website</label>
+                                  <input
+                                    type="url"
+                                    value={wizardData.productLink}
+                                    onChange={(e) => setWizardData({ ...wizardData, productLink: e.target.value })}
+                                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
+                                    placeholder={brandProfile.website || 'https://...'}
+                                  />
+                                </div>
+                              </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Brand Name</label>
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Product Description</label>
+                                <textarea
+                                  rows={2}
+                                  value={wizardData.description}
+                                  onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
+                                  className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none"
+                                  placeholder={brandProfile.description || 'What does it do?'}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Target Audience</label>
+                                <input
+                                  type="text"
+                                  value={wizardData.targetAudience}
+                                  onChange={(e) => setWizardData({ ...wizardData, targetAudience: e.target.value })}
+                                  className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
+                                  placeholder={brandProfile.targetAudience || 'e.g. SaaS founders'}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Problem it solves</label>
+                                <input
+                                  type="text"
+                                  value={wizardData.problemSolved}
+                                  onChange={(e) => setWizardData({ ...wizardData, problemSolved: e.target.value })}
+                                  className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
+                                  placeholder={brandProfile.problem || 'e.g. Difficulty finding leads'}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border-2 border-orange-100 overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-3 bg-orange-50">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 bg-orange-500 rounded-xl flex items-center justify-center">
+                                <Building2 size={13} className="text-white" />
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Quick Brand Context</p>
+                                <p className="text-[10px] text-slate-500 font-medium">For better AI personalization</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowBrandOverride(v => !v)}
+                              className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors"
+                            >
+                              <ChevronDown size={12} className={`transition-transform ${showBrandOverride ? 'rotate-180' : ''}`} />
+                              {showBrandOverride ? 'Hide' : 'Fill in'}
+                            </button>
+                          </div>
+                          {showBrandOverride && (
+                            <div className="p-4 bg-white border-t border-orange-100 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
                                 <input
                                   type="text"
                                   value={wizardData.productMention}
                                   onChange={(e) => setWizardData({ ...wizardData, productMention: e.target.value })}
                                   className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                                  placeholder={brandProfile.brandName || 'Product Name'}
+                                  placeholder="Product Name"
                                 />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><LinkIcon size={10} /> Website</label>
                                 <input
                                   type="url"
                                   value={wizardData.productLink}
                                   onChange={(e) => setWizardData({ ...wizardData, productLink: e.target.value })}
                                   className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                                  placeholder={brandProfile.website || 'https://...'}
+                                  placeholder="Website URL"
                                 />
                               </div>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Product Description</label>
                               <textarea
                                 rows={2}
                                 value={wizardData.description}
                                 onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
                                 className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none"
-                                placeholder={brandProfile.description || 'What does it do?'}
+                                placeholder="Product description..."
                               />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Target Audience</label>
                               <input
                                 type="text"
                                 value={wizardData.targetAudience}
                                 onChange={(e) => setWizardData({ ...wizardData, targetAudience: e.target.value })}
                                 className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                                placeholder={brandProfile.targetAudience || 'e.g. SaaS founders'}
+                                placeholder="Target Audience"
                               />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Problem it solves</label>
                               <input
                                 type="text"
                                 value={wizardData.problemSolved}
                                 onChange={(e) => setWizardData({ ...wizardData, problemSolved: e.target.value })}
                                 className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                                placeholder={brandProfile.problem || 'e.g. Difficulty finding leads'}
+                                placeholder="Problem it solves"
                               />
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border-2 border-orange-100 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 bg-orange-50">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 bg-orange-500 rounded-xl flex items-center justify-center">
-                              <Building2 size={13} className="text-white" />
-                            </div>
-                            <div>
-                              <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Quick Brand Context</p>
-                              <p className="text-[10px] text-slate-500 font-medium">For better AI personalization</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setShowBrandOverride(v => !v)}
-                            className="flex items-center gap-1 text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors"
-                          >
-                            <ChevronDown size={12} className={`transition-transform ${showBrandOverride ? 'rotate-180' : ''}`} />
-                            {showBrandOverride ? 'Hide' : 'Fill in'}
-                          </button>
+                          )}
                         </div>
-                        {showBrandOverride && (
-                          <div className="p-4 bg-white border-t border-orange-100 space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
-                              <input
-                                type="text"
-                                value={wizardData.productMention}
-                                onChange={(e) => setWizardData({ ...wizardData, productMention: e.target.value })}
-                                className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                                placeholder="Product Name"
-                              />
-                              <input
-                                type="url"
-                                value={wizardData.productLink}
-                                onChange={(e) => setWizardData({ ...wizardData, productLink: e.target.value })}
-                                className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                                placeholder="Website URL"
-                              />
-                            </div>
-                            <textarea
-                              rows={2}
-                              value={wizardData.description}
-                              onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
-                              className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none"
-                              placeholder="Product description..."
-                            />
-                            <input
-                              type="text"
-                              value={wizardData.targetAudience}
-                              onChange={(e) => setWizardData({ ...wizardData, targetAudience: e.target.value })}
-                              className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                              placeholder="Target Audience"
-                            />
-                            <input
-                              type="text"
-                              value={wizardData.problemSolved}
-                              onChange={(e) => setWizardData({ ...wizardData, problemSolved: e.target.value })}
-                              className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:border-orange-500 font-bold text-sm"
-                              placeholder="Problem it solves"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-
-                  {/* Toggles */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
-                          <Target size={16} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">Include Brand Name</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setIncludeBrandName(!includeBrandName)}
-                        className={`w-10 h-6 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
-                      >
-                        <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-4' : 'translate-x-0'}`} />
-                      </button>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
-                          <LinkIcon size={16} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">Include Link</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setIncludeLink(!includeLink)}
-                        className={`w-10 h-6 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
-                      >
-                        <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-4' : 'translate-x-0'}`} />
-                      </button>
-                    </div>
 
-                    {/* Link Tracking Toggle */}
-                    {includeLink && (
-                      <div className="flex items-center justify-between p-4 bg-blue-50/30 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+                    {/* Toggles */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-sm ${!canTrack ? 'bg-slate-100 text-slate-400' : 'bg-white text-blue-600'}`}>
-                            {!canTrack ? <Crown size={14} /> : <Zap size={14} />}
+                          <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                            <Target size={16} />
                           </div>
                           <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-bold text-slate-900">Track Clicks</p>
-                              {!canTrack && <span className="bg-blue-100 text-blue-600 text-[7px] font-black px-1 py-0.5 rounded-md uppercase tracking-tighter">Pro</span>}
-                            </div>
+                            <p className="text-xs font-bold text-slate-900">Include Brand Name</p>
                           </div>
                         </div>
                         <button
-                          onClick={() => canTrack ? setUseTracking(!useTracking) : window.location.href = '/pricing'}
-                          className={`w-10 h-6 rounded-full transition-all relative ${useTracking && canTrack ? 'bg-blue-600' : 'bg-slate-300'}`}
+                          onClick={() => setIncludeBrandName(!includeBrandName)}
+                          className={`w-10 h-6 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
                         >
-                          <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${useTracking && canTrack ? 'translate-x-4' : 'translate-x-0'} flex items-center justify-center`}>
-                            {!canTrack && <AlertCircle size={8} className="text-slate-400" />}
-                          </div>
+                          <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex gap-3">
-                    <button onClick={() => setWizardStep(1)} className="px-8 py-5 bg-slate-50 text-slate-400 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all">Back</button>
-                    <button
-                      onClick={() => handleGenerate(selectedPost!)}
-                      className="flex-1 py-5 bg-orange-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-100 hover:bg-orange-700 transition-all flex flex-col items-center justify-center animate-pulse-slow"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>Generate Reply</span>
-                        <Sparkles size={16} />
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                            <LinkIcon size={16} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">Include Link</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIncludeLink(!includeLink)}
+                          className={`w-10 h-6 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
                       </div>
-                      <span className="text-[9px] text-orange-200 font-black uppercase tracking-[0.2em] mt-0.5">Will cost {costs.comment} PTS</span>
-                    </button>
+
+                      {/* Link Tracking Toggle */}
+                      {includeLink && (
+                        <div className="flex items-center justify-between p-4 bg-blue-50/30 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-sm ${!canTrack ? 'bg-slate-100 text-slate-400' : 'bg-white text-blue-600'}`}>
+                              {!canTrack ? <Crown size={14} /> : <Zap size={14} />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-bold text-slate-900">Track Clicks</p>
+                                {!canTrack && <span className="bg-blue-100 text-blue-600 text-[7px] font-black px-1 py-0.5 rounded-md uppercase tracking-tighter">Pro</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => canTrack ? setUseTracking(!useTracking) : window.location.href = '/pricing'}
+                            className={`w-10 h-6 rounded-full transition-all relative ${useTracking && canTrack ? 'bg-blue-600' : 'bg-slate-300'}`}
+                          >
+                            <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${useTracking && canTrack ? 'translate-x-4' : 'translate-x-0'} flex items-center justify-center`}>
+                              {!canTrack && <AlertCircle size={8} className="text-slate-400" />}
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button onClick={() => setWizardStep(1)} className="px-8 py-5 bg-slate-50 text-slate-400 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all">Back</button>
+                      <button
+                        onClick={() => handleGenerate(selectedPost!)}
+                        className="flex-1 py-5 bg-orange-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-orange-100 hover:bg-orange-700 transition-all flex flex-col items-center justify-center animate-pulse-slow"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>Generate Reply</span>
+                          <Sparkles size={16} />
+                        </div>
+                        <span className="text-[9px] text-orange-200 font-black uppercase tracking-[0.2em] mt-0.5">Will cost {costs.comment} PTS</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </div >
           </div >
-        </div >
-      )}
+        )
+      }
       {/* Daily Limit Modal */}
-      {showDailyLimitModal && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-['Outfit']">
-          <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50 to-white -z-10" />
+      {
+        showDailyLimitModal && (
+          <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 font-['Outfit']">
+            <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50 to-white -z-10" />
 
-            <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-blue-200">
-              <Clock size={40} className="fill-current" />
-            </div>
+              <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-blue-200">
+                <Clock size={40} className="fill-current" />
+              </div>
 
-            <div className="space-y-2">
-              <h3 className="text-2xl font-black text-slate-900 leading-tight">Daily Limit Reached! 🕒</h3>
-              <p className="text-slate-500 text-sm font-medium leading-relaxed">
-                You've reached your allowed quota of <span className="text-orange-600 font-bold">
-                  {(() => {
-                    const plan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
-                    const planLimit = user?.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
-                    return (Number(user?.customDailyLimit) > 0) ? user?.customDailyLimit : (planLimit || 0);
-                  })()} PTS
-                </span> for today. Your limit resets every 24 hours.
-              </p>
-            </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-slate-900 leading-tight">Daily Limit Reached! 🕒</h3>
+                <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                  You've reached your allowed quota of <span className="text-orange-600 font-bold">
+                    {(() => {
+                      const plan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
+                      const planLimit = user?.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+                      return (Number(user?.customDailyLimit) > 0) ? user?.customDailyLimit : (planLimit || 0);
+                    })()} PTS
+                  </span> for today. Your limit resets every 24 hours.
+                </p>
+              </div>
 
-            <div className="space-y-3 pt-2">
-              <Link
-                to="/support"
-                className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
-              >
-                Contact Support <MessageSquare size={16} />
-              </Link>
-              <Link
-                to="/pricing"
-                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black shadow-xl shadow-orange-100 hover:bg-orange-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
-              >
-                Upgrade Plan <Crown size={18} />
-              </Link>
-              <button
-                onClick={() => setShowDailyLimitModal(false)}
-                className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
-              >
-                Got it
-              </button>
+              <div className="space-y-3 pt-2">
+                <Link
+                  to="/support"
+                  className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                >
+                  Contact Support <MessageSquare size={16} />
+                </Link>
+                <Link
+                  to="/pricing"
+                  className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black shadow-xl shadow-orange-100 hover:bg-orange-700 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                >
+                  Upgrade Plan <Crown size={18} />
+                </Link>
+                <button
+                  onClick={() => setShowDailyLimitModal(false)}
+                  className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
+                >
+                  Got it
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </>
   );
 };
