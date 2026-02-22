@@ -437,7 +437,7 @@ export const Analytics: React.FC = () => {
                   <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full uppercase tracking-wider">Tracking Link</span>
                   <span className="text-slate-400 flex items-center gap-1.5"><Clock size={12} /> {new Date(selectedEntry.createdAt).toLocaleDateString()}</span>
                 </div>
-                <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight truncate max-w-[200px] sm:max-w-sm md:max-w-md" title={selectedEntry.originalUrl}>{selectedEntry.originalUrl}</h2>
+                <h2 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight break-all" title={selectedEntry.originalUrl}>{selectedEntry.originalUrl}</h2>
                 <div className="flex items-center gap-2 text-slate-500 font-bold mt-2">
                   Targeted: <span className="text-orange-600">r/{selectedEntry.subreddit}</span>
                 </div>
@@ -517,7 +517,7 @@ export const Analytics: React.FC = () => {
                             <div className="flex items-center gap-1.5">
                               <Globe size={12} className="text-blue-500" />
                               <span>
-                                {[click.city, click.region, click.country].filter(Boolean).join(', ') || 'Unknown Location'}
+                                {[click.city, click.region, click.country].filter(Boolean).join(', ') || (click.ip === '127.0.0.1' || click.ip === '::1' ? 'Local Network' : 'Unknown Location')}
                               </span>
                             </div>
                           </div>
