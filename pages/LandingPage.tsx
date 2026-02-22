@@ -596,16 +596,11 @@ export const LandingPage: React.FC = () => {
 
 
               return (
-                <div key={plan.id} className={`bg-white rounded-[2.5rem] p-10 border ${plan.isPopular ? 'border-orange-200 shadow-2xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-all duration-500 relative overflow-hidden flex flex-col`}>
+                <div key={plan.id} className={`bg-white rounded-[2.5rem] p-10 border ${plan.isPopular ? 'border-orange-200 shadow-2xl shadow-orange-100/50 scale-105 z-10' : 'border-slate-100 shadow-lg'} hover:-translate-y-2 transition-all duration-500 relative overflow-hidden flex flex-col ${plan.purchaseEnabled === false ? 'opacity-80 grayscale-[0.2]' : ''}`}>
                   {plan.isPopular && (
                     <div className="absolute top-0 right-0 w-48 h-48 bg-orange-50 rounded-bl-[160px] -mr-12 -mt-12 pointer-events-none transition-transform hover:scale-110"></div>
                   )}
 
-                  {!isFree && plan.purchaseEnabled === false && (
-                    <div className="absolute top-4 left-6 bg-orange-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-200 border border-orange-500 z-20">
-                      Max Capacity
-                    </div>
-                  )}
                   {plan.isPopular && (
                     <div className="absolute top-6 right-6 bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
                       Most Popular
@@ -615,6 +610,11 @@ export const LandingPage: React.FC = () => {
                   <div className="relative z-10 flex flex-col h-full">
                     <div className="mb-8">
                       <div className="flex flex-col gap-2">
+                        {!isFree && plan.purchaseEnabled === false && (
+                          <span className="bg-orange-600 text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest w-fit mb-1 shadow-sm shadow-orange-100">
+                            Reached Capacity
+                          </span>
+                        )}
                         <span className={`font-black uppercase tracking-widest text-[10px] px-3 py-1 rounded-full w-fit ${plan.isPopular ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-500'}`}>{plan.name}</span>
                         {isYearlySelected && actualDiscount > 0 && (
                           <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-1 rounded-lg w-fit">
