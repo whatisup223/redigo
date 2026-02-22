@@ -454,12 +454,28 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
     link.clicks = (Number(link.clicks) || 0) + 1;
     const now = new Date().toISOString();
 
+    const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
+    let country = '';
+
+    try {
+      if (ip && ip !== 'unknown' && ip !== '127.0.0.1' && ip !== '::1' && !ip.startsWith('192.168.') && !ip.startsWith('10.')) {
+        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=country`);
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          country = geoData.country || '';
+        }
+      }
+    } catch (err) {
+      console.error('[TRACKING] Geo-lookup failed:', err);
+    }
+
     if (!link.clickDetails) link.clickDetails = [];
     link.clickDetails.push({
       timestamp: now,
       userAgent: req.headers['user-agent'] || 'unknown',
       referer: req.headers['referer'] || 'direct',
-      ip: req.headers['x-forwarded-for'] || req.ip || 'unknown'
+      ip: ip,
+      country: country
     });
     link.lastClickedAt = now;
 

@@ -473,8 +473,8 @@ export const Analytics: React.FC = () => {
                             <span className="font-black text-slate-900 text-sm">{new Date(click.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                             {idx === 0 && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase">Latest</span>}
                           </div>
-                          <p className="text-xs font-bold text-slate-400 capitalize bg-slate-50 w-fit px-3 py-1.5 rounded-lg border border-slate-100">
-                            {click.userAgent.includes('Mobile') ? '📱 Mobile Browser' : '💻 Desktop Browser'} • IP: {click.ip?.substring(0, 6)}...
+                          <p className="text-xs font-bold text-slate-400 capitalize bg-slate-50 w-fit max-w-full px-3 py-1.5 rounded-lg border border-slate-100 break-all">
+                            {click.userAgent.includes('Mobile') ? '📱 Mobile Browser' : '💻 Desktop Browser'} • IP: {click.ip} {click.country ? `(${click.country})` : ''}
                           </p>
                         </div>
                       </div>
