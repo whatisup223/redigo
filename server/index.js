@@ -1626,14 +1626,25 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
     const planDistribution = {};
 
     // 4. Totals & Activity
-    let totalCreditsCirculating = 0;
+    let totalPaidCreditsCirculating = 0;
+    let totalFreeCreditsCirculating = 0;
     const liveFeed = [];
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     allUsers.forEach(u => {
-      totalCreditsCirculating += (u.credits || 0);
+      // Calculate circulation excluding admins
+      if (u.role !== 'admin') {
+        const pName = (u.plan || 'Free').toLowerCase();
+        const isPaid = pName !== 'starter' && pName !== 'free';
+
+        if (isPaid) {
+          totalPaidCreditsCirculating += (u.credits || 0);
+        } else {
+          totalFreeCreditsCirculating += (u.credits || 0);
+        }
+      }
 
       // Plan distribution
       const pName = u.plan || 'Free';
@@ -1711,7 +1722,8 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
 
     res.json({
       totalRevenue,
-      totalCreditsCirculating,
+      totalPaidCreditsCirculating,
+      totalFreeCreditsCirculating,
       totalUsers: allUsers.length,
       planDistribution: Object.entries(planDistribution).map(([name, value]) => ({ name, value })),
       chartData,
@@ -2054,10 +2066,20 @@ app.put('/api/users/:id/2fa', async (req, res) => {
 
 app.delete('/api/admin/users/:id', adminAuth, async (req, res) => {
   try {
-    await User.deleteOne({ id: req.params.id.toString() });
+    const userId = req.params.id.toString();
+
+    // Cascade delete: Remove user, their replies, and their posts
+    await Promise.all([
+      User.deleteOne({ id: userId }),
+      RedditReply.deleteMany({ userId: userId }),
+      RedditPost.deleteMany({ userId: userId })
+    ]);
+
+    addSystemLog('WARN', `[Admin] Permanently deleted user ${userId} and all associated data.`);
     res.status(204).send();
   } catch (err) {
-    res.status(500).json({ error: 'Internal error' });
+    console.error('Delete User Cascade Error:', err);
+    res.status(500).json({ error: 'Internal error during deletion' });
   }
 });
 

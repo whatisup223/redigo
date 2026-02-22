@@ -808,7 +808,7 @@ export const Admin: React.FC = () => {
                                 ) : (
                                     <>
                                         {/* Top Cards */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
                                                 <div className="flex items-center justify-between mb-4">
                                                     <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform">
@@ -826,11 +826,23 @@ export const Admin: React.FC = () => {
                                                     <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
                                                         <ZapIcon size={24} />
                                                     </div>
-                                                    <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Economy</span>
+                                                    <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Paid Obligation</span>
                                                 </div>
                                                 <div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Credits in Circulation</p>
-                                                    <p className="text-3xl font-black text-slate-900">{analytics.totalCreditsCirculating?.toLocaleString()}</p>
+                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Paid Credits in Circulation</p>
+                                                    <p className="text-3xl font-black text-slate-900">{analytics.totalPaidCreditsCirculating?.toLocaleString()}</p>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                        <ZapIcon size={24} />
+                                                    </div>
+                                                    <span className="text-xs font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-lg">Free Obligation</span>
+                                                </div>
+                                                <div>
+                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Free Credits in Circulation</p>
+                                                    <p className="text-3xl font-black text-slate-900">{analytics.totalFreeCreditsCirculating?.toLocaleString()}</p>
                                                 </div>
                                             </div>
                                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
