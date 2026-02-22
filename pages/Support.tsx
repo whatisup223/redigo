@@ -18,7 +18,8 @@ import {
     X,
     MoreVertical,
     RefreshCw,
-    Archive
+    Archive,
+    Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -180,6 +181,26 @@ export const Support: React.FC = () => {
             }
         } catch (e) {
             alert("Failed to update status");
+        }
+    };
+
+    const handleDeleteTicket = async (ticketId: string) => {
+        if (!confirm('Are you sure you want to permanently delete this ticket? it will be removed from the database and the user will not see it anymore.')) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`/api/support/tickets/${ticketId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setActiveTicket(null);
+                fetchData();
+            } else {
+                alert("Failed to delete ticket");
+            }
+        } catch (e) {
+            alert("Error deleting ticket");
         }
     };
 
@@ -411,6 +432,13 @@ export const Support: React.FC = () => {
                                                     <option value="resolved">Resolved</option>
                                                     <option value="closed">Closed</option>
                                                 </select>
+                                                <button
+                                                    onClick={() => handleDeleteTicket(activeTicket.id)}
+                                                    className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                                                    title="Delete Ticket"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
                                             </div>
                                         )}
                                     </div>

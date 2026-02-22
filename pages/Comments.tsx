@@ -873,7 +873,7 @@ export const Comments: React.FC = () => {
                         </div>
 
                       </div>
-
+                    )}
                     {/* Account Selector & Deploy Button (only if reply generated) */}
                     {(generatedReply || editedComment) && (
                       <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-500">

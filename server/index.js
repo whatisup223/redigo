@@ -2272,6 +2272,21 @@ app.put('/api/support/tickets/:id', async (req, res) => {
   }
 });
 
+app.delete('/api/support/tickets/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ticket = await Ticket.findOneAndDelete({ id });
+    if (ticket) {
+      addSystemLog('INFO', `Ticket deleted: ${id}`);
+      res.json({ success: true, message: 'Ticket deleted successfully' });
+    } else {
+      res.status(404).json({ error: 'Ticket not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Reddit OAuth2 Flow ---
 
 app.get('/api/auth/reddit/url', (req, res) => {
