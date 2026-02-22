@@ -565,11 +565,13 @@ const setupAdmin = async () => {
       await adminUser.save();
       console.log(`✅ Default Admin user (${adminEmail}) created successfully!`);
     } else {
-      if (adminUser.role !== 'admin') {
-        adminUser.role = 'admin';
-        adminUser.hasCompletedOnboarding = true;
-        await adminUser.save();
-      }
+      // Force verified and admin role for the designated email
+      let needsSave = false;
+      if (adminUser.role !== 'admin') { adminUser.role = 'admin'; needsSave = true; }
+      if (!adminUser.isVerified) { adminUser.isVerified = true; needsSave = true; }
+      if (!adminUser.hasCompletedOnboarding) { adminUser.hasCompletedOnboarding = true; needsSave = true; }
+
+      if (needsSave) await adminUser.save();
       console.log(`--- ADMIN ACCOUNT READY: ${adminEmail} ---`);
     }
   } catch (e) {
