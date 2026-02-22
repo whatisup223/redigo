@@ -43,8 +43,21 @@ const UserSchema = new mongoose.Schema({
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorCode: String,
     twoFactorExpires: Date,
-    lowCreditsNotified: { type: Boolean, default: false }
+    lowCreditsNotified: { type: Boolean, default: false },
+    dismissedAnnouncements: [String]
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
+
+const AnnouncementSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    title: String,
+    content: String,
+    type: { type: String, enum: ['update', 'promotion', 'maintenance', 'welcome'], default: 'update' },
+    imageUrl: String,
+    targetPlan: { type: String, default: 'all' },
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now },
+    createdBy: String
+}, { strict: false });
 
 const TrackingLinkSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
@@ -166,3 +179,5 @@ export const Setting = mongoose.model('Setting', SettingsSchema);
 export const RedditReply = mongoose.model('RedditReply', RedditReplySchema);
 export const RedditPost = mongoose.model('RedditPost', RedditPostSchema);
 export const SystemLog = mongoose.model('SystemLog', SystemLogSchema);
+export const Announcement = mongoose.model('Announcement', AnnouncementSchema);
+

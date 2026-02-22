@@ -64,6 +64,18 @@ interface User {
     transactions?: any[];
 }
 
+interface Announcement {
+    id: string;
+    title: string;
+    content: string;
+    type: 'update' | 'promotion' | 'maintenance' | 'welcome';
+    imageUrl: string;
+    targetPlan: string;
+    isActive: boolean;
+    createdAt: string;
+    createdBy?: string;
+}
+
 interface AISettings {
     provider: 'google' | 'openai' | 'openrouter';
     model: string;
@@ -135,6 +147,7 @@ export const Admin: React.FC = () => {
         const path = location.pathname;
         if (path.includes('/analytics')) return 'analytics';
         if (path.includes('/users')) return 'users';
+        if (path.includes('/communicate')) return 'communicate';
         if (path.includes('/settings')) return 'settings';
         if (path.includes('/logs')) return 'logs';
         return 'overview';
@@ -246,6 +259,19 @@ export const Admin: React.FC = () => {
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailRefreshing, setDetailRefreshing] = useState(false);
     const [detailLastUpdated, setDetailLastUpdated] = useState<Date | null>(null);
+
+    // Announcements State
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [isAnnModalOpen, setIsAnnModalOpen] = useState(false);
+    const [annForm, setAnnForm] = useState<Partial<Announcement>>({
+        title: '',
+        content: '',
+        type: 'update',
+        targetPlan: 'all',
+        isActive: true,
+        imageUrl: ''
+    });
+    const [isAnnSaving, setIsAnnSaving] = useState(false);
 
     const fetchDetailUser = async (userId: number, silent = false) => {
         const token = localStorage.getItem('token');
@@ -656,6 +682,67 @@ export const Admin: React.FC = () => {
             setIsPasswordSaving(false);
         }
     };
+
+    const fetchAnnouncements = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/announcements', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setAnnouncements(await res.json());
+        } catch (err) {
+            console.error('Failed to fetch announcements', err);
+        }
+    };
+
+    const handleSaveAnnouncement = async () => {
+        const token = localStorage.getItem('token');
+        setIsAnnSaving(true);
+        try {
+            const isEditing = !!annForm.id;
+            const url = isEditing ? `/api/admin/announcements/${annForm.id}` : '/api/admin/announcements';
+            const method = isEditing ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(annForm)
+            });
+
+            if (res.ok) {
+                setIsAnnModalOpen(false);
+                fetchAnnouncements();
+                setAnnForm({ title: '', content: '', type: 'update', targetPlan: 'all', isActive: true, imageUrl: '' });
+            }
+        } catch (err) {
+            alert('Failed to save announcement');
+        } finally {
+            setIsAnnSaving(false);
+        }
+    };
+
+    const handleDeleteAnnouncement = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this announcement?')) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/admin/announcements/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) fetchAnnouncements();
+        } catch (err) {
+            alert('Failed to delete announcement');
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'communicate') {
+            fetchAnnouncements();
+        }
+    }, [activeTab]);
 
 
     return (
@@ -1197,6 +1284,196 @@ export const Admin: React.FC = () => {
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Communicate Tab */}
+                        {activeTab === 'communicate' && (
+                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="space-y-1">
+                                        <h2 className="text-xl font-black text-slate-800 tracking-tight">System Announcements</h2>
+                                        <p className="text-sm text-slate-400 font-medium">Broadcast messages to users based on their active plan.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setAnnForm({ title: '', content: '', type: 'update', targetPlan: 'all', isActive: true, imageUrl: '' });
+                                            setIsAnnModalOpen(true);
+                                        }}
+                                        className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-orange-600 transition-all active:scale-95 flex items-center gap-2"
+                                    >
+                                        <Zap size={18} />
+                                        Create Announcement
+                                    </button>
+                                </div>
+
+                                <div className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-sm overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50/50 text-slate-500 text-xs font-extrabold uppercase tracking-wider border-b border-slate-100">
+                                                <tr>
+                                                    <th className="px-8 py-4 text-nowrap">Announcement</th>
+                                                    <th className="px-8 py-4">Target Plan</th>
+                                                    <th className="px-8 py-4">Type</th>
+                                                    <th className="px-8 py-4">Status</th>
+                                                    <th className="px-8 py-4 text-right">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 text-sm font-medium">
+                                                {announcements.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={5} className="px-8 py-20 text-center text-slate-400 italic">
+                                                            No announcements created yet...
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    announcements.map((ann) => (
+                                                        <tr key={ann.id} className="hover:bg-slate-50/50 transition-colors group">
+                                                            <td className="px-8 py-4">
+                                                                <div>
+                                                                    <p className="text-slate-900 font-bold">{ann.title}</p>
+                                                                    <p className="text-slate-400 text-xs truncate max-w-md">{ann.content.replace(/<[^>]*>/g, '')}</p>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-8 py-4">
+                                                                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold uppercase tracking-wider">
+                                                                    {ann.targetPlan}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-8 py-4 uppercase text-[10px] font-black tracking-widest text-slate-500">
+                                                                {ann.type}
+                                                            </td>
+                                                            <td className="px-8 py-4">
+                                                                <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${ann.isActive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                                                    {ann.isActive ? 'Active' : 'Inactive'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-8 py-4 text-right">
+                                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setAnnForm(ann);
+                                                                            setIsAnnModalOpen(true);
+                                                                        }}
+                                                                        className="p-2 bg-white border border-slate-200 rounded-lg hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+                                                                    >
+                                                                        <Edit2 size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                                                                        className="p-2 bg-white border border-slate-200 rounded-lg hover:text-red-600 hover:border-red-200 transition-all shadow-sm"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Announcement Modal */}
+                        {isAnnModalOpen && (
+                            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsAnnModalOpen(false)} />
+                                <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-2xl flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
+                                    <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                                        <h2 className="text-2xl font-black text-slate-900">{annForm.id ? 'Edit Announcement' : 'New Announcement'}</h2>
+                                        <button onClick={() => setIsAnnModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={24} /></button>
+                                    </div>
+                                    <div className="overflow-y-auto custom-scrollbar p-8 space-y-6">
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Title</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-bold"
+                                                    value={annForm.title}
+                                                    onChange={e => setAnnForm({ ...annForm, title: e.target.value })}
+                                                    placeholder="e.g. Major Update Released!"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Type</label>
+                                                <select
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-bold"
+                                                    value={annForm.type}
+                                                    onChange={e => setAnnForm({ ...annForm, type: e.target.value as any })}
+                                                >
+                                                    <option value="update">System Update</option>
+                                                    <option value="promotion">Promotion</option>
+                                                    <option value="maintenance">Maintenance</option>
+                                                    <option value="welcome">Welcome Message</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Target Plan</label>
+                                                <select
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-bold"
+                                                    value={annForm.targetPlan}
+                                                    onChange={e => setAnnForm({ ...annForm, targetPlan: e.target.value })}
+                                                >
+                                                    <option value="all">All Users</option>
+                                                    {plans.map(p => (
+                                                        <option key={p.id} value={p.name}>{p.name} Users</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Image URL (Optional)</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-medium"
+                                                    placeholder="https://..."
+                                                    value={annForm.imageUrl}
+                                                    onChange={e => setAnnForm({ ...annForm, imageUrl: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Content (HTML Supported)</label>
+                                            <textarea
+                                                className="w-full h-40 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-medium resize-none"
+                                                placeholder="Write your announcement message here..."
+                                                value={annForm.content}
+                                                onChange={e => setAnnForm({ ...annForm, content: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                                            <div>
+                                                <p className="text-xs font-black text-slate-900">Active Status</p>
+                                                <p className="text-[10px] text-slate-500 font-medium">Toggle visibility for users</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setAnnForm({ ...annForm, isActive: !annForm.isActive })}
+                                                className={`w-12 h-6 rounded-full p-1 transition-colors ${annForm.isActive ? 'bg-green-500' : 'bg-slate-300'}`}
+                                            >
+                                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${annForm.isActive ? 'translate-x-6' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+
+                                        <div className="pt-4">
+                                            <button
+                                                onClick={handleSaveAnnouncement}
+                                                disabled={isAnnSaving}
+                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                                {isAnnSaving ? <RefreshCw size={20} className="animate-spin" /> : <Save size={20} />}
+                                                {isAnnSaving ? 'Saving...' : 'Save Announcement'}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

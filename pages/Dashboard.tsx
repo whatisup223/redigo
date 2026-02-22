@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CreditsBanner from '../components/CreditsBanner';
+import { AnnouncementModal } from '../components/AnnouncementModal';
 import {
   AreaChart,
   Area,
@@ -153,6 +154,7 @@ export const Dashboard: React.FC = () => {
   const [redditConnected, setRedditConnected] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  const [announcement, setAnnouncement] = useState<any>(null);
 
   useEffect(() => {
     // If we just returned from a successful payment, sync user data immediately
@@ -189,12 +191,33 @@ export const Dashboard: React.FC = () => {
         setRedditConnected(d.connected);
       }
       setLastRefreshed(new Date());
+
+      // Fetch Latest Announcement
+      const annRes = await fetch(`/api/user/announcements/latest?userId=${user.id}`);
+      if (annRes.ok) {
+        const annData = await annRes.json();
+        setAnnouncement(annData);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       if (isInitial) setIsLoading(false);
     }
   }, [user?.id]); // Only depend on ID, not the whole user object
+
+  const handleDismissAnnouncement = async () => {
+    if (!announcement || !user) return;
+    try {
+      await fetch('/api/user/announcements/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, announcementId: announcement.id })
+      });
+      setAnnouncement(null);
+    } catch (e) {
+      setAnnouncement(null);
+    }
+  };
 
   useEffect(() => {
     fetchData(true);
@@ -279,6 +302,14 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
+      {/* Announcements */}
+      {announcement && (
+        <AnnouncementModal
+          announcement={announcement}
+          onDismiss={handleDismissAnnouncement}
+        />
+      )}
+
       {/* Detail Modal (Sync with Analytics) */}
       {selectedEntry && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">

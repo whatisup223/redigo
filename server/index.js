@@ -17,7 +17,7 @@ dotenv.config();
 
 // MongoDB Integration
 import mongoose from 'mongoose';
-import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog } from './models.js';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog, Announcement } from './models.js';
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -1787,6 +1787,112 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching admin analytics:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Announcement Management (Admin) ───────────────────────────────────────────
+app.get('/api/admin/announcements', adminAuth, async (req, res) => {
+  try {
+    const list = await Announcement.find({}).sort({ createdAt: -1 });
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch announcements' });
+  }
+});
+
+app.post('/api/admin/announcements', adminAuth, async (req, res) => {
+  try {
+    const { title, content, type, imageUrl, targetPlan, isActive } = req.body;
+    const id = `ann_${Date.now()}`;
+    const newAnn = new Announcement({
+      id,
+      title,
+      content,
+      type: type || 'update',
+      imageUrl,
+      targetPlan: targetPlan || 'all',
+      isActive: isActive !== undefined ? isActive : true,
+      createdAt: new Date()
+    });
+    await newAnn.save();
+    addSystemLog('INFO', `Announcement created: ${title}`, { id });
+    res.status(201).json(newAnn);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create announcement' });
+  }
+});
+
+app.put('/api/admin/announcements/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ann = await Announcement.findOne({ id });
+    if (!ann) return res.status(404).json({ error: 'Announcement not found' });
+
+    const updates = req.body;
+    Object.assign(ann, updates);
+    await ann.save();
+    res.json(ann);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update announcement' });
+  }
+});
+
+app.delete('/api/admin/announcements/:id', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Announcement.deleteOne({ id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+});
+
+// ─── Announcement Client Endpoints ─────────────────────────────────────────────
+app.get('/api/user/announcements/latest', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'UserId required' });
+
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const userPlan = user.plan || 'Starter';
+    const dismissed = user.dismissedAnnouncements || [];
+
+    // Find the latest active announcement for this user
+    const announcement = await Announcement.findOne({
+      isActive: true,
+      id: { $nin: dismissed },
+      $or: [
+        { targetPlan: 'all' },
+        { targetPlan: { $regex: new RegExp('^' + userPlan + '$', 'i') } }
+      ]
+    }).sort({ createdAt: -1 });
+
+    res.json(announcement || null);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/user/announcements/dismiss', async (req, res) => {
+  try {
+    const { userId, announcementId } = req.body;
+    if (!userId || !announcementId) return res.status(400).json({ error: 'Missing fields' });
+
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.dismissedAnnouncements) user.dismissedAnnouncements = [];
+    if (!user.dismissedAnnouncements.includes(announcementId)) {
+      user.dismissedAnnouncements.push(announcementId);
+      user.markModified('dismissedAnnouncements');
+      await user.save();
+    }
+
+    res.json({ success: true });
+  } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
