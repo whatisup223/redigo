@@ -1946,8 +1946,8 @@ export const Admin: React.FC = () => {
                                             <div className="space-y-8">
                                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                                     {/* Stripe Section */}
-                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col h-full">
+                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
                                                             <div className="flex items-center gap-4">
                                                                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
                                                                     <CreditCard size={24} />
@@ -1965,71 +1965,75 @@ export const Admin: React.FC = () => {
                                                             </button>
                                                         </div>
 
-                                                        <div className={`space-y-6 transition-opacity duration-300 ${stripeSettings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                                                            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                                                                <div>
-                                                                    <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
-                                                                    <p className="text-slate-500 text-xs">Enable for test payments.</p>
+                                                        <div className="flex-grow space-y-6 flex flex-col">
+                                                            <div className={`space-y-6 transition-opacity duration-300 ${stripeSettings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                                                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                                                                    <div>
+                                                                        <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
+                                                                        <p className="text-slate-500 text-xs">Enable for test payments.</p>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
+                                                                        className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                    >
+                                                                        <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                    </button>
                                                                 </div>
+
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={stripeSettings.publishableKey}
+                                                                        onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
+                                                                        placeholder="pk_test_..."
+                                                                    />
+                                                                </label>
+
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
+                                                                    <input
+                                                                        type="password"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={stripeSettings.secretKey}
+                                                                        onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
+                                                                        placeholder="sk_test_..."
+                                                                    />
+                                                                </label>
+
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Secret</span>
+                                                                    <input
+                                                                        type="password"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={stripeSettings.webhookSecret}
+                                                                        onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
+                                                                        placeholder="whsec_..."
+                                                                    />
+                                                                </label>
+
+                                                                <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                                                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Webhook URL</p>
+                                                                    <p className="text-xs font-mono text-emerald-900 break-all">{window.location.origin}/api/webhook</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-auto pt-6">
                                                                 <button
-                                                                    onClick={() => setStripeSettings({ ...stripeSettings, isSandbox: !stripeSettings.isSandbox })}
-                                                                    className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${stripeSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                    onClick={handleSaveStripeSettings}
+                                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-indigo-600 hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
                                                                 >
-                                                                    <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${stripeSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                    <Save size={20} />
+                                                                    Save Stripe Configuration
                                                                 </button>
                                                             </div>
-
-                                                            <label className="block">
-                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Publishable Key</span>
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={stripeSettings.publishableKey}
-                                                                    onChange={(e) => setStripeSettings({ ...stripeSettings, publishableKey: e.target.value })}
-                                                                    placeholder="pk_test_..."
-                                                                />
-                                                            </label>
-
-                                                            <label className="block">
-                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
-                                                                <input
-                                                                    type="password"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={stripeSettings.secretKey}
-                                                                    onChange={(e) => setStripeSettings({ ...stripeSettings, secretKey: e.target.value })}
-                                                                    placeholder="sk_test_..."
-                                                                />
-                                                            </label>
-
-                                                            <label className="block">
-                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook Secret</span>
-                                                                <input
-                                                                    type="password"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={stripeSettings.webhookSecret}
-                                                                    onChange={(e) => setStripeSettings({ ...stripeSettings, webhookSecret: e.target.value })}
-                                                                    placeholder="whsec_..."
-                                                                />
-                                                            </label>
-
-                                                            <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
-                                                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Webhook URL</p>
-                                                                <p className="text-xs font-mono text-emerald-900 break-all">{window.location.origin}/api/webhook</p>
-                                                            </div>
-
-                                                            <button
-                                                                onClick={handleSaveStripeSettings}
-                                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-indigo-600 hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                            >
-                                                                <Save size={20} />
-                                                                Save Stripe Configuration
-                                                            </button>
                                                         </div>
                                                     </div>
 
                                                     {/* PayPal Section */}
-                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col h-full">
+                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
                                                             <div className="flex items-center gap-4">
                                                                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
                                                                     <Globe size={24} />
@@ -2047,70 +2051,74 @@ export const Admin: React.FC = () => {
                                                             </button>
                                                         </div>
 
-                                                        <div className={`space-y-6 transition-opacity duration-300 ${paypalSettings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                                                            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                                                                <div>
-                                                                    <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
-                                                                    <p className="text-slate-500 text-xs">Enable for test payments.</p>
+                                                        <div className="flex-grow space-y-6 flex flex-col">
+                                                            <div className={`space-y-6 transition-opacity duration-300 ${paypalSettings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                                                                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                                                                    <div>
+                                                                        <h3 className="font-bold text-slate-900">Sandbox Mode</h3>
+                                                                        <p className="text-slate-500 text-xs">Enable for test payments.</p>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => setPaypalSettings({ ...paypalSettings, isSandbox: !paypalSettings.isSandbox })}
+                                                                        className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${paypalSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                    >
+                                                                        <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${paypalSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                    </button>
                                                                 </div>
+
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={paypalSettings.clientId}
+                                                                        onChange={(e) => setPaypalSettings({ ...paypalSettings, clientId: e.target.value })}
+                                                                        placeholder="PayPal Client ID"
+                                                                    />
+                                                                </label>
+
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
+                                                                    <input
+                                                                        type="password"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={paypalSettings.secretKey}
+                                                                        onChange={(e) => setPaypalSettings({ ...paypalSettings, secretKey: e.target.value })}
+                                                                        placeholder="PayPal Secret Key"
+                                                                    />
+                                                                </label>
+
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook ID</span>
+                                                                    <input
+                                                                        type="password"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={paypalSettings.webhookId}
+                                                                        onChange={(e) => setPaypalSettings({ ...paypalSettings, webhookId: e.target.value })}
+                                                                        placeholder="Webhook ID"
+                                                                    />
+                                                                </label>
+
+                                                                <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                                                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Webhook URL</p>
+                                                                    <p className="text-xs font-mono text-blue-900 break-all">{window.location.origin}/api/paypal/webhook</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-auto pt-6">
                                                                 <button
-                                                                    onClick={() => setPaypalSettings({ ...paypalSettings, isSandbox: !paypalSettings.isSandbox })}
-                                                                    className={`w-14 h-8 rounded-full p-1 transition-colors duration-300 relative ${paypalSettings.isSandbox ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                                    onClick={handleSavePayPalSettings}
+                                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-blue-600 hover:shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2"
                                                                 >
-                                                                    <div className={`w-6 h-6 bg-white rounded-full shadow-sm transition-transform duration-300 ${paypalSettings.isSandbox ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                                                    <Save size={20} />
+                                                                    Save PayPal Configuration
                                                                 </button>
                                                             </div>
-
-                                                            <label className="block">
-                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={paypalSettings.clientId}
-                                                                    onChange={(e) => setPaypalSettings({ ...paypalSettings, clientId: e.target.value })}
-                                                                    placeholder="PayPal Client ID"
-                                                                />
-                                                            </label>
-
-                                                            <label className="block">
-                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Secret Key</span>
-                                                                <input
-                                                                    type="password"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={paypalSettings.secretKey}
-                                                                    onChange={(e) => setPaypalSettings({ ...paypalSettings, secretKey: e.target.value })}
-                                                                    placeholder="PayPal Secret Key"
-                                                                />
-                                                            </label>
-
-                                                            <label className="block">
-                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Webhook ID</span>
-                                                                <input
-                                                                    type="password"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={paypalSettings.webhookId}
-                                                                    onChange={(e) => setPaypalSettings({ ...paypalSettings, webhookId: e.target.value })}
-                                                                    placeholder="Webhook ID"
-                                                                />
-                                                            </label>
-
-                                                            <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
-                                                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Webhook URL</p>
-                                                                <p className="text-xs font-mono text-blue-900 break-all">{window.location.origin}/api/paypal/webhook</p>
-                                                            </div>
-
-                                                            <button
-                                                                onClick={handleSavePayPalSettings}
-                                                                className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-blue-600 hover:shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                            >
-                                                                <Save size={20} />
-                                                                Save PayPal Configuration
-                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center gap-8">
+                                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center gap-8 shadow-2xl">
                                                     <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center flex-shrink-0">
                                                         <Shield size={40} className="text-emerald-400" />
                                                     </div>
@@ -2127,132 +2135,132 @@ export const Admin: React.FC = () => {
                                         )
                                     }
 
-                                    {
-                                        settingsTab === 'reddit' && (
-                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                                <div className="space-y-6">
-                                                    <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-                                                        <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-100">
-                                                            <Globe size={24} />
-                                                        </div>
-                                                        <div>
-                                                            <h2 className="text-xl font-bold text-slate-900">Reddit API Configuration</h2>
-                                                            <p className="text-slate-400 text-sm">Set up your application credentials.</p>
-                                                        </div>
+                                    {settingsTab === 'reddit' && (
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-4 border-b border-slate-100 pb-6 mb-2">
+                                                    <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-100">
+                                                        <Globe size={24} />
                                                     </div>
-
-                                                    <div className="space-y-6">
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={redditSettings.clientId}
-                                                                onChange={(e) => setRedditSettings({ ...redditSettings, clientId: e.target.value })}
-                                                                placeholder="e.g. -XyZ123abc..."
-                                                            />
-                                                        </label>
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Client Secret</span>
-                                                            <input
-                                                                type="password"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={redditSettings.clientSecret}
-                                                                onChange={(e) => setRedditSettings({ ...redditSettings, clientSecret: e.target.value })}
-                                                            />
-                                                        </label>
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Redirect URI</span>
-                                                            <div className="flex gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-mono text-sm text-slate-500 cursor-not-allowed"
-                                                                    value={`${window.location.origin}/auth/reddit/callback`}
-                                                                    readOnly
-                                                                />
-                                                                <button
-                                                                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/auth/reddit/callback`)}
-                                                                    className="bg-white border border-slate-200 p-4 rounded-2xl hover:text-orange-600 hover:border-orange-200 transition-colors"
-                                                                    title="Copy"
-                                                                >
-                                                                    <Copy size={20} />
-                                                                </button>
-                                                            </div>
-                                                        </label>
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">User Agent</span>
-                                                            <input
-                                                                type="text"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={redditSettings.userAgent}
-                                                                onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
-                                                            />
-                                                        </label>
-
-                                                        {/* Safety & Anti-Spam Section */}
-                                                        <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <Shield size={18} className="text-orange-600" />
-                                                                <h3 className="text-sm font-bold text-slate-900">Safety & Anti-Spam</h3>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-2 gap-4">
-                                                                <label className="block">
-                                                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Min Delay (sec)</span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                        value={redditSettings.minDelay || 5}
-                                                                        onChange={(e) => setRedditSettings({ ...redditSettings, minDelay: parseInt(e.target.value) })}
-                                                                    />
-                                                                </label>
-                                                                <label className="block">
-                                                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Max Delay (sec)</span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                        value={redditSettings.maxDelay || 15}
-                                                                        onChange={(e) => setRedditSettings({ ...redditSettings, maxDelay: parseInt(e.target.value) })}
-                                                                    />
-                                                                </label>
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                                                                <div>
-                                                                    <p className="text-xs font-bold text-slate-900">Anti-Spam Guard</p>
-                                                                    <p className="text-[10px] text-slate-500">Prevent double-replying to the same post</p>
-                                                                </div>
-                                                                <button
-                                                                    onClick={() => setRedditSettings({ ...redditSettings, antiSpam: !redditSettings.antiSpam })}
-                                                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.antiSpam ? 'bg-orange-600' : 'bg-slate-300'}`}
-                                                                >
-                                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.antiSpam ? 'translate-x-6' : 'translate-x-0'}`} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-slate-900">Reddit API Configuration</h2>
+                                                        <p className="text-slate-400 text-sm">Set up your application credentials.</p>
                                                     </div>
-                                                    <button
-                                                        onClick={handleSaveRedditSettings}
-                                                        className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 hover:shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                                    >
-                                                        <Save size={20} />
-                                                        Save Reddit Config
-                                                    </button>
                                                 </div>
-                                                <div className="bg-orange-50/50 p-8 rounded-[2rem] border border-orange-100 flex items-center justify-center">
-                                                    <div className="text-center space-y-4">
-                                                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-orange-600">
-                                                            <Globe size={32} />
+
+                                                <div className="space-y-6">
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={redditSettings.clientId}
+                                                            onChange={(e) => setRedditSettings({ ...redditSettings, clientId: e.target.value })}
+                                                            placeholder="e.g. -XyZ123abc..."
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Client Secret</span>
+                                                        <input
+                                                            type="password"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={redditSettings.clientSecret}
+                                                            onChange={(e) => setRedditSettings({ ...redditSettings, clientSecret: e.target.value })}
+                                                        />
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Redirect URI</span>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-mono text-sm text-slate-500 cursor-not-allowed"
+                                                                value={`${window.location.origin}/auth/reddit/callback`}
+                                                                readOnly
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/auth/reddit/callback`)}
+                                                                className="bg-white border border-slate-200 p-4 rounded-2xl hover:text-orange-600 hover:border-orange-200 transition-colors"
+                                                                title="Copy"
+                                                            >
+                                                                <Copy size={20} />
+                                                            </button>
                                                         </div>
-                                                        <h3 className="font-bold text-slate-900">API Policy</h3>
-                                                        <p className="text-slate-500 text-sm max-w-xs mx-auto">
-                                                            Ensure your User Agent is unique to avoid rate limiting.
-                                                        </p>
+                                                    </label>
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">User Agent</span>
+                                                        <input
+                                                            type="text"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                            value={redditSettings.userAgent}
+                                                            onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
+                                                        />
+                                                    </label>
+
+                                                    <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Shield size={18} className="text-orange-600" />
+                                                            <h3 className="text-sm font-bold text-slate-900">Safety & Anti-Spam</h3>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <label className="block">
+                                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Min Delay (sec)</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={redditSettings.minDelay || 5}
+                                                                    onChange={(e) => setRedditSettings({ ...redditSettings, minDelay: parseInt(e.target.value) })}
+                                                                />
+                                                            </label>
+                                                            <label className="block">
+                                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Max Delay (sec)</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                    value={redditSettings.maxDelay || 15}
+                                                                    onChange={(e) => setRedditSettings({ ...redditSettings, maxDelay: parseInt(e.target.value) })}
+                                                                />
+                                                            </label>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                                                            <div>
+                                                                <p className="text-xs font-bold text-slate-900">Anti-Spam Guard</p>
+                                                                <p className="text-[10px] text-slate-500">Prevent double-replying to the same post</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setRedditSettings({ ...redditSettings, antiSpam: !redditSettings.antiSpam })}
+                                                                className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.antiSpam ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                            >
+                                                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.antiSpam ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                            </button>
+                                                        </div>
                                                     </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveRedditSettings}
+                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 hover:shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                >
+                                                    <Save size={20} />
+                                                    <span>Save Reddit Configuration</span>
+                                                </button>
+                                            </div>
+                                            <div className="bg-orange-50/50 p-8 rounded-[2rem] border border-orange-100 flex items-center justify-center">
+                                                <div className="text-center space-y-4">
+                                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm text-orange-600">
+                                                        <Globe size={32} />
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-900">API Policy</h3>
+                                                    <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                                                        Ensure your User Agent is unique to avoid rate limiting.
+                                                    </p>
                                                 </div>
                                             </div>
-                                        )
-                                    }
+                                        </div>
+                                    )}
 
                                     {settingsTab === 'plans' && (
                                         <div>
@@ -3221,8 +3229,9 @@ export const Admin: React.FC = () => {
                             )
                         }
                     </>
-                )}
-            </div>
+                )
+                }
+            </div >
         </>
     );
 };
