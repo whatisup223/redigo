@@ -3,6 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
 
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -223,8 +226,34 @@ const sendEmail = async (templateId, to, variables = {}) => {
 };
 
 const app = express();
-app.set('trust proxy', true); // Trust reverse proxy (EasyPanel/Nginx)
+app.set('trust proxy', 1); // Trust first proxy (EasyPanel/Nginx)
 const PORT = process.env.PORT || 3001;
+
+// --- Security Middleware ---
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP strictly for API if front-end is separate, or configure properly
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // Limit each IP to 500 requests per 15 minutes
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Limit each IP to 20 auth requests per 15 minutes
+  message: { error: 'Too many authentication attempts, please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
+app.use(mongoSanitize());
 
 // Webhook Handler (Must be before express.json)
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
@@ -562,17 +591,11 @@ const generalAuth = async (req, res, next) => {
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    if (token === 'mock-jwt-token-123') {
-      decodedUser = { role: 'admin' };
-    } else if (token.startsWith('mock-user-token-')) {
-      userId = token.replace('mock-user-token-', '');
-    } else {
-      try {
-        decodedUser = jwt.verify(token, JWT_SECRET);
-        if (!userId) userId = decodedUser.id;
-      } catch (e) {
-        // Fallback to existing userId or continue to let specific routes handle if auth is truly needed
-      }
+    try {
+      decodedUser = jwt.verify(token, JWT_SECRET);
+      if (!userId) userId = decodedUser.id;
+    } catch (e) {
+      // Token invalid or expired
     }
   }
 
@@ -593,27 +616,10 @@ const generalAuth = async (req, res, next) => {
     } catch (e) {
       console.error('Error in generalAuth:', e);
     }
-  } else if (decodedUser?.role === 'admin' || authHeader === 'Bearer mock-jwt-token-123') {
-    // Admin token - check if admin is banned
-    try {
-      const adminId = decodedUser?.id;
-      const adminUser = adminId ? await User.findOne({ id: adminId.toString() }) : await User.findOne({ role: 'admin' });
-      if (adminUser) {
-        req.userEmail = adminUser.email;
-        if (adminUser.status === 'Banned' || adminUser.status === 'Suspended') {
-          return res.status(403).json({
-            error: `Your account has been ${adminUser.status.toLowerCase()}.`,
-            reason: adminUser.statusMessage || ''
-          });
-        }
-      }
-    } catch (e) {
-      console.error('Error in generalAuth (Admin check):', e);
-    }
   }
 
-  // Admin bypass or check
-  if (decodedUser?.role === 'admin' || authHeader === 'Bearer mock-jwt-token-123') {
+  // Admin check
+  if (decodedUser?.role === 'admin') {
     req.isAdmin = true;
   }
 
