@@ -318,6 +318,42 @@ export const Analytics: React.FC = () => {
     return acc;
   }, {});
 
+  const exportToCSV = (link: any) => {
+    if (!link || !link.clickDetails || link.clickDetails.length === 0) {
+      showToast('No clicks to export', 'error');
+      return;
+    }
+
+    // CSV Headers
+    const headers = ['Timestamp', 'IP', 'Country', 'City', 'Region', 'OS', 'Referer', 'User Agent', 'Type'];
+
+    // Create rows and handle CSV escaping (basic)
+    const rows = link.clickDetails.map((c: any) => [
+      new Date(c.timestamp).toLocaleString(),
+      c.ip,
+      `"${c.country || ''}"`,
+      `"${c.city || ''}"`,
+      `"${c.region || ''}"`,
+      `"${c.os || ''}"`,
+      `"${c.referer || ''}"`,
+      `"${(c.userAgent || '').replace(/"/g, '""')}"`,
+      c.isBot ? 'Bot' : (c.isSpam ? 'Spam' : 'Real User')
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link_element = document.createElement('a');
+    link_element.setAttribute('href', url);
+    link_element.setAttribute('download', `tracking_link_${link.id}_stats.csv`);
+    link_element.style.visibility = 'hidden';
+    document.body.appendChild(link_element);
+    link_element.click();
+    document.body.removeChild(link_element);
+    showToast('CSV Exported Successfully!');
+  };
+
   const topSubs = Object.entries(subPerformance)
     .map(([name, score]: any) => ({ name, score }))
     .sort((a, b) => b.score - a.score)
@@ -383,11 +419,9 @@ export const Analytics: React.FC = () => {
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
               <button onClick={() => setSelectedEntry(null)} className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95">Close</button>
-              {activeTab !== 'links' && (
-                <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2">
-                  Verify on Live Reddit <ExternalLink size={18} />
-                </a>
-              )}
+              <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2">
+                Verify on Live Reddit <ExternalLink size={18} />
+              </a>
             </div>
           </div>
         </div>
@@ -465,17 +499,28 @@ export const Analytics: React.FC = () => {
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Recent Click Timeline</h3>
                   </div>
                   <div className="border-l-2 border-slate-100 ml-4 pl-6 space-y-6">
-                    {[...(selectedEntry.clickDetails)].reverse().slice(0, 10).map((click: any, idx) => (
+                    {[...(selectedEntry.clickDetails)].reverse().slice(0, 15).map((click: any, idx) => (
                       <div key={idx} className="relative">
                         <div className="absolute -left-[31px] w-4 h-4 bg-white border-4 border-blue-500 rounded-full top-1 shadow-sm"></div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-slate-900 text-sm">{new Date(click.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        <div className="space-y-2">
+                          <div className="flex items-center flex-wrap gap-2">
+                            <span className="font-black text-slate-900 text-sm whitespace-nowrap">{new Date(click.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                             {idx === 0 && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase">Latest</span>}
+                            {click.isBot && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase">Bot</span>}
+                            {click.isSpam && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase">Spam</span>}
                           </div>
-                          <p className="text-xs font-bold text-slate-400 capitalize bg-slate-50 w-fit max-w-full px-3 py-1.5 rounded-lg border border-slate-100 break-all">
-                            {click.userAgent.includes('Mobile') ? '📱 Mobile Browser' : '💻 Desktop Browser'} • IP: {click.ip} {click.country ? `(${click.country})` : ''}
-                          </p>
+                          <div className="text-[11px] font-bold text-slate-400 capitalize bg-slate-50 w-fit max-w-full px-3 py-2 rounded-xl border border-slate-100 break-all space-y-1">
+                            <div className="flex items-center gap-1.5 text-slate-600">
+                              {click.userAgent.includes('Mobile') ? <LayoutList size={12} /> : <Layout size={12} />}
+                              <span>{click.os || (click.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop')} • {click.ip}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Globe size={12} className="text-blue-500" />
+                              <span>
+                                {[click.city, click.region, click.country].filter(Boolean).join(', ') || 'Unknown Location'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -484,11 +529,14 @@ export const Analytics: React.FC = () => {
               )}
             </div>
 
-            <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-between gap-4 font-bold">
-              <button onClick={() => { const url = `${window.location.origin}/t/${selectedEntry.id}`; navigator.clipboard.writeText(url); showToast('Tracking URL Copied!'); }} className="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center gap-2 transition-all active:scale-95 shadow-sm">
+            <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex flex-wrap gap-4 font-bold">
+              <button onClick={() => { const url = `${window.location.origin}/t/${selectedEntry.id}`; navigator.clipboard.writeText(url); showToast('Tracking URL Copied!'); }} className="flex-1 min-w-[140px] px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
                 <Copy size={18} /> Copy Link
               </button>
-              <button onClick={() => setSelectedEntry(null)} className="px-10 py-4 bg-slate-900 text-white rounded-[1.5rem] shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95">
+              <button onClick={() => exportToCSV(selectedEntry)} className="flex-1 min-w-[140px] px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
+                <LayoutList size={18} /> Export CSV
+              </button>
+              <button onClick={() => setSelectedEntry(null)} className="w-full md:w-fit px-10 py-4 bg-slate-900 text-white rounded-[1.5rem] shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95">
                 Done
               </button>
             </div>

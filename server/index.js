@@ -451,33 +451,64 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
       return res.status(404).send("Tracking link not found");
     }
 
-    link.clicks = (Number(link.clicks) || 0) + 1;
-    const now = new Date().toISOString();
-
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const userAgent = req.headers['user-agent'] || 'unknown';
     const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
-    let country = '';
 
+    // 1. Basic Bot Detection
+    const bots = /bot|crawler|spider|slurp|facebookexternalhit|whatsapp|linkpreview/i;
+    const isBot = bots.test(userAgent);
+
+    // 2. Simple OS Detection
+    let os = 'Unknown OS';
+    if (userAgent.includes('Windows')) os = 'Windows';
+    else if (userAgent.includes('Android')) os = 'Android';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
+    else if (userAgent.includes('Macintosh')) os = 'macOS';
+    else if (userAgent.includes('Linux')) os = 'Linux';
+
+    // 3. Anti-Spam Check (Ignore clicks from same IP within 10 seconds for the same link)
+    if (!link.clickDetails) link.clickDetails = [];
+    const lastClick = link.clickDetails.length > 0 ? link.clickDetails[link.clickDetails.length - 1] : null;
+    const isSpam = lastClick && lastClick.ip === ip && (now.getTime() - new Date(lastClick.timestamp).getTime() < 10000);
+
+    // 4. Expanded Geo Lookup
+    let country = '', city = '', region = '';
     try {
       if (ip && ip !== 'unknown' && ip !== '127.0.0.1' && ip !== '::1' && !ip.startsWith('192.168.') && !ip.startsWith('10.')) {
-        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=country`);
+        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,regionName`);
         if (geoRes.ok) {
           const geoData = await geoRes.json();
           country = geoData.country || '';
+          city = geoData.city || '';
+          region = geoData.regionName || '';
         }
       }
     } catch (err) {
       console.error('[TRACKING] Geo-lookup failed:', err);
     }
 
-    if (!link.clickDetails) link.clickDetails = [];
+    // 5. Update Link Data
+    // Only increment global clicks if it's a real user and not a rapid repeat
+    if (!isBot && !isSpam) {
+      link.clicks = (Number(link.clicks) || 0) + 1;
+    }
+
     link.clickDetails.push({
-      timestamp: now,
-      userAgent: req.headers['user-agent'] || 'unknown',
+      timestamp: nowIso,
+      userAgent: userAgent,
       referer: req.headers['referer'] || 'direct',
       ip: ip,
-      country: country
+      country: country,
+      city: city,
+      region: region,
+      os: os,
+      isBot: isBot,
+      isSpam: isSpam
     });
-    link.lastClickedAt = now;
+    link.lastClickedAt = nowIso;
+
 
     if (link.clickDetails.length > 10000) {
       link.clickDetails = link.clickDetails.slice(-10000);
