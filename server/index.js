@@ -55,41 +55,7 @@ const initSettings = async () => {
 
 await initSettings();
 
-const seedAdmin = async () => {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-
-  if (!adminEmail || !adminPassword) {
-    console.log('ℹ️ Admin credentials not found in environment, skipping seeder.');
-    return;
-  }
-
-  try {
-    const adminExists = await User.findOne({ role: 'admin' });
-    if (!adminExists) {
-      console.log('🚀 Seeding default admin user...');
-      const hashedPassword = await bcrypt.hash(adminPassword, 10);
-      const newAdmin = new User({
-        id: 'admin-' + Math.random().toString(36).substring(2, 7),
-        name: 'Super Admin',
-        email: adminEmail.toLowerCase(),
-        password: hashedPassword,
-        role: 'admin',
-        isVerified: true,
-        status: 'Active',
-        plan: 'Professional',
-        credits: 100000,
-        hasCompletedOnboarding: true
-      });
-      await newAdmin.save();
-      console.log(`✅ Default Admin user (${adminEmail}) created successfully!`);
-    }
-  } catch (err) {
-    console.error('❌ Failed to seed admin user:', err);
-  }
-};
-
-await seedAdmin();
+// Email Templates Logic (removed older seeder call to avoid duplication with setupAdmin below)
 
 const loadSettings = () => settingsCache;
 
@@ -265,33 +231,14 @@ const app = express();
 app.set('trust proxy', 1); // Trust first proxy (EasyPanel/Nginx)
 const PORT = process.env.PORT || 3001;
 
-// --- Security Middleware ---
+// --- 1. Basic Security & CORS ---
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable CSP strictly for API if front-end is separate, or configure properly
+  contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+app.use(cors());
 
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // Limit each IP to 500 requests per 15 minutes
-  message: { error: 'Too many requests from this IP, please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 auth requests per 15 minutes
-  message: { error: 'Too many authentication attempts, please try again in 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.use('/api/', apiLimiter);
-app.use('/api/auth/', authLimiter);
-app.use(mongoSanitize());
-
-// Webhook Handler (Must be before express.json)
+// --- 2. Webhook (Needs Raw Body) ---
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
   const sig = request.headers['stripe-signature'];
   const stripe = getStripe();
@@ -397,9 +344,29 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
   response.send();
 });
 
-// Middleware
-app.use(cors());
+// --- 3. Body Parsing & Sanitization (AFTER Webhook) ---
 app.use(express.json());
+app.use(mongoSanitize());
+
+// --- 4. Rate Limiting ---
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many auth attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
 
 
 // --- System Logging (MongoDB) ---
@@ -584,18 +551,19 @@ const setupAdmin = async () => {
     if (!adminUser) {
       const hashedPassword = await bcrypt.hash(adminPassword, 10);
       adminUser = new User({
-        id: '1',
-        name: 'Admin',
-        email: adminEmail,
+        id: 'admin-' + Math.random().toString(36).substring(2, 7),
+        name: 'Super Admin',
+        email: adminEmail.toLowerCase(),
         password: hashedPassword,
         role: 'admin',
-        plan: 'Professional',
+        isVerified: true,
         status: 'Active',
-        credits: 999999,
+        plan: 'Professional',
+        credits: 100000,
         hasCompletedOnboarding: true
       });
       await adminUser.save();
-      console.log(`--- ADMIN ACCOUNT CREATED: ${adminEmail} ---`);
+      console.log(`✅ Default Admin user (${adminEmail}) created successfully!`);
     } else {
       if (adminUser.role !== 'admin') {
         adminUser.role = 'admin';
