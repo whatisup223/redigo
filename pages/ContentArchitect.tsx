@@ -1306,7 +1306,10 @@ export const ContentArchitect: React.FC = () => {
                                                 </label>
                                                 {!isGeneratingImage && postData.imageUrl && (
                                                     <button
-                                                        onClick={() => triggerImageGeneration(postData.imagePrompt)}
+                                                        onClick={() => {
+                                                            setRegenMode('image');
+                                                            setShowRegenConfirm(true);
+                                                        }}
                                                         className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
                                                     >
                                                         <RefreshCw size={10} /> Regenerate
