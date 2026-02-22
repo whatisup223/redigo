@@ -192,18 +192,20 @@ export const Dashboard: React.FC = () => {
       }
       setLastRefreshed(new Date());
 
-      // Fetch Latest Announcement
-      const annRes = await fetch(`/api/user/announcements/latest?userId=${user.id}`);
-      if (annRes.ok) {
-        const annData = await annRes.json();
-        setAnnouncement(annData);
+      // Fetch Latest Announcement (Only if onboarding is finished)
+      if (user.hasCompletedOnboarding) {
+        const annRes = await fetch(`/api/user/announcements/latest?userId=${user.id}`);
+        if (annRes.ok) {
+          const annData = await annRes.json();
+          setAnnouncement(annData);
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
       if (isInitial) setIsLoading(false);
     }
-  }, [user?.id]); // Only depend on ID, not the whole user object
+  }, [user?.id, user?.hasCompletedOnboarding]); // Only depend on ID and onboarding state
 
   const handleDismissAnnouncement = async () => {
     if (!announcement || !user) return;

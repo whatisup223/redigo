@@ -34,8 +34,12 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({ announceme
             <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
 
                 {announcement.imageUrl && (
-                    <div className="w-full h-48 overflow-hidden">
-                        <img src={announcement.imageUrl} alt={announcement.title} className="w-full h-full object-cover" />
+                    <div className="w-full bg-slate-50 border-b border-slate-100 flex items-center justify-center overflow-hidden max-h-[320px]">
+                        <img
+                            src={announcement.imageUrl}
+                            alt={announcement.title}
+                            className="max-w-full max-h-[320px] w-auto h-auto object-contain animate-in fade-in duration-500"
+                        />
                     </div>
                 )}
 
