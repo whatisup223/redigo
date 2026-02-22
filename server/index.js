@@ -22,6 +22,8 @@ import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, R
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import multer from 'multer';
+import fs from 'fs';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 
@@ -231,12 +233,37 @@ const app = express();
 app.set('trust proxy', 1); // Trust first proxy (EasyPanel/Nginx)
 const PORT = process.env.PORT || 3001;
 
+// --- Multer Configuration ---
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../public/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only images are allowed'));
+  }
+});
+
 // --- 1. Basic Security & CORS ---
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors());
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // --- 2. Webhook (Needs Raw Body) ---
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
@@ -1845,6 +1872,56 @@ app.delete('/api/admin/announcements/:id', adminAuth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+});
+
+app.get('/api/admin/announcements/:id/stats', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ann = await Announcement.findOne({ id });
+    if (!ann) return res.status(404).json({ error: 'Announcement not found' });
+
+    const filter = ann.targetPlan === 'all'
+      ? {}
+      : { plan: { $regex: new RegExp('^' + ann.targetPlan + '$', 'i') } };
+
+    const totalTargeted = await User.countDocuments(filter);
+    const dismissedCount = await User.countDocuments({
+      ...filter,
+      dismissedAnnouncements: id
+    });
+
+    const users = await User.find(filter, 'plan dismissedAnnouncements');
+    const planBreakdown = {};
+    users.forEach(u => {
+      const p = u.plan || 'Starter';
+      if (!planBreakdown[p]) planBreakdown[p] = { total: 0, dismissed: 0 };
+      planBreakdown[p].total++;
+      if (u.dismissedAnnouncements && u.dismissedAnnouncements.includes(id)) {
+        planBreakdown[p].dismissed++;
+      }
+    });
+
+    res.json({
+      id,
+      title: ann.title,
+      totalTargeted,
+      dismissedCount,
+      remainingCount: totalTargeted - dismissedCount,
+      planBreakdown
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch announcement stats' });
+  }
+});
+
+app.post('/api/admin/announcements/upload', adminAuth, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ imageUrl });
+  } catch (err) {
+    res.status(500).json({ error: 'Upload failed' });
   }
 });
 

@@ -272,6 +272,10 @@ export const Admin: React.FC = () => {
         imageUrl: ''
     });
     const [isAnnSaving, setIsAnnSaving] = useState(false);
+    const [isAnnStatsModalOpen, setIsAnnStatsModalOpen] = useState(false);
+    const [annStats, setAnnStats] = useState<any>(null);
+    const [isAnnStatsLoading, setIsAnnStatsLoading] = useState(false);
+    const [isImageUploading, setIsImageUploading] = useState(false);
 
     const fetchDetailUser = async (userId: number, silent = false) => {
         const token = localStorage.getItem('token');
@@ -735,6 +739,48 @@ export const Admin: React.FC = () => {
             if (res.ok) fetchAnnouncements();
         } catch (err) {
             alert('Failed to delete announcement');
+        }
+    };
+
+    const fetchAnnStats = async (id: string) => {
+        const token = localStorage.getItem('token');
+        setIsAnnStatsLoading(true);
+        setIsAnnStatsModalOpen(true);
+        try {
+            const res = await fetch(`/api/admin/announcements/${id}/stats`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setAnnStats(await res.json());
+        } catch (err) {
+            console.error('Failed to fetch announcement stats', err);
+        } finally {
+            setIsAnnStatsLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        setIsImageUploading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('/api/admin/announcements/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAnnForm({ ...annForm, imageUrl: data.imageUrl });
+            }
+        } catch (err) {
+            alert('Failed to upload image');
+        } finally {
+            setIsImageUploading(false);
         }
     };
 
@@ -1352,6 +1398,13 @@ export const Admin: React.FC = () => {
                                                             <td className="px-8 py-4 text-right">
                                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <button
+                                                                        onClick={() => fetchAnnStats(ann.id)}
+                                                                        className="p-2 bg-white border border-slate-200 rounded-lg hover:text-orange-600 hover:border-orange-200 transition-all shadow-sm"
+                                                                        title="View Stats"
+                                                                    >
+                                                                        <BarChart2 size={14} />
+                                                                    </button>
+                                                                    <button
                                                                         onClick={() => {
                                                                             setAnnForm(ann);
                                                                             setIsAnnModalOpen(true);
@@ -1373,6 +1426,88 @@ export const Admin: React.FC = () => {
                                                 )}
                                             </tbody>
                                         </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Announcement Stats Modal */}
+                        {isAnnStatsModalOpen && (
+                            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsAnnStatsModalOpen(false)} />
+                                <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-2xl flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
+                                    <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600">
+                                                <BarChart2 size={20} />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-black text-slate-900 leading-tight">Announcement Insights</h2>
+                                                <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Statistical Breakdown</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setIsAnnStatsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={24} /></button>
+                                    </div>
+                                    <div className="overflow-y-auto custom-scrollbar p-8">
+                                        {isAnnStatsLoading ? (
+                                            <div className="py-20 flex flex-col items-center justify-center gap-4">
+                                                <RefreshCw size={32} className="animate-spin text-orange-600" />
+                                                <p className="text-sm font-bold text-slate-400">Calculating reach stats...</p>
+                                            </div>
+                                        ) : annStats ? (
+                                            <div className="space-y-8">
+                                                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Target Description</p>
+                                                    <h3 className="text-lg font-bold text-slate-900">{annStats.title}</h3>
+                                                </div>
+
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm text-center">
+                                                        <p className="text-2xl font-black text-slate-900">{annStats.totalTargeted}</p>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Targeted Users</p>
+                                                    </div>
+                                                    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm text-center">
+                                                        <p className="text-2xl font-black text-green-600">{annStats.dismissedCount}</p>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Acknowledged</p>
+                                                    </div>
+                                                    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm text-center">
+                                                        <p className="text-2xl font-black text-orange-600">{annStats.remainingCount}</p>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Remaining</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between px-2">
+                                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">Plan Breakdown</h4>
+                                                        <span className="text-[10px] font-bold text-slate-400">Success Rate: {annStats.totalTargeted > 0 ? Math.round((annStats.dismissedCount / annStats.totalTargeted) * 100) : 0}%</span>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        {Object.entries(annStats.planBreakdown).map(([plan, data]: [string, any]) => {
+                                                            const pct = data.total > 0 ? Math.round((data.dismissed / data.total) * 100) : 0;
+                                                            return (
+                                                                <div key={plan} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <span className="text-xs font-black text-slate-700">{plan}</span>
+                                                                        <span className="text-xs font-bold text-slate-500">{data.dismissed} / {data.total} ({pct}%)</span>
+                                                                    </div>
+                                                                    <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className="h-full bg-orange-600 rounded-full transition-all duration-1000"
+                                                                            style={{ width: `${pct}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="py-20 text-center text-slate-400 font-bold">Failed to load stats.</div>
+                                        )}
+                                    </div>
+                                    <div className="p-6 border-t border-slate-100 flex justify-end">
+                                        <button onClick={() => setIsAnnStatsModalOpen(false)} className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-lg shadow-slate-200 hover:bg-orange-600 transition-all active:scale-95">Close Insights</button>
                                     </div>
                                 </div>
                             </div>
@@ -1429,14 +1564,41 @@ export const Admin: React.FC = () => {
                                                 </select>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Image URL (Optional)</label>
-                                                <input
-                                                    type="text"
-                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-medium"
-                                                    placeholder="https://..."
-                                                    value={annForm.imageUrl}
-                                                    onChange={e => setAnnForm({ ...annForm, imageUrl: e.target.value })}
-                                                />
+                                                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Cover Image</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-sm"
+                                                        placeholder="URL or Upload →"
+                                                        value={annForm.imageUrl}
+                                                        onChange={e => setAnnForm({ ...annForm, imageUrl: e.target.value })}
+                                                    />
+                                                    <input
+                                                        type="file"
+                                                        id="ann-image-upload"
+                                                        className="hidden"
+                                                        accept="image/*"
+                                                        onChange={handleImageUpload}
+                                                    />
+                                                    <label
+                                                        htmlFor="ann-image-upload"
+                                                        className={`w-14 h-14 rounded-2xl border border-slate-200 flex items-center justify-center cursor-pointer transition-all hover:bg-slate-50 active:scale-95 ${isImageUploading ? 'bg-slate-100 pointer-events-none' : 'bg-white'}`}
+                                                        title="Upload locally"
+                                                    >
+                                                        {isImageUploading ? <RefreshCw size={20} className="animate-spin text-orange-600" /> : <Image size={20} className="text-slate-400" />}
+                                                    </label>
+                                                </div>
+                                                {annForm.imageUrl && (
+                                                    <div className="relative w-fit group">
+                                                        <img src={annForm.imageUrl} className="h-10 rounded-lg border border-slate-100" alt="Preview" />
+                                                        <button
+                                                            onClick={() => setAnnForm({ ...annForm, imageUrl: '' })}
+                                                            className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <X size={10} />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
