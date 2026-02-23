@@ -20,7 +20,7 @@ const UserSchema = new mongoose.Schema({
     allowImages: Boolean,
     allowTracking: Boolean,
     dailyUsagePoints: { type: Number, default: 0 },
-    dailyUsage: String,
+    dailyUsage: { type: Number, default: 0 },
     lastUsageDate: String,
     hasCompletedOnboarding: { type: Boolean, default: false },
     usageStats: mongoose.Schema.Types.Mixed,

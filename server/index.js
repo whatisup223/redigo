@@ -68,8 +68,18 @@ if (process.env.ADMIN_EMAIL) {
       );
       console.log(`🛡️ Emergency: Primary admin ${process.env.ADMIN_EMAIL} has been unsuspended.`);
     }
+
+    // CRITICAL FIX: Convert dailyUsage from String to Number for all users to support atomic $inc
+    const usersWithStrUsage = await User.find({ dailyUsage: { $type: "string" } });
+    if (usersWithStrUsage.length > 0) {
+      console.log(`🧹 Cleaning up ${usersWithStrUsage.length} users with string dailyUsage...`);
+      for (const u of usersWithStrUsage) {
+        await User.updateOne({ _id: u._id }, { $set: { dailyUsage: Number(u.dailyUsage) || 0 } });
+      }
+      console.log('✅ Cleanup complete.');
+    }
   } catch (err) {
-    console.error('Failed to run admin safeguard:', err);
+    console.error('Failed to run startup safeguards:', err);
   }
 }
 
