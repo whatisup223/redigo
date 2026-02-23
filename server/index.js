@@ -3717,17 +3717,17 @@ app.post('/api/generate', async (req, res) => {
     addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: updatedUser.credits, role: updatedUser.role });
 
     // Check low credits (fire and forget)
-    checkLowCredits(user).catch(e => console.error('Low credits check error:', e));
+    checkLowCredits(updatedUser).catch(e => console.error('Low credits check error:', e));
 
     res.json({
       text,
-      credits: user.credits,
-      dailyUsage: user.dailyUsage,
-      dailyUsagePoints: user.dailyUsagePoints
+      credits: updatedUser.credits,
+      dailyUsage: updatedUser.dailyUsage,
+      dailyUsagePoints: updatedUser.dailyUsagePoints
     });
   } catch (error) {
     console.error('AI Generation Error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 });
 
