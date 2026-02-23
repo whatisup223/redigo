@@ -44,7 +44,11 @@ const UserSchema = new mongoose.Schema({
     twoFactorCode: String,
     twoFactorExpires: Date,
     lowCreditsNotified: { type: Boolean, default: false },
-    dismissedAnnouncements: [String]
+    dismissedAnnouncements: [String],
+    autoRenew: { type: Boolean, default: true },
+    deletionScheduledDate: Date,
+    cancellationReason: mongoose.Schema.Types.Mixed,
+    isSuspended: { type: Boolean, default: false }
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const AnnouncementSchema = new mongoose.Schema({
@@ -170,6 +174,16 @@ const SettingsSchema = new mongoose.Schema({
     value: mongoose.Schema.Types.Mixed
 }, { strict: false });
 
+const CancellationFeedbackSchema = new mongoose.Schema({
+    userId: String,
+    userEmail: String,
+    plan: String,
+    reason: String,
+    comment: String,
+    usageAtCancellation: Number,
+    date: { type: Date, default: Date.now }
+});
+
 export const User = mongoose.model('User', UserSchema);
 export const TrackingLink = mongoose.model('TrackingLink', TrackingLinkSchema);
 export const BrandProfile = mongoose.model('BrandProfile', BrandProfileSchema);
@@ -180,4 +194,5 @@ export const RedditReply = mongoose.model('RedditReply', RedditReplySchema);
 export const RedditPost = mongoose.model('RedditPost', RedditPostSchema);
 export const SystemLog = mongoose.model('SystemLog', SystemLogSchema);
 export const Announcement = mongoose.model('Announcement', AnnouncementSchema);
+export const CancellationFeedback = mongoose.model('CancellationFeedback', CancellationFeedbackSchema);
 

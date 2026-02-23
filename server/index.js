@@ -17,7 +17,7 @@ dotenv.config();
 
 // MongoDB Integration
 import mongoose from 'mongoose';
-import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog, Announcement } from './models.js';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog, Announcement, CancellationFeedback } from './models.js';
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -87,7 +87,17 @@ const DEFAULT_EMAIL_TEMPLATES = {
   'payment_success': {
     name: 'Payment Successful',
     subject: 'Payment Successful! 🎉',
-    body: `<h1>Thank you for your purchase!</h1><p>Your subscription to <strong>{{plan_name}}</strong> is now active.</p><p>Credits added: {{credits_added}}</p><p>Total balance: {{final_balance}}</p>`,
+    body: `<h1>Thank you for your purchase!</h1>
+    <p>Your subscription to <strong>{{plan_name}}</strong> is now active. Here are your transaction details:</p>
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr><td style="padding: 8px 0; color: #64748b;">Transaction ID:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{transaction_id}}</td></tr>
+        <tr><td style="padding: 8px 0; color: #64748b;">Amount Paid:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{amount}} {{currency}}</td></tr>
+        <tr><td style="padding: 8px 0; color: #64748b;">Credits Added:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{credits_added}}</td></tr>
+        <tr><td style="padding: 8px 0; color: #64748b;">Balance:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{final_balance}}</td></tr>
+      </table>
+    </div>
+    <p>You can view and download your full invoice in your <a href="{{settings_url}}">Account Settings</a>.</p>`,
     active: true
   },
   'low_credits': {
@@ -132,6 +142,36 @@ const DEFAULT_EMAIL_TEMPLATES = {
     body: `<h1>Subscription Expired</h1><p>Hi {{name}}, your premium subscription has expired. You have been returned to the <strong>Starter</strong> plan.</p><p>To continue using premium features and higher limits, please upgrade your plan.</p><p><a href="{{upgrade_link}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">Upgrade Plan</a></p>`,
     active: true
   },
+  'cancellation_confirmed': {
+    name: 'Cancellation Confirmed',
+    subject: 'Stripe/PayPal Auto-Renewal Cancelled',
+    body: `<h1>Auto-Renewal Cancelled</h1>
+    <p>Hi {{name}}, we've received your request to stop the automatic renewal of your subscription.</p>
+    <p>Your current <strong>{{plan_name}}</strong> benefits and your remaining credits will remain active until <strong>{{expiry_date}}</strong>.</p>
+    <p>After this date, your account will move to the free Starter plan and you won't be charged again.</p>
+    <p>We're sorry to see you go! You can reactivate your subscription at any time in your <a href="{{settings_url}}">Account Settings</a>.</p>`,
+    active: true
+  },
+  'plan_expired_notice': {
+    name: 'Subscription Ended',
+    subject: 'Your Redditgo subscription has ended',
+    body: `<h1>Subscription Period Ended</h1>
+    <p>Hi {{name}}, your subscription to <strong>{{plan_name}}</strong> has now expired.</p>
+    <p>Your account has been moved to the Starter plan. If you had remaining credits, they are still available in your account balance for future use.</p>
+    <p>We hope to see you back soon! To keep using premium features, you can upgrade at any time.</p>
+    <p><a href="{{upgrade_link}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">View Pricing Plans</a></p>`,
+    active: true
+  },
+  'deletion_scheduled': {
+    name: 'Account Deletion Scheduled',
+    subject: 'Action Required: Your account is scheduled for deletion',
+    body: `<h1>Account Deletion Scheduled</h1>
+    <p>Hi {{name}}, we've received your request to delete your account.</p>
+    <p>Your account and all associated data are scheduled to be permanently removed on <strong>{{deletion_date}}</strong>.</p>
+    <p><strong>Note:</strong> If you change your mind, simply log back into your account before this date to cancel the deletion request.</p>
+    <p>If you did not request this, please contact support immediately or log in to secure your account.</p>`,
+    active: true
+  },
   'refund_processed': {
     name: 'Refund Success',
     subject: 'Refund Processed - Redditgo',
@@ -156,7 +196,8 @@ const checkLowCredits = async (user) => {
   if (credits <= 20 && !user.lowCreditsNotified) {
     await sendEmail('low_credits', user.email, {
       name: user.name || 'there',
-      balance: credits.toString()
+      balance: credits.toString(),
+      upgrade_link: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/pricing`
     });
     user.lowCreditsNotified = true;
     await user.save();
@@ -164,6 +205,56 @@ const checkLowCredits = async (user) => {
   } else if (credits > 20 && user.lowCreditsNotified) {
     user.lowCreditsNotified = false;
     await user.save();
+  }
+};
+
+// --- Global Health Check (Subscription Expiration & Deletion) ---
+let lastGlobalCheck = 0;
+const runGlobalCheck = async () => {
+  const now = Date.now();
+  // Only run once per hour
+  if (now - lastGlobalCheck < 3600000) return;
+  lastGlobalCheck = now;
+
+  try {
+    const today = new Date();
+
+    // 1. Handle Expired Subscriptions
+    const expiredUsers = await User.find({
+      plan: { $ne: 'Starter' },
+      subscriptionEnd: { $lt: today },
+      autoRenew: false // Only auto-downgrade if auto-renewal is disabled
+    });
+
+    for (const u of expiredUsers) {
+      const oldPlan = u.plan;
+      u.plan = 'Starter';
+      u.status = 'Active';
+      // In the Starter plan, we reset daily usage points
+      u.dailyUsagePoints = 0;
+      await u.save();
+
+      await sendEmail('plan_expired_notice', u.email, {
+        name: u.name || 'User',
+        plan_name: oldPlan,
+        upgrade_link: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/pricing`
+      });
+      addSystemLog('INFO', `Subscription for ${u.email} expired and moved to Starter.`);
+    }
+
+    // 2. Handle Scheduled Deletions (14-day period)
+    const usersToDelete = await User.find({
+      deletionScheduledDate: { $lt: today }
+    });
+
+    for (const u of usersToDelete) {
+      addSystemLog('WARN', `Deleting user account ${u.email} after 14-day cooling period.`);
+      await User.deleteOne({ _id: u._id });
+      // In a real app, you might want to delete related brandProfiles, posts, etc.
+    }
+
+  } catch (err) {
+    console.error('Error in runGlobalCheck:', err);
   }
 };
 
@@ -740,8 +831,11 @@ setupAdmin();
 const generalAuth = async (req, res, next) => {
   const path = req.path.replace(/\/$/, '');
 
+  // Run Global Check periodically (hourly)
+  runGlobalCheck().catch(e => console.error('Global check error:', e));
+
   // Exempt public routes explicitly
-  const publicRoutes = ['/api/auth/login', '/api/auth/resend-2fa', '/api/auth/verify-2fa', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook'];
+  const publicRoutes = ['/api/auth/login', '/api/auth/resend-2fa', '/api/auth/verify-2fa', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook', '/api/paypal/webhook'];
   if (publicRoutes.includes(path)) return next();
 
   // Try to extract user from token or ID
@@ -762,15 +856,28 @@ const generalAuth = async (req, res, next) => {
   // If we have a userId, check status
   if (userId) {
     try {
-      const user = await User.findOne({ id: userId.toString() });
+      const user = await User.findOne({
+        $or: [{ id: userId.toString() }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
+      });
+
       if (user) {
         req.userEmail = user.email;
-        if (user.status === 'Banned' || user.status === 'Suspended') {
+        req.user = user; // Attach user object to request for easier access
+
+        // 🛑 Handle Suspensions/Bans
+        if (user.status === 'Banned' || user.status === 'Suspended' || user.isSuspended) {
           console.log(`[AUTH] Blocked ${user.status} user: ${user.email}`);
           return res.status(403).json({
-            error: `Your account has been ${user.status.toLowerCase()}.`,
+            error: `Your account has been ${user.status === 'Suspended' || user.isSuspended ? 'suspended' : 'banned'}.`,
             reason: user.statusMessage || 'Contact support for details.'
           });
+        }
+
+        // 🔄 Handle Account Deletion Cancellation
+        if (user.deletionScheduledDate) {
+          addSystemLog('INFO', `User ${user.email} logged in, cancelling scheduled deletion.`);
+          user.deletionScheduledDate = undefined;
+          await user.save();
         }
       }
     } catch (e) {
@@ -779,7 +886,7 @@ const generalAuth = async (req, res, next) => {
   }
 
   // Admin check
-  if (decodedUser?.role === 'admin') {
+  if (decodedUser?.role === 'admin' || req.user?.role === 'admin') {
     req.isAdmin = true;
   }
 
@@ -1511,7 +1618,11 @@ const applyPlanToUser = async ({ email, planName, billingCycle, transactionId, g
     sendEmail('payment_success', email, {
       plan_name: planName,
       credits_added: creditsToAdd.toString(),
-      final_balance: newBalance.toString()
+      final_balance: newBalance.toString(),
+      transaction_id: transactionId,
+      amount: (amount || 0).toFixed(2),
+      currency: (currency || 'USD').toUpperCase(),
+      settings_url: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/settings?tab=billing`
     });
 
     return true;
@@ -2613,6 +2724,185 @@ app.put('/api/users/:id/2fa', async (req, res) => {
     console.error('2FA Toggle error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// --- NEW SUBSCRIPTION & ACCOUNT MANAGEMENT ENDPOINTS ---
+
+// 1. Cancel Auto-Renewal (User)
+app.post('/api/user/cancel-subscription', async (req, res) => {
+  try {
+    const { userId, reason, comment } = req.body;
+    const user = await User.findOne({
+      $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Stop Auto-Renewal
+    user.autoRenew = false;
+    user.statusMessage = `Cancelled (Ends: ${user.subscriptionEnd?.toLocaleDateString() || 'N/A'})`;
+    await user.save();
+
+    // Save Feedback
+    const feedback = new CancellationFeedback({
+      userId: user.id || user._id,
+      userEmail: user.email,
+      plan: user.plan,
+      reason: reason || 'Not specified',
+      comment: comment || '',
+      usageAtCancellation: user.dailyUsagePoints || 0
+    });
+    await feedback.save();
+
+    // Send Confirmation Email
+    await sendEmail('cancellation_confirmed', user.email, {
+      name: user.name || 'User',
+      plan_name: user.plan,
+      expiry_date: user.subscriptionEnd?.toLocaleDateString() || 'End of Period',
+      settings_url: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/settings?tab=billing`
+    });
+
+    addSystemLog('INFO', `User ${user.email} cancelled auto-renewal. Reason: ${reason}`);
+    res.json({ success: true, message: 'Auto-renewal cancelled successfully.' });
+  } catch (err) {
+    console.error('Cancellation error:', err);
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
+// 2. Schedule Account Deletion (User)
+app.post('/api/user/schedule-deletion', async (req, res) => {
+  try {
+    const { userId, password } = req.body;
+    const user = await User.findOne({
+      $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Verify password
+    const isMatch = user.password.startsWith('$2')
+      ? await bcrypt.compare(password, user.password)
+      : user.password === password;
+
+    if (!isMatch) return res.status(401).json({ error: 'Incorrect password' });
+
+    const deletionDate = new Date();
+    deletionDate.setDate(deletionDate.getDate() + 14); // 14 days from now
+
+    user.deletionScheduledDate = deletionDate;
+    await user.save();
+
+    await sendEmail('deletion_scheduled', user.email, {
+      name: user.name || 'User',
+      deletion_date: deletionDate.toLocaleDateString()
+    });
+
+    addSystemLog('WARN', `User ${user.email} scheduled account deletion for ${deletionDate.toLocaleDateString()}`);
+    res.json({ success: true, message: 'Account deletion scheduled for 14 days from now.' });
+  } catch (err) {
+    console.error('Deletion scheduling error:', err);
+    res.status(500).json({ error: 'Failed to schedule deletion' });
+  }
+});
+
+// 3. Process Manual Refund (Admin)
+app.post('/api/admin/process-refund', adminAuth, async (req, res) => {
+  try {
+    const { transactionId, userId, amount, force } = req.body;
+
+    // Check Policy (if not forced)
+    const policy = loadSettings().refundPolicy || { days: 7, usageLimit: 20 };
+    const user = await User.findOne({
+      $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const tx = (user.transactions || []).find(t => t.id === transactionId);
+    if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+
+    if (!force) {
+      const txDate = new Date(tx.date);
+      const diffDays = Math.ceil(Math.abs(Date.now() - txDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      const usage = user.dailyUsagePoints || 0;
+      const planCredits = tx.creditsAdded || 1; // avoid div by zero
+      const usagePercent = (usage / planCredits) * 100;
+
+      if (diffDays > policy.days || usagePercent > policy.usageLimit) {
+        return res.status(400).json({
+          policyViolation: true,
+          message: `Policy violation: ${diffDays} days passed (Limit: ${policy.days}), ${usagePercent.toFixed(1)}% usage (Limit: ${policy.usageLimit}%)`
+        });
+      }
+    }
+
+    // Process Refund Logic (Mocking actual gateway call, we focus on DB state)
+    // In real-world, call Stripe/PayPal API here.
+
+    await revokePlanFromUser({
+      email: user.email,
+      transactionId,
+      gateway: tx.type === 'stripe_payment' ? 'stripe' : 'paypal',
+      reason: 'refund'
+    });
+
+    addSystemLog('SUCCESS', `Admin refunded transaction ${transactionId} for ${user.email}`);
+    res.json({ success: true, message: 'Refund processed and plan revoked.' });
+  } catch (err) {
+    console.error('Refund processing error:', err);
+    res.status(500).json({ error: 'Refund failed' });
+  }
+});
+
+// 4. Suspend User (Admin)
+app.patch('/api/admin/users/:id/suspend', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isSuspended, reason } = req.body;
+
+    const user = await User.findOne({
+      $or: [{ id: id }, { _id: mongoose.isValidObjectId(id) ? id : null }]
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.isSuspended = isSuspended;
+    user.status = isSuspended ? 'Suspended' : 'Active';
+    user.statusMessage = reason || '';
+    await user.save();
+
+    addSystemLog('WARN', `Admin ${isSuspended ? 'suspended' : 'unsuspended'} user ${user.email}. Reason: ${reason}`);
+    res.json({ success: true, isSuspended: user.isSuspended });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update suspension status' });
+  }
+});
+
+// 5. Get Cancellation Feedback (Admin)
+app.get('/api/admin/cancellation-feedback', adminAuth, async (req, res) => {
+  try {
+    const feedback = await CancellationFeedback.find().sort({ date: -1 });
+    res.json(feedback);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch feedback' });
+  }
+});
+
+// 6. Manage Refund Policy (Admin)
+app.post('/api/admin/payment-policy', adminAuth, async (req, res) => {
+  try {
+    const { days, usageLimit } = req.body;
+    saveSettings({ refundPolicy: { days, usageLimit } });
+    res.json({ message: 'Policy updated' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update policy' });
+  }
+});
+
+app.get('/api/admin/payment-policy', adminAuth, async (req, res) => {
+  res.json(loadSettings().refundPolicy || { days: 7, usageLimit: 20 });
 });
 
 app.delete('/api/admin/users/:id', adminAuth, async (req, res) => {

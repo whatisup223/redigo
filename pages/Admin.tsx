@@ -40,7 +40,8 @@ import {
     Code,
     TrendingUp,
     DollarSign,
-    Zap as ZapIcon
+    Zap as ZapIcon,
+    Undo2
 } from 'lucide-react';
 
 import {
@@ -254,6 +255,101 @@ export const Admin: React.FC = () => {
     const [analytics, setAnalytics] = useState<any>(null);
     const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
+    // --- Subscription Management States ---
+    const [cancellationFeedback, setCancellationFeedback] = useState<any[]>([]);
+    const [refundPolicy, setRefundPolicy] = useState({ days: 7, usageLimit: 20 });
+    const [refundingTxId, setRefundingTxId] = useState<string | null>(null);
+    const [isRefunding, setIsRefunding] = useState(false);
+
+    const toggleUserSuspension = async (userId: string | number, currentStatus: boolean, reason?: string) => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/admin/users/${userId}/suspend`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ isSuspended: !currentStatus, reason: reason || (!currentStatus ? 'System suspension' : '') })
+            });
+            if (res.ok) {
+                fetchData();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleProcessRefund = async (userId: string | number, transactionId: string, force = false) => {
+        if (!force && !confirm('Are you sure you want to refund this transaction? This will also revoke associated credits and downgrade the user.')) return;
+
+        const token = localStorage.getItem('token');
+        setRefundingTxId(transactionId);
+        setIsRefunding(true);
+        try {
+            const res = await fetch('/api/admin/process-refund', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId, transactionId, force })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert('Refund processed and plan revoked.');
+                if (detailUser) fetchDetailUser(userId as any);
+                fetchData();
+            } else if (data.policyViolation) {
+                if (confirm(`${data.message}\n\nDo you want to FORCE this refund anyway?`)) {
+                    handleProcessRefund(userId, transactionId, true);
+                }
+            } else {
+                alert(data.error || 'Refund failed.');
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsRefunding(false);
+            setRefundingTxId(null);
+        }
+    };
+
+    const fetchCancellationFeedback = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/cancellation-feedback', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setCancellationFeedback(await res.json());
+        } catch (err) { }
+    };
+
+    const fetchRefundPolicy = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/payment-policy', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) setRefundPolicy(await res.json());
+        } catch (err) { }
+    };
+
+    const saveRefundPolicy = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/payment-policy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(refundPolicy)
+            });
+            if (res.ok) alert('Refund policy updated.');
+        } catch (err) { }
+    };
+
 
     const [plans, setPlans] = useState<Plan[]>([]);
 
@@ -394,12 +490,6 @@ export const Admin: React.FC = () => {
         }
     };
 
-    useEffect(() => {
-        if (activeTab === 'analytics') {
-            fetchAnalytics();
-        }
-    }, [activeTab]);
-
     const handleUpdateUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedUser) return;
@@ -459,7 +549,15 @@ export const Admin: React.FC = () => {
 
     useEffect(() => {
         fetchData();
+        fetchRefundPolicy();
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'analytics') {
+            fetchCancellationFeedback();
+            fetchAnalytics();
+        }
+    }, [activeTab]);
 
     const handleSaveSettings = async () => {
         const token = localStorage.getItem('token');
@@ -1216,6 +1314,42 @@ export const Admin: React.FC = () => {
                                                             </div>
                                                         ))}
                                                     </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Churn & Cancellation Feedback */}
+                                            <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
+                                                <div className="p-8 border-b border-slate-50 bg-slate-50/30">
+                                                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Cancellation Feedback</h2>
+                                                    <p className="text-xs text-slate-500 font-bold mt-1">Understand why users are leaving your platform.</p>
+                                                </div>
+                                                <div className="p-4 flex-1 overflow-y-auto custom-scrollbar max-h-[600px]">
+                                                    {cancellationFeedback.length === 0 ? (
+                                                        <div className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2">
+                                                            <Archive size={32} className="opacity-10" />
+                                                            <p className="font-bold text-sm">No feedback received yet.</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-4">
+                                                            {cancellationFeedback.map((fb, idx) => (
+                                                                <div key={idx} className="p-5 bg-slate-50/50 border border-slate-100 rounded-3xl space-y-3">
+                                                                    <div className="flex items-start justify-between">
+                                                                        <div className="space-y-0.5">
+                                                                            <p className="text-sm font-black text-slate-900">{fb.userName}</p>
+                                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{fb.userEmail}</p>
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg">
+                                                                            {new Date(fb.date).toLocaleDateString()}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="p-3 bg-white rounded-2xl border border-slate-100">
+                                                                        <p className="text-xs font-black text-orange-600 mb-1">Reason: {fb.reason}</p>
+                                                                        {fb.comment && <p className="text-xs text-slate-600 font-medium leading-relaxed italic">"{fb.comment}"</p>}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -2115,6 +2249,57 @@ export const Admin: React.FC = () => {
                                                                 </button>
                                                             </div>
                                                         </div>
+
+                                                        {/* Global Refund Policy */}
+                                                        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col h-full lg:col-span-2">
+                                                            <div className="flex items-center gap-4 border-b border-slate-100 pb-6 mb-6">
+                                                                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                                                    <AlertTriangle size={24} />
+                                                                </div>
+                                                                <div>
+                                                                    <h2 className="text-xl font-bold text-slate-900">Global Refund Policy</h2>
+                                                                    <p className="text-slate-400 text-sm">Rules that trigger warnings during manual refunds.</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                                <label className="block space-y-2">
+                                                                    <span className="text-sm font-bold text-slate-700">Refund Window (Days)</span>
+                                                                    <div className="relative">
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-50 focus:border-amber-500 focus:outline-none transition-all font-bold"
+                                                                            value={refundPolicy.days}
+                                                                            onChange={(e) => setRefundPolicy({ ...refundPolicy, days: parseInt(e.target.value) })}
+                                                                        />
+                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold uppercase">Days</div>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-slate-400 font-medium">Policy allows refunds up to X days after purchase.</p>
+                                                                </label>
+
+                                                                <label className="block space-y-2">
+                                                                    <span className="text-sm font-bold text-slate-700">Usage Threshold (%)</span>
+                                                                    <div className="relative">
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-50 focus:border-amber-500 focus:outline-none transition-all font-bold"
+                                                                            value={refundPolicy.usageLimit}
+                                                                            onChange={(e) => setRefundPolicy({ ...refundPolicy, usageLimit: parseInt(e.target.value) })}
+                                                                        />
+                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold uppercase">% Credits</div>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-slate-400 font-medium">Policy allows refunds if used credits are below X%.</p>
+                                                                </label>
+                                                            </div>
+
+                                                            <button
+                                                                onClick={saveRefundPolicy}
+                                                                className="mt-8 py-4 bg-amber-600 text-white rounded-[2rem] font-bold shadow-xl shadow-amber-100 hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
+                                                            >
+                                                                <Save size={20} />
+                                                                Apply Refund Policy Rules
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -2761,6 +2946,24 @@ export const Admin: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            {detailUser.deletionScheduledDate && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-600 animate-pulse">
+                                                    <Trash2 size={12} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Deletion in {Math.ceil((new Date(detailUser.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}d</span>
+                                                </div>
+                                            )}
+                                            {detailUser.isSuspended && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 border border-orange-100 rounded-lg text-orange-600">
+                                                    <Shield size={12} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Suspended</span>
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => toggleUserSuspension(detailUser.id, !!detailUser.isSuspended)}
+                                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${detailUser.isSuspended ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}
+                                            >
+                                                {detailUser.isSuspended ? 'Unsuspend' : 'Suspend Account'}
+                                            </button>
                                             <button
                                                 onClick={() => fetchDetailUser(detailUser.id, true)}
                                                 className={`p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-700 ${detailRefreshing ? 'animate-spin text-orange-500' : ''}`}
@@ -2831,6 +3034,52 @@ export const Admin: React.FC = () => {
                                                         </div>
                                                     ));
                                                 })()}
+                                            </div>
+
+                                            {/* Recent Transactions */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Payment History</h3>
+                                                    <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Auto-Renew: {detailUser.autoRenew ? 'ON' : 'OFF'}</span>
+                                                </div>
+                                                <div className="bg-slate-50 border border-slate-100 rounded-[2rem] overflow-hidden">
+                                                    {!detailUser.transactions || detailUser.transactions.length === 0 ? (
+                                                        <div className="p-12 flex flex-col items-center justify-center text-slate-300 gap-2">
+                                                            <CreditCard size={24} className="opacity-20" />
+                                                            <p className="text-[10px] font-black uppercase tracking-widest">No payment history</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="divide-y divide-slate-100">
+                                                            {detailUser.transactions.map((tx: any, idx: number) => (
+                                                                <div key={idx} className="p-4 hover:bg-slate-100/50 transition-colors flex items-center justify-between group">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className={`p-2 rounded-xl ${tx.status === 'refunded' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                                            <DollarSign size={14} />
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-xs font-black text-slate-900">${tx.amount} <span className="text-slate-400 font-bold lowercase tracking-tight">— {tx.planName}</span></p>
+                                                                            <p className="text-[10px] text-slate-400 font-medium">{new Date(tx.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {tx.status === 'refunded' ? (
+                                                                            <span className="text-[10px] font-black uppercase tracking-widest text-rose-500 px-2 py-1 bg-rose-50 rounded-lg">Refunded</span>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => handleProcessRefund(detailUser.id, tx.id || tx.transactionId)}
+                                                                                disabled={isRefunding && refundingTxId === (tx.id || tx.transactionId)}
+                                                                                className="opacity-0 group-hover:opacity-100 p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                                                                            >
+                                                                                {isRefunding && refundingTxId === (tx.id || tx.transactionId) ? <RefreshCw className="animate-spin" size={12} /> : <Undo2 size={12} />}
+                                                                                Refund
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </>)}
                                     </div>

@@ -20,42 +20,39 @@ export const TermsOfService: React.FC = () => {
                 <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight">Terms of Service</h1>
                 <p className="text-lg text-slate-500 mb-12">Last updated: February 18, 2026</p>
 
-                <div className="prose prose-lg prose-slate max-w-none">
-                    <p>
-                        These Terms of Service cover your use of RedditGo ("Service") and provide information about the RedditGo Service, outlined below. By creating an account or using our Service, you agree to these terms.
-                    </p>
+                <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">1. Subscriptions & Billing</h3>
+                <p>
+                    By subscribing to a paid plan, you agree to recurring billing based on your selected cycle (Monthly or Yearly).
+                </p>
+                <ul className="list-disc pl-6 mt-4 space-y-2">
+                    <li><strong>Auto-Renewal:</strong> Subscriptions renew automatically unless cancelled via the Billing settings at least 24 hours before the period ends.</li>
+                    <li><strong>Cancellation:</strong> You may cancel auto-renewal at any time. You will retain access to premium features until the end of your current billing period.</li>
+                </ul>
 
-                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">1. Use of Service</h3>
-                    <p>
-                        You must follow any policies made available to you within the Service. Don't misuse our Service. For example, don't interfere with our Service or try to access it using a method other than the interface and the instructions that we provide. You may use our Service only as permitted by law, including applicable export and re-export control laws and regulations.
-                    </p>
+                <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">2. Refund Policy</h3>
+                <p>
+                    We strive for transparency in our refund process. Refunds are processed manually and are subject to the following "Fair Use" criteria:
+                </p>
+                <ul className="list-disc pl-6 mt-4 space-y-2">
+                    <li><strong>Time Window:</strong> Refund requests must be submitted within the timeframe specified in our global policy (defaulting to 7 days from purchase).</li>
+                    <li><strong>Usage Threshold:</strong> To prevent abuse, refunds are only eligible if credit consumption is below the defined threshold (defaulting to 20% of the plan's total credits).</li>
+                    <li><strong>Discretionary Refunds:</strong> Management reserves the right to deny refunds if patterns of abuse or system exploitation are detected.</li>
+                </ul>
 
-                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">2. Your RedditGo Account</h3>
-                    <p>
-                        You may need a RedditGo Account in order to use some of our Services. You may create your own RedditGo Account, or your RedditGo Account may be assigned to you by an administrator, such as your employer or educational institution. If you are using a RedditGo Account assigned to you by an administrator, different terms may apply and your administrator may be able to access or disable your account.
-                    </p>
+                <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">3. Account Deletion & Termination</h3>
+                <p>
+                    We respect your right to be forgotten. However, to prevent accidental or malicious data loss, the following protocol applies:
+                </p>
+                <ul className="list-disc pl-6 mt-4 space-y-2">
+                    <li><strong>Scheduled Deletion:</strong> Upon request, accounts are scheduled for deletion and permanently removed after a <strong>14-day grace period</strong>.</li>
+                    <li><strong>Reactivation:</strong> You may cancel a deletion request at any time during the 14-day grace period by logging into your account.</li>
+                    <li><strong>Suspension:</strong> We reserves the right to suspend or terminate accounts immediately for non-payment, payment disputes (chargebacks), or violation of Reddit's API rules.</li>
+                </ul>
 
-                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">3. Content in our Services</h3>
-                    <p>
-                        Our Service allows you to upload, submit, store, send or receive content. You retain ownership of any intellectual property rights that you hold in that content. In short, what belongs to you stays yours.
-                    </p>
-                    <p className="mt-4">
-                        When you upload, submit, store, send or receive content to or through our Services, you give RedditGo (and those we work with) a worldwide license to use, host, store, reproduce, modify, create derivative works (such as those resulting from translations, adaptations or other changes we make so that your content works better with our Services), communicate, publish, publicly perform, publicly display and distribute such content.
-                    </p>
-
-                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">4. Privacy and Copyright Protection</h3>
-                    <p>
-                        RedditGo's privacy policies explain how we treat your personal data and protect your privacy when you use our Services. By using our Services, you agree that RedditGo can use such data in accordance with our privacy policies.
-                    </p>
-
-                    <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">5. Modifying and Terminating our Services</h3>
-                    <p>
-                        We are constantly changing and improving our Services. We may add or remove functionalities or features, and we may suspend or stop a Service altogether.
-                    </p>
-                    <p className="mt-4">
-                        You can stop using our Services at any time, although we'll be sorry to see you go. RedditGo may also stop providing Services to you, or add or create new limits to our Services at any time.
-                    </p>
-                </div>
+                <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">4. Liability & API Usage</h3>
+                <p>
+                    RedditGo is an automation tool. You are solely responsible for the content generated and for ensuring your use of the tool complies with Reddit's Terms of Service and Anti-Spam policies. RedditGo is not responsible for any account bans or restrictions imposed by Reddit.
+                </p>
             </div>
         </div>
     );

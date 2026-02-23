@@ -52,6 +52,101 @@ export const Settings: React.FC = () => {
             syncUser();
         }
     }, [activeTab, syncUser]);
+
+    // New state variables
+    const [isUploading, setIsUploading] = useState(false);
+    const [is2faLoading, setIs2faLoading] = useState(false);
+
+    // --- Subscription & Deletion States ---
+    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [cancelComment, setCancelComment] = useState('');
+    const [isCancelling, setIsCancelling] = useState(false);
+
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deletePassword, setDeletePassword] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleCancelAutoRenewal = async () => {
+        if (!cancelReason) return;
+        setIsCancelling(true);
+        try {
+            const res = await fetch(`/api/user/cancel-subscription`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userId: user.id || user._id,
+                    reason: cancelReason,
+                    comment: cancelComment
+                })
+            });
+            if (res.ok) {
+                // Success - reload or update local user state
+                window.location.reload();
+            } else {
+                alert('Failed to cancel renewal. Please try again or contact support.');
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsCancelling(false);
+            setIsCancelModalOpen(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!deletePassword) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/user/schedule-deletion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userId: user.id || user._id,
+                    password: deletePassword
+                })
+            });
+            if (res.ok) {
+                alert('Account scheduled for deletion in 14 days. You will be logged out.');
+                window.location.href = '/login';
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to schedule deletion.');
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsDeleting(false);
+            setIsDeleteModalOpen(false);
+        }
+    };
+
+    const handleCancelDeletion = async () => {
+        try {
+            const res = await fetch(`/api/user/cancel-deletion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId: user.id || user._id })
+            });
+            if (res.ok) {
+                alert('Account deletion cancelled.');
+                syncUser();
+            }
+        } catch (err) { }
+    };
+
+    const navigateToSettings = (tab: Tab) => {
+        setActiveTab(tab);
+    };
     const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [loading, setLoading] = useState(true);
     const [brandSaving, setBrandSaving] = useState(false);
@@ -77,12 +172,13 @@ export const Settings: React.FC = () => {
         return new Promise<string>((resolve) => {
             const canvas = document.createElement('canvas');
             canvas.width = 800;
-            canvas.height = 640;
+            canvas.height = 700;
             const ctx = canvas.getContext('2d');
 
             // Plan Details Logic
             const planName = tx?.planName || user.plan || 'Starter';
             const price = tx?.amount !== undefined ? tx.amount.toFixed(2) : '0.00';
+            const currency = (tx?.currency || 'USD').toUpperCase();
             const description = tx?.description || `${planName} Plan Subscription`;
             const isAdminAdj = tx?.isAdjustment === true;
             const adjType = tx?.adjustmentType;
@@ -90,137 +186,159 @@ export const Settings: React.FC = () => {
             const finalBal = tx?.finalBalance;
             const creditsAdded = tx?.creditsAdded;
             const subDescription = tx?.subDescription || (creditsAdded ? `Added ${creditsAdded} Credits` : '');
+            const gateway = tx?.gateway || (tx?.type === 'stripe_payment' ? 'stripe' : tx?.type === 'paypal_payment' ? 'paypal' : 'system');
 
             if (ctx) {
                 // Background
                 ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, 800, 600);
+                ctx.fillRect(0, 0, 800, 700);
 
-                // Header
+                // Header section
                 ctx.fillStyle = '#f8fafc';
-                ctx.fillRect(0, 0, 800, 150);
+                ctx.fillRect(0, 0, 800, 160);
 
-                ctx.font = 'bold 40px Arial';
+                // Logo
+                ctx.font = 'bold 42px Arial';
                 ctx.fillStyle = '#ea580c';
-                ctx.fillText('Redditgo', 50, 90);
+                ctx.fillText('Redditgo', 50, 95);
 
-                ctx.font = '20px Arial';
+                // Right header info
+                ctx.textAlign = 'right';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillText('OFFICIAL RECEIPT', 750, 60);
+
+                ctx.font = '24px Arial';
+                ctx.fillStyle = '#1e293b';
+                ctx.fillText('INVOICE', 750, 95);
+
+                // Bill To & Company Info
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 16px Arial';
                 ctx.fillStyle = '#64748b';
-                ctx.textAlign = 'right';
-                ctx.fillText('INVOICE', 750, 90);
-
-                // Bill To
-                ctx.textAlign = 'left';
-                ctx.font = 'bold 18px Arial';
-                ctx.fillStyle = '#0f172a';
-                ctx.fillText('Bill To:', 50, 200);
-
-                ctx.font = '16px Arial';
-                ctx.fillStyle = '#334155';
-                ctx.fillText(user.name || 'Valued Customer', 50, 230);
-                ctx.fillText(user.email || '', 50, 255);
-
-                // Info
-                ctx.textAlign = 'right';
-                const date = tx?.date ? new Date(tx.date).toLocaleDateString() : new Date().toLocaleDateString();
-                ctx.fillText(`Date: ${date}`, 750, 230);
-                const invId = tx?.id ? String(tx.id).slice(-6).toUpperCase() : Math.floor(1000 + Math.random() * 9000);
-                ctx.fillText(`Invoice #: INV-${invId}`, 750, 255);
-
-                // Item Row
-                ctx.fillStyle = '#f1f5f9';
-                ctx.fillRect(50, 300, 700, 40);
-                ctx.fillStyle = '#475569';
-                ctx.font = 'bold 14px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillText('DESCRIPTION', 70, 325);
-                ctx.textAlign = 'right';
-                ctx.fillText('AMOUNT', 730, 325);
-
-                // Item Details - Description
-                ctx.font = '16px Arial';
-                ctx.fillStyle = '#1e293b';
-                ctx.textAlign = 'left';
-                ctx.fillText(description, 70, 370);
-
-                if (subDescription) {
-                    ctx.font = '13px Arial';
-                    ctx.fillStyle = '#64748b';
-                    ctx.fillText(subDescription, 70, 392);
-                }
-
-                // Credits breakdown for admin adjustments
-                let detailsY = 415;
-                if (isAdminAdj && prevBal !== undefined && finalBal !== undefined) {
-                    ctx.font = '13px Arial';
-                    ctx.textAlign = 'left';
-
-                    if (adjType === 'add_extra') {
-                        ctx.fillStyle = '#94a3b8';
-                        ctx.fillText(`Previous Balance:  ${prevBal} pts`, 70, detailsY);
-                        detailsY += 20;
-                        ctx.fillStyle = '#16a34a';
-                        ctx.fillText(`Credits Added:       +${creditsAdded} pts`, 70, detailsY);
-                        detailsY += 20;
-                        ctx.fillStyle = '#ea580c';
-                        ctx.font = 'bold 13px Arial';
-                        ctx.fillText(`Final Balance:        ${finalBal} pts`, 70, detailsY);
-                        detailsY += 15;
-                    } else if (adjType === 'plan_reset') {
-                        ctx.fillStyle = '#94a3b8';
-                        ctx.fillText(`Previous Balance:  ${prevBal} pts`, 70, detailsY);
-                        detailsY += 20;
-                        ctx.fillStyle = '#ea580c';
-                        ctx.font = 'bold 13px Arial';
-                        ctx.fillText(`Reset to Plan Default: ${finalBal} pts`, 70, detailsY);
-                        detailsY += 15;
-                    }
-                }
-
-                ctx.textAlign = 'right';
-                ctx.font = '16px Arial';
-                ctx.fillStyle = '#1e293b';
-                ctx.fillText(`$${price}`, 730, 370);
-
-                // Total Line
-                const lineY = Math.max(detailsY + 20, 445);
-                ctx.beginPath();
-                ctx.moveTo(500, lineY);
-                ctx.lineTo(750, lineY);
-                ctx.strokeStyle = '#e2e8f0';
-                ctx.stroke();
+                ctx.fillText('BILL TO', 50, 210);
 
                 ctx.font = 'bold 20px Arial';
                 ctx.fillStyle = '#0f172a';
-                ctx.fillText(`Total: $${price}`, 730, lineY + 35);
+                ctx.fillText(user.name || 'Valued Customer', 50, 240);
 
-                // Admin Adjustment Badge
-                if (isAdminAdj) {
-                    let badgeLabel = 'ADMIN ADJUSTMENT';
-                    let badgeColor = '#fef3c7';
-                    let textColor = '#92400e';
-                    if (adjType === 'add_extra') {
-                        badgeLabel = 'ADMIN EXTRA CREDITS';
-                        badgeColor = '#dcfce7'; textColor = '#166534';
-                    } else if (adjType === 'plan_reset') {
-                        badgeLabel = 'ADMIN PLAN CHANGE';
-                        badgeColor = '#fff7ed'; textColor = '#c2410c';
-                    }
-                    ctx.fillStyle = badgeColor;
-                    ctx.beginPath();
-                    ctx.roundRect?.(50, lineY + 15, 220, 28, 6);
-                    ctx.fill?.();
-                    ctx.font = 'bold 11px Arial';
-                    ctx.fillStyle = textColor;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(badgeLabel, 160, lineY + 34);
+                ctx.font = '16px Arial';
+                ctx.fillStyle = '#475569';
+                ctx.fillText(user.email || '', 50, 265);
+
+                // Meta Info (Right side)
+                ctx.textAlign = 'right';
+                const date = tx?.date ? new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString();
+
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText('DATE', 750, 210);
+                ctx.font = 'bold 16px Arial';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(date, 750, 235);
+
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText('TRANSACTION ID', 750, 275);
+                ctx.font = 'bold 13px Courier New';
+                ctx.fillStyle = '#0f172a';
+                const displayId = tx?.id ? String(tx.id) : 'N/A';
+                ctx.fillText(displayId, 750, 300);
+
+                // Table Header
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(50, 360, 700, 45);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 13px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText('DESCRIPTION', 75, 388);
+                ctx.textAlign = 'right';
+                ctx.fillText('AMOUNT', 725, 388);
+
+                // Table Rows
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 17px Arial';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(description, 75, 445);
+
+                if (subDescription) {
+                    ctx.font = '14px Arial';
+                    ctx.fillStyle = '#64748b';
+                    ctx.fillText(subDescription, 75, 470);
                 }
 
-                // Footer
+                ctx.textAlign = 'right';
+                ctx.font = 'bold 18px Arial';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(`${price} ${currency}`, 725, 445);
+
+                // Summary / Totals
+                const lineY = 530;
+                ctx.beginPath();
+                ctx.moveTo(450, lineY);
+                ctx.lineTo(750, lineY);
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.font = 'bold 15px Arial';
+                ctx.fillStyle = '#64748b';
+                ctx.fillText('Subtotal:', 600, lineY + 35);
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(`${price} ${currency}`, 725, lineY + 35);
+
+                ctx.font = 'bold 24px Arial';
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText('Total:', 600, lineY + 80);
+                ctx.fillStyle = '#ea580c';
+                ctx.fillText(`${price} ${currency}`, 725, lineY + 80);
+
+                // Payment Method Indicator
+                if (gateway && gateway !== 'system') {
+                    ctx.textAlign = 'left';
+                    ctx.fillStyle = '#f1f5f9';
+                    ctx.beginPath();
+                    ctx.roundRect?.(50, lineY + 50, 180, 40, 8);
+                    ctx.fill?.();
+
+                    ctx.font = 'bold 11px Arial';
+                    ctx.fillStyle = '#64748b';
+                    ctx.fillText('PAYMENT METHOD', 65, lineY + 40);
+
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillStyle = '#1e293b';
+                    const methodLabel = gateway.charAt(0).toUpperCase() + gateway.slice(1);
+                    ctx.fillText(methodLabel, 65, lineY + 75);
+                }
+
+                // Admin Adjustments Detail Box
+                if (isAdminAdj && prevBal !== undefined && finalBal !== undefined) {
+                    ctx.fillStyle = '#fff7ed';
+                    ctx.fillRect(50, 510, 350, 110);
+                    ctx.strokeStyle = '#fdba74';
+                    ctx.strokeRect(50, 510, 350, 110);
+
+                    ctx.font = 'bold 11px Arial';
+                    ctx.fillStyle = '#c2410c';
+                    ctx.textAlign = 'left';
+                    ctx.fillText('CREDIT ADJUSTMENT DETAILS', 70, 535);
+
+                    ctx.font = '13px Arial';
+                    ctx.fillStyle = '#9a3412';
+                    ctx.fillText(`Previous Balance:  ${prevBal} pts`, 70, 560);
+                    ctx.fillText(`Change:            +${creditsAdded} pts`, 70, 580);
+                    ctx.font = 'bold 13px Arial';
+                    ctx.fillText(`New Balance:       ${finalBal} pts`, 70, 600);
+                }
+
+                // Footer Note
                 ctx.textAlign = 'center';
-                ctx.font = '14px Arial';
+                ctx.font = 'italic 13px Arial';
                 ctx.fillStyle = '#94a3b8';
-                ctx.fillText('Thank you for choosing Redditgo.', 400, 615);
+                ctx.fillText('This is a computer-generated receipt. No signature is required.', 400, 670);
+                ctx.font = 'bold 13px Arial';
+                ctx.fillText('https://redditgo.online', 400, 688);
 
                 resolve(canvas.toDataURL('image/png'));
             }
@@ -417,6 +535,25 @@ export const Settings: React.FC = () => {
 
     return (
         <div className="max-w-4xl space-y-6 font-['Outfit'] pb-20 pt-4">
+            {user.deletionScheduledDate && (
+                <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-rose-600">
+                            <Trash2 size={24} />
+                        </div>
+                        <div>
+                            <h3 className="font-black text-rose-900 leading-tight">Account Deletion Scheduled</h3>
+                            <p className="text-xs text-rose-600 font-bold">Your account is set to be permanently deleted on {new Date(user.deletionScheduledDate).toLocaleDateString()}.</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleCancelDeletion}
+                        className="px-6 py-3 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-200 active:scale-95"
+                    >
+                        Cancel Deletion
+                    </button>
+                </div>
+            )}
 
             {/* Header */}
             <div className="flex justify-between items-end border-b border-slate-100 pb-6">
@@ -729,6 +866,23 @@ export const Settings: React.FC = () => {
                         </div>
                     </section>
 
+                    <section className="space-y-4 pt-4">
+                        <h2 className="text-lg font-extrabold text-red-600 flex items-center gap-2">
+                            <Trash2 size={20} /> Danger Zone
+                        </h2>
+                        <div className="bg-red-50 p-8 rounded-[2rem] border border-red-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                            <div className="space-y-1">
+                                <p className="font-bold text-red-900">Delete Account</p>
+                                <p className="text-sm text-red-600 font-medium">Permanently remove your account and all data. This action is irreversible after 14 days.</p>
+                            </div>
+                            <button
+                                onClick={() => setIsDeleteModalOpen(true)}
+                                className="px-8 py-3 bg-red-600 text-white rounded-xl font-black hover:bg-red-700 transition-all shadow-lg shadow-red-200 whitespace-nowrap"
+                            >
+                                DELETE ACCOUNT
+                            </button>
+                        </div>
+                    </section>
                 </div>
             )}
 
@@ -1059,12 +1213,29 @@ export const Settings: React.FC = () => {
                                             UPGRADE NOW
                                         </Link>
                                     ) : (
-                                        <div className="space-y-1">
-                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Status</p>
-                                            <div className="flex items-center justify-end gap-2 text-green-400 font-black">
-                                                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                                                Active
+                                        <div className="space-y-3 text-right">
+                                            <div className="space-y-1">
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Status</p>
+                                                {user.autoRenew !== false ? (
+                                                    <div className="flex items-center justify-end gap-2 text-green-400 font-black">
+                                                        <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                                                        Active
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center justify-end gap-2 text-orange-400 font-black">
+                                                        <Archive size={14} />
+                                                        Cancelling soon
+                                                    </div>
+                                                )}
                                             </div>
+                                            {user.autoRenew !== false && (
+                                                <button
+                                                    onClick={() => setIsCancelModalOpen(true)}
+                                                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-400 transition-colors border-b border-transparent hover:border-red-400/30"
+                                                >
+                                                    Cancel Auto-Renewal
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -1381,6 +1552,116 @@ export const Settings: React.FC = () => {
                                 className="px-5 py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-500 shadow-lg shadow-orange-200 transition-all flex items-center gap-2"
                             >
                                 <Upload className="rotate-180" size={16} /> Download
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Cancellation Survey Modal */}
+            {isCancelModalOpen && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-200 space-y-8">
+                        <div className="text-center space-y-2">
+                            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                <Archive size={32} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900">We're sorry to see you go</h3>
+                            <p className="text-slate-500 font-medium">Please let us know why you're cancelling. Your feedback helps us improve.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            {[
+                                { id: 'price', label: 'Too expensive' },
+                                { id: 'features', label: 'Missing features' },
+                                { id: 'technical', label: 'Technical issues' },
+                                { id: 'unused', label: "I don't use it enough" },
+                                { id: 'other', label: 'Other' }
+                            ].map(opt => (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => setCancelReason(opt.label)}
+                                    className={`w-full p-4 rounded-2xl border-2 text-left font-bold transition-all flex items-center justify-between ${cancelReason === opt.label ? 'border-orange-600 bg-orange-50 text-orange-600' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                                >
+                                    {opt.label}
+                                    {cancelReason === opt.label && <Check size={18} />}
+                                </button>
+                            ))}
+
+                            <textarea
+                                placeholder="Any additional comments? (Optional)"
+                                rows={3}
+                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-slate-700 resize-none transition-all"
+                                value={cancelComment}
+                                onChange={e => setCancelComment(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setIsCancelModalOpen(false)}
+                                className="flex-1 py-4 text-slate-600 font-black hover:bg-slate-50 rounded-2xl transition-all"
+                            >
+                                Keep Subscription
+                            </button>
+                            <button
+                                onClick={handleCancelAutoRenewal}
+                                disabled={!cancelReason || isCancelling}
+                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isCancelling ? <RefreshCw className="animate-spin" size={18} /> : 'Confirm Cancellation'}
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Deletion Modal */}
+            {isDeleteModalOpen && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-200 space-y-8">
+                        <div className="text-center space-y-2">
+                            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                <Trash2 size={32} />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900">Are you absolutely sure?</h3>
+                            <p className="text-slate-500 font-medium text-sm">
+                                This will schedule your account and all data for permanent deletion in 14 days.
+                                Log back in before then to cancel the deletion.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-700 text-xs font-bold leading-relaxed">
+                                ⚠️ WARNING: All your brand profiles, post history, and campaign data will be lost forever.
+                            </div>
+                            <label className="block space-y-2">
+                                <span className="text-sm font-black text-slate-700 uppercase tracking-widest">Confirm Password</span>
+                                <input
+                                    type="password"
+                                    placeholder="Enter your password to confirm"
+                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-red-500 font-bold text-slate-900 transition-all"
+                                    value={deletePassword}
+                                    onChange={e => setDeletePassword(e.target.value)}
+                                />
+                            </label>
+                        </div>
+
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setIsDeleteModalOpen(false)}
+                                className="flex-1 py-4 text-slate-600 font-black hover:bg-slate-50 rounded-2xl transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteAccount}
+                                disabled={!deletePassword || isDeleting}
+                                className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isDeleting ? <RefreshCw className="animate-spin" size={18} /> : 'Delete My Data'}
                             </button>
                         </div>
                     </div>
