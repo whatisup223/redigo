@@ -69,6 +69,20 @@ if (process.env.ADMIN_EMAIL) {
       console.log(`🛡️ Emergency: Primary admin ${process.env.ADMIN_EMAIL} has been unsuspended.`);
     }
 
+    // CRITICAL FIX: Ensure Professional Email Templates are synced from code to DB
+    const dbEmailTemplates = await Setting.findOne({ key: 'emailTemplates' });
+    if (dbEmailTemplates && dbEmailTemplates.value) {
+      console.log('🔄 Syncing email templates: Checking for outdated templates in DB...');
+      // If the DB version is significantly smaller or missing newer templates like password_updated, clear it.
+      const dbKeys = Object.keys(dbEmailTemplates.value);
+      if (dbKeys.length < Object.keys(DEFAULT_EMAIL_TEMPLATES).length || !dbKeys.includes('password_updated')) {
+        await Setting.deleteOne({ key: 'emailTemplates' });
+        console.log('✅ Outdated templates cleared. System will now use the latest Premium templates from index.js.');
+        // Refresh cache
+        delete settingsCache.emailTemplates;
+      }
+    }
+
     // CRITICAL FIX: Convert dailyUsage from String to Number for all users to support atomic $inc
     const usersWithStrUsage = await User.find({ dailyUsage: { $type: "string" } });
     if (usersWithStrUsage.length > 0) {
@@ -128,6 +142,10 @@ const DEFAULT_EMAIL_TEMPLATES = {
         <tr>
           <td style="padding: 12px 0; color: #64748b;">Credits Added:</td>
           <td style="padding: 12px 0; text-align: right; font-weight: bold; color: #0f172a;">{{credits_added}} AI Credits</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px 0; color: #64748b;">Total Balance:</td>
+          <td style="padding: 12px 0; text-align: right; font-weight: bold; color: #0f172a;">{{final_balance}} AI Credits</td>
         </tr>
         <tr style="border-top: 1px dashed #e2e8f0;">
           <td style="padding: 20px 0 0 0; font-size: 18px; font-weight: bold; color: #0f172a;">Total Paid:</td>
