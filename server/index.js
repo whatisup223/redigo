@@ -69,16 +69,14 @@ if (process.env.ADMIN_EMAIL) {
       console.log(`🛡️ Emergency: Primary admin ${process.env.ADMIN_EMAIL} has been unsuspended.`);
     }
 
-    // CRITICAL FIX: Ensure Professional Email Templates are synced from code to DB
+    // AGGRESSIVE SYNC: Force Professional Email Templates if DB version is outdated or plain-text
     const dbEmailTemplates = await Setting.findOne({ key: 'emailTemplates' });
     if (dbEmailTemplates && dbEmailTemplates.value) {
-      console.log('🔄 Syncing email templates: Checking for outdated templates in DB...');
-      // If the DB version is significantly smaller or missing newer templates like password_updated, clear it.
-      const dbKeys = Object.keys(dbEmailTemplates.value);
-      if (dbKeys.length < Object.keys(DEFAULT_EMAIL_TEMPLATES).length || !dbKeys.includes('password_updated')) {
+      const psTemplate = dbEmailTemplates.value.payment_success?.body || "";
+      // If the DB version is old (doesn't contain the receipt box structure), wipe it.
+      if (!psTemplate.includes('Receipt #') || !psTemplate.includes('Total Paid:') || !dbEmailTemplates.value.password_updated) {
         await Setting.deleteOne({ key: 'emailTemplates' });
-        console.log('✅ Outdated templates cleared. System will now use the latest Premium templates from index.js.');
-        // Refresh cache
+        console.log('🚮 Aggressive Sync: Outdated/Plain email templates wiped from DB. System will now use Premium HTML templates.');
         delete settingsCache.emailTemplates;
       }
     }
@@ -402,11 +400,11 @@ const sendEmail = async (templateId, to, variables = {}) => {
     let subject = template.subject;
     let body = template.body;
 
-    // Replace variables
+    // Replace variables (Robust regex handles whitespace: {{ key }} or {{key}})
     Object.entries(variables).forEach(([key, value]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
+      const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
       subject = subject.replace(regex, value);
-      body = body.replace(regex, value);
+      body = body.replace(regex, String(value));
     });
 
     const mailOptions = {
