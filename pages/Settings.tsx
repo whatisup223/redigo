@@ -114,6 +114,7 @@ export const Settings: React.FC = () => {
             });
             if (res.ok) {
                 alert('Account scheduled for deletion in 14 days. You will be logged out.');
+                logout();
                 window.location.href = '/login';
             } else {
                 const data = await res.json();
