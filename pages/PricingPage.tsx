@@ -60,14 +60,16 @@ export const PricingPage: React.FC = () => {
             return;
         }
 
-        // If gateway not specified and multiple enabled, show modal
-        if (!gatewayOverride && gateways.stripe && gateways.paypal) {
+        const isFree = plan.monthlyPrice === 0 && (billingCycle === 'monthly' || plan.yearlyPrice === 0);
+
+        // If gateway not specified and multiple enabled AND not a free plan, show modal
+        if (!isFree && !gatewayOverride && gateways.stripe && gateways.paypal) {
             setSelectedPlanForModal(plan);
             setShowGatewayModal(true);
             return;
         }
 
-        const gateway = gatewayOverride || (gateways.paypal && !gateways.stripe ? 'paypal' : 'stripe');
+        const gateway = isFree ? 'system' : (gatewayOverride || (gateways.paypal && !gateways.stripe ? 'paypal' : 'stripe'));
 
         setIsLoading(plan.id);
         setShowGatewayModal(false);
