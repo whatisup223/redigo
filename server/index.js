@@ -1422,6 +1422,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    await user.save(); // CRITICAL FIX: Save the new password to DB
+
     addSystemLog('SUCCESS', `[Password Reset] Password successfully reset for: ${user.email}`);
 
     // SECURITY NOTIFICATION
@@ -2841,6 +2843,13 @@ app.put('/api/users/:id/password', async (req, res) => {
     await user.save();
 
     addSystemLog('INFO', `User changed password: ${user.email}`);
+
+    // SECURITY NOTIFICATION
+    sendEmail('password_updated', user.email, {
+      name: user.name || 'there',
+      time: new Date().toLocaleString()
+    });
+
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {
     console.error('Password change error:', err);
