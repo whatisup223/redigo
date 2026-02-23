@@ -2448,7 +2448,14 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
       const oldPlanName = user.plan;
       const oldCredits = user.credits || 0;
 
-      if (req.body.status) updateData.status = req.body.status;
+      if (req.body.status) {
+        updateData.status = req.body.status;
+        if (req.body.status === 'Suspended' || req.body.status === 'Banned') {
+          updateData.isSuspended = true;
+        } else {
+          updateData.isSuspended = false;
+        }
+      }
       if (req.body.statusMessage !== undefined) updateData.statusMessage = req.body.statusMessage;
 
       if (updateData.plan && updateData.plan !== oldPlanName) {
