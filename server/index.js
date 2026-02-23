@@ -193,6 +193,27 @@ const DEFAULT_EMAIL_TEMPLATES = {
     subject: 'Refund Processed - Redditgo',
     body: `<h1>Refund Processed</h1><p>Hi {{name}}, we have successfully processed your refund for transaction <strong>{{transaction_id}}</strong>.</p><p>As a result, your account has been returned to the Starter plan. If you have any questions, please reply to this email.</p>`,
     active: true
+  },
+  'deletion_cancelled': {
+    name: 'Account Deletion Cancelled',
+    subject: 'Confirmation: Your account deletion request has been cancelled',
+    body: `<h1>Deletion Request Cancelled</h1>
+    <p>Hi {{name}},</p>
+    <p>This email confirms that your request to delete your Redditgo account has been successfully cancelled.</p>
+    <p>Your account is now fully active, and all your data and credits remain intact. You can continue using our services as usual.</p>
+    <p>If you have any questions or did not authorize this action, please contact our support team immediately.</p>`,
+    active: true
+  },
+  'plan_upgraded': {
+    name: 'Plan Upgraded',
+    subject: 'Your account has been upgraded! 🚀',
+    body: `<h1>Plan Upgraded Successfully</h1>
+    <p>Hi {{name}},</p>
+    <p>This is a confirmation that your account has been upgraded to the <strong>{{plan_name}}</strong> plan by an administrator.</p>
+    <p>Your new credit balance is: <strong>{{credits}}</strong></p>
+    <p>You can now enjoy all the benefits of your new plan. If you have any questions about this change, please contact our support team.</p>
+    <p><a href="{{settings_url}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">View Account Settings</a></p>`,
+    active: true
   }
 };
 
@@ -238,8 +259,9 @@ const runGlobalCheck = async () => {
     // 1. Handle Expired Subscriptions
     const expiredUsers = await User.find({
       plan: { $ne: 'Starter' },
-      subscriptionEnd: { $lt: today },
-      autoRenew: false // Only auto-downgrade if auto-renewal is disabled
+      subscriptionEnd: { $lt: today }
+      // Removed autoRenew: false check because automated rebilling is not yet implemented.
+      // All expired accounts must be downgraded to prevent infinite free premium access.
     });
 
     for (const u of expiredUsers) {
@@ -960,21 +982,22 @@ app.post('/api/auth/login', async (req, res) => {
 
       let updated = false;
       if (user.subscriptionEnd && new Date() > new Date(user.subscriptionEnd)) {
-        addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
-        console.log(`[Subscription] User ${user.email} subscription expired. Downgrading and resetting period.`);
+        addSystemLog('INFO', `[Subscription] User ${user.email} subscription expired. Downgrading to Starter.`);
 
-        // Find Starter Plan
-        const starterPlan = await Plan.findOne({ id: 'starter' }) || { credits: 100 };
-
+        const oldPlan = user.plan;
         user.plan = 'Starter';
-        const now = new Date();
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-        user.credits = starterPlan.credits;
-        user.subscriptionStart = now.toISOString();
-        user.subscriptionEnd = nextMonth.toISOString();
+        // We preserve remaining credits instead of resetting them to default starter credits
+        // This is more user-friendly as they paid for those credits.
+        user.status = 'Active';
+        user.autoRenew = true; // Default for free plan
+        user.subscriptionEnd = null; // No end date for free plan
         updated = true;
+
+        sendEmail('plan_expired_notice', user.email, {
+          name: user.name || 'there',
+          plan_name: oldPlan,
+          upgrade_link: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/pricing`
+        }).catch(err => console.error('Error sending expiration email:', err));
       }
 
       if (updated) {
@@ -1856,14 +1879,22 @@ app.post('/api/user/subscribe', async (req, res) => {
 
     // If plan is free, activate immediately
     if (plan.monthlyPrice === 0 && plan.yearlyPrice === 0) {
+      const oldPlan = user.plan;
       user.plan = plan.name;
-      user.credits = plan.credits;
+      // We don't reset credits if they have more, but we ensure they have at least the plan minimum
+      user.credits = Math.max(user.credits || 0, plan.credits);
       user.status = 'Active';
+      user.autoRenew = true; // Default for free plan
       user.subscriptionStart = new Date().toISOString();
       user.subscriptionEnd = null;
 
       await user.save();
-      addSystemLog('INFO', `User activated free plan: ${user.email} (${plan.name})`);
+
+      await sendEmail('welcome', user.email, {
+        name: user.name || 'User',
+      });
+
+      addSystemLog('INFO', `User switched/activated free plan: ${user.email} (${plan.name}) from ${oldPlan}`);
       return res.json({ success: true, user, message: 'Free plan activated' });
     }
 
@@ -2528,7 +2559,8 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
         sendEmail('plan_upgraded', user.email, {
           name: user.name || 'there',
           plan_name: updateData.plan,
-          credits: user.credits.toString()
+          credits: user.credits.toString(),
+          settings_url: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/settings`
         });
       }
 
@@ -2850,6 +2882,32 @@ app.post('/api/user/schedule-deletion', async (req, res) => {
     res.status(500).json({ error: 'Failed to schedule deletion' });
   }
 });
+
+// 2b. Cancel Account Deletion (User)
+app.post('/api/user/cancel-deletion', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const user = await User.findOne({
+      $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.deletionScheduledDate = null;
+    await user.save();
+
+    await sendEmail('deletion_cancelled', user.email, {
+      name: user.name || 'User'
+    });
+
+    addSystemLog('INFO', `User ${user.email} cancelled account deletion.`);
+    res.json({ success: true, message: 'Account deletion cancelled.' });
+  } catch (err) {
+    console.error('Cancellation error:', err);
+    res.status(500).json({ error: 'Failed to cancel deletion' });
+  }
+});
+
 
 // 3. Process Manual Refund (Admin)
 app.post('/api/admin/process-refund', adminAuth, async (req, res) => {

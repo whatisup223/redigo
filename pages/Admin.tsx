@@ -152,7 +152,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const Admin: React.FC = () => {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const location = useLocation();
     // Determine active tab based on URL
     const getActiveTab = () => {
@@ -372,6 +372,7 @@ export const Admin: React.FC = () => {
     // User Detail Modal State
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [detailUser, setDetailUser] = useState<any>(null);
+    const [isRestoringDetail, setIsRestoringDetail] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailRefreshing, setDetailRefreshing] = useState(false);
     const [detailLastUpdated, setDetailLastUpdated] = useState<Date | null>(null);
@@ -527,6 +528,37 @@ export const Admin: React.FC = () => {
     const handleDeleteUser = (id: number) => {
         setUserToDelete(id);
         setIsDeleteModalOpen(true);
+    };
+
+    const handleRestoreUser = async (userId: string | number) => {
+        if (!token) return;
+        setIsRestoringDetail(true);
+        try {
+            const res = await fetch(`/api/user/cancel-deletion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ userId })
+            });
+
+            if (res.ok) {
+                // Refresh local lists
+                setUsers(prev => prev.map(u => (u.id === userId || (u as any)._id === userId) ? { ...u, deletionScheduledDate: null } : u));
+                if (detailUser && (detailUser.id === userId || detailUser._id === userId)) {
+                    setDetailUser({ ...detailUser, deletionScheduledDate: null });
+                }
+            } else {
+                const err = await res.json();
+                alert(err.error || 'Failed to restore account');
+            }
+        } catch (err) {
+            console.error('Restore error:', err);
+            alert('Restoration failed');
+        } finally {
+            setIsRestoringDetail(false);
+        }
     };
 
     const executeDeleteUser = async () => {
@@ -3217,6 +3249,49 @@ export const Admin: React.FC = () => {
                                                 <RefreshCw size={28} className="animate-spin" />
                                             </div>
                                         ) : (<>
+                                            {/* Account Deletion Alert */}
+                                            {detailUser.deletionScheduledDate && (
+                                                <div className="bg-gradient-to-br from-rose-50 to-white border border-rose-100 p-6 rounded-[2rem] shadow-lg shadow-rose-100/50 relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-rose-200/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+                                                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="p-4 bg-rose-600 text-white rounded-2xl shadow-lg relative group">
+                                                                <Archive size={24} />
+                                                                <div className="absolute inset-0 bg-rose-400 rounded-2xl blur-lg opacity-40 group-hover:opacity-60 animate-pulse -z-10" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="px-2 py-0.5 bg-rose-600 text-[9px] font-black text-white rounded-md uppercase tracking-wider">Scheduled Termination</span>
+                                                                    <h4 className="text-base font-black text-rose-950">User Requested Deletion</h4>
+                                                                </div>
+                                                                <p className="text-xs text-rose-700/80 font-bold leading-relaxed">
+                                                                    Purge scheduled for <span className="text-rose-900 border-b-2 border-rose-200">{new Date(detailUser.deletionScheduledDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                </p>
+                                                                <div className="flex items-center gap-3 mt-3">
+                                                                    <div className="w-32 h-1.5 bg-rose-100 rounded-full overflow-hidden p-0.5">
+                                                                        <div
+                                                                            className="h-full bg-rose-500 rounded-full shadow-sm"
+                                                                            style={{ width: `${Math.max(5, 100 - (Math.ceil((new Date(detailUser.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) / 14 * 100))}%` }}
+                                                                        />
+                                                                    </div>
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-600">
+                                                                        {Math.ceil((new Date(detailUser.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} Days Left
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleRestoreUser(detailUser.id || detailUser._id)}
+                                                            disabled={isRestoringDetail}
+                                                            className="px-6 py-3.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-slate-200 active:scale-95 flex items-center gap-2 disabled:opacity-50"
+                                                        >
+                                                            {isRestoringDetail ? <RefreshCw className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                                                            {isRestoringDetail ? 'Processing...' : 'Cancel Deletion'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Overview Stats */}
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                                 {[

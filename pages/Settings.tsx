@@ -128,7 +128,9 @@ export const Settings: React.FC = () => {
         }
     };
 
+    const [isRestoring, setIsRestoring] = useState(false);
     const handleCancelDeletion = async () => {
+        setIsRestoring(true);
         try {
             const res = await fetch(`/api/user/cancel-deletion`, {
                 method: 'POST',
@@ -138,11 +140,27 @@ export const Settings: React.FC = () => {
                 },
                 body: JSON.stringify({ userId: user.id || user._id })
             });
+
             if (res.ok) {
-                alert('Account deletion cancelled.');
-                syncUser();
+                const data = await res.json();
+                // Update local user state immediately to hide the banner
+                updateUser({ deletionScheduledDate: undefined });
+                // Also trigger a full sync to be sure
+                await syncUser();
+
+                // Show success message
+                setProfileMessage({ type: 'success', text: 'Account termination has been cancelled successfully.' });
+                setTimeout(() => setProfileMessage(null), 5000);
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to cancel deletion. Please contact support.');
             }
-        } catch (err) { }
+        } catch (err) {
+            console.error('Restoration error:', err);
+            alert('An error occurred during restoration.');
+        } finally {
+            setIsRestoring(false);
+        }
     };
 
     const navigateToSettings = (tab: Tab) => {
@@ -540,40 +558,48 @@ export const Settings: React.FC = () => {
     return (
         <div className="max-w-4xl space-y-6 font-['Outfit'] pb-20 pt-4">
             {user.deletionScheduledDate && (
-                <div className="bg-rose-50 border border-rose-100 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-6 duration-700 shadow-xl shadow-rose-100/50">
-                    <div className="flex items-center gap-6">
-                        <div className="relative">
-                            <div className="p-4 bg-white rounded-2xl shadow-sm text-rose-600 relative z-10">
+                <div className="bg-gradient-to-br from-rose-50 to-white border border-rose-100 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-8 animate-in slide-in-from-top-6 duration-700 shadow-2xl shadow-rose-200/50 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-rose-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                    <div className="flex items-center gap-6 relative z-10">
+                        <div className="relative group">
+                            <div className="p-5 bg-rose-600 text-white rounded-[1.5rem] shadow-xl shadow-rose-200 relative z-10 group-hover:scale-105 transition-transform duration-500">
                                 <Archive size={32} />
                             </div>
-                            <div className="absolute inset-0 bg-rose-200 rounded-2xl blur-lg animate-pulse -z-10" />
+                            <div className="absolute inset-0 bg-rose-400 rounded-[1.5rem] blur-xl opacity-40 group-hover:opacity-60 animate-pulse -z-10 transition-opacity" />
                         </div>
-                        <div className="space-y-1">
-                            <h3 className="text-xl font-black text-rose-950 leading-tight">Account Deletion Mapped</h3>
-                            <div className="flex flex-col gap-1">
-                                <p className="text-sm text-rose-600 font-bold">
-                                    Your data will be permanently wiped on <span className="bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-200">{new Date(user.deletionScheduledDate).toLocaleDateString()}</span>
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-rose-600 text-[10px] font-black text-white rounded-md uppercase tracking-wider">Scheduled Termination</span>
+                                <h3 className="text-xl font-black text-rose-950 tracking-tight leading-tight">Account Deletion Active</h3>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <p className="text-sm text-rose-700/80 font-semibold max-w-md">
+                                    All your data, credits, and profiles will be permanently purged on <span className="font-black text-rose-900 border-b-2 border-rose-200 pb-0.5">{new Date(user.deletionScheduledDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span>
                                 </p>
-                                <div className="flex items-center gap-2">
-                                    <div className="h-1.5 w-32 bg-rose-200 rounded-full overflow-hidden">
+                                <div className="flex items-center gap-4 mt-2">
+                                    <div className="flex-1 h-2 bg-rose-100 rounded-full overflow-hidden border border-rose-200/50 p-0.5">
                                         <div
-                                            className="h-full bg-rose-600 animate-pulse"
-                                            style={{ width: `${Math.max(10, 100 - (Math.ceil((new Date(user.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) / 14 * 100))}%` }}
+                                            className="h-full bg-gradient-to-r from-rose-500 to-rose-600 rounded-full shadow-lg shadow-rose-200"
+                                            style={{ width: `${Math.max(5, 100 - (Math.ceil((new Date(user.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) / 14 * 100))}%` }}
                                         />
                                     </div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">
-                                        {Math.ceil((new Date(user.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} Days Remaining
-                                    </span>
+                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                        <span className="text-sm font-black text-rose-600">
+                                            {Math.ceil((new Date(user.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}
+                                        </span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">Days Left</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <button
                         onClick={handleCancelDeletion}
-                        className="group relative overflow-hidden px-8 py-4 bg-white border-2 border-rose-600 text-rose-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all shadow-lg shadow-rose-200 active:scale-95 flex items-center gap-2"
+                        disabled={isRestoring}
+                        className="group relative overflow-hidden px-8 py-4 bg-white border-2 border-slate-900 text-slate-900 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all shadow-xl shadow-slate-200 active:scale-95 flex items-center gap-3 z-10 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
-                        Restore My Account
+                        <RefreshCw size={14} className={`${isRestoring ? 'animate-spin' : 'group-hover:rotate-180'} transition-transform duration-700`} />
+                        {isRestoring ? 'Restoring...' : 'Cancel Termination'}
                     </button>
                 </div>
             )}
