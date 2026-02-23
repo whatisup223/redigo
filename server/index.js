@@ -889,11 +889,11 @@ const generalAuth = async (req, res, next) => {
           });
         }
 
-        // 🔄 Handle Account Deletion Cancellation
+        // 🔄 Handle Account Deletion Status
         if (user.deletionScheduledDate) {
-          addSystemLog('INFO', `User ${user.email} logged in, cancelling scheduled deletion.`);
-          user.deletionScheduledDate = undefined;
-          await user.save();
+          // Keep the info in logs, but don't cancel it here.
+          // The user must cancel it manually from the settings page.
+          console.log(`[AUTH] User ${user.email} is pending deletion.`);
         }
       }
     } catch (e) {

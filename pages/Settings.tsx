@@ -540,21 +540,40 @@ export const Settings: React.FC = () => {
     return (
         <div className="max-w-4xl space-y-6 font-['Outfit'] pb-20 pt-4">
             {user.deletionScheduledDate && (
-                <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-500">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-white rounded-2xl shadow-sm text-rose-600">
-                            <Trash2 size={24} />
+                <div className="bg-rose-50 border border-rose-100 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 animate-in slide-in-from-top-6 duration-700 shadow-xl shadow-rose-100/50">
+                    <div className="flex items-center gap-6">
+                        <div className="relative">
+                            <div className="p-4 bg-white rounded-2xl shadow-sm text-rose-600 relative z-10">
+                                <Archive size={32} />
+                            </div>
+                            <div className="absolute inset-0 bg-rose-200 rounded-2xl blur-lg animate-pulse -z-10" />
                         </div>
-                        <div>
-                            <h3 className="font-black text-rose-900 leading-tight">Account Deletion Scheduled</h3>
-                            <p className="text-xs text-rose-600 font-bold">Your account is set to be permanently deleted on {new Date(user.deletionScheduledDate).toLocaleDateString()}.</p>
+                        <div className="space-y-1">
+                            <h3 className="text-xl font-black text-rose-950 leading-tight">Account Deletion Mapped</h3>
+                            <div className="flex flex-col gap-1">
+                                <p className="text-sm text-rose-600 font-bold">
+                                    Your data will be permanently wiped on <span className="bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-200">{new Date(user.deletionScheduledDate).toLocaleDateString()}</span>
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <div className="h-1.5 w-32 bg-rose-200 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-rose-600 animate-pulse"
+                                            style={{ width: `${Math.max(10, 100 - (Math.ceil((new Date(user.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) / 14 * 100))}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">
+                                        {Math.ceil((new Date(user.deletionScheduledDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} Days Remaining
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <button
                         onClick={handleCancelDeletion}
-                        className="px-6 py-3 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-200 active:scale-95"
+                        className="group relative overflow-hidden px-8 py-4 bg-white border-2 border-rose-600 text-rose-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all shadow-lg shadow-rose-200 active:scale-95 flex items-center gap-2"
                     >
-                        Cancel Deletion
+                        <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-500" />
+                        Restore My Account
                     </button>
                 </div>
             )}
@@ -874,17 +893,29 @@ export const Settings: React.FC = () => {
                         <h2 className="text-lg font-extrabold text-red-600 flex items-center gap-2">
                             <Trash2 size={20} /> Danger Zone
                         </h2>
-                        <div className="bg-red-50 p-8 rounded-[2rem] border border-red-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className={`p-8 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-500 ${user.deletionScheduledDate ? 'bg-slate-50 border-slate-200 grayscale' : 'bg-red-50 border-red-100'}`}>
                             <div className="space-y-1">
-                                <p className="font-bold text-red-900">Delete Account</p>
-                                <p className="text-sm text-red-600 font-medium">Permanently remove your account and all data. This action is irreversible after 14 days.</p>
+                                <p className={`font-bold ${user.deletionScheduledDate ? 'text-slate-500' : 'text-red-900'}`}>
+                                    {user.deletionScheduledDate ? 'Deletion is Pending' : 'Delete Account'}
+                                </p>
+                                <p className={`text-sm font-medium ${user.deletionScheduledDate ? 'text-slate-400' : 'text-red-600'}`}>
+                                    {user.deletionScheduledDate
+                                        ? `You have already scheduled this account for deletion. It will be wiped on ${new Date(user.deletionScheduledDate).toLocaleDateString()}.`
+                                        : 'Permanently remove your account and all data. This action is irreversible after 14 days.'}
+                                </p>
                             </div>
-                            <button
-                                onClick={() => setIsDeleteModalOpen(true)}
-                                className="px-8 py-3 bg-red-600 text-white rounded-xl font-black hover:bg-red-700 transition-all shadow-lg shadow-red-200 whitespace-nowrap"
-                            >
-                                DELETE ACCOUNT
-                            </button>
+                            {user.deletionScheduledDate ? (
+                                <div className="flex items-center gap-2 px-6 py-3 bg-slate-200 text-slate-500 rounded-xl font-black text-xs uppercase tracking-widest cursor-not-allowed">
+                                    <Shield size={14} /> PENDING WIPE
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setIsDeleteModalOpen(true)}
+                                    className="px-8 py-3 bg-red-600 text-white rounded-xl font-black hover:bg-red-700 transition-all shadow-lg shadow-red-200 whitespace-nowrap"
+                                >
+                                    DELETE ACCOUNT
+                                </button>
+                            )}
                         </div>
                     </section>
                 </div>
