@@ -3166,7 +3166,7 @@ export const Admin: React.FC = () => {
                                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsDetailModalOpen(false)} />
                                 <div className="relative bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 w-full max-w-2xl flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
                                     {/* Header */}
-                                    <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                                    <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between flex-shrink-0">
                                         <div className="flex items-center gap-4">
                                             <div className="w-14 h-14 rounded-2xl overflow-hidden bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-orange-500/20 flex-shrink-0 border-4 border-white">
                                                 {detailUser.avatar ? (
@@ -3187,7 +3187,7 @@ export const Admin: React.FC = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 mt-4 md:mt-0 flex-wrap">
                                             {detailUser.deletionScheduledDate && (
                                                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-600 animate-pulse">
                                                     <Trash2 size={12} />
