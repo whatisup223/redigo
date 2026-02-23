@@ -105,15 +105,27 @@ const DEFAULT_EMAIL_TEMPLATES = {
     subject: 'Payment Successful! 🎉',
     body: `<h1>Thank you for your purchase!</h1>
     <p>Your subscription to <strong>{{plan_name}}</strong> is now active. Here are your transaction details:</p>
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+    <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 20px; padding: 30px; margin: 25px 0; font-family: sans-serif;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #0f172a; font-size: 20px;">Receipt #{{transaction_id}}</h2>
+        <span style="font-size: 12px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Official Invoice</span>
+      </div>
       <table style="width: 100%; border-collapse: collapse;">
-        <tr><td style="padding: 8px 0; color: #64748b;">Transaction ID:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{transaction_id}}</td></tr>
-        <tr><td style="padding: 8px 0; color: #64748b;">Amount Paid:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{amount}} {{currency}}</td></tr>
-        <tr><td style="padding: 8px 0; color: #64748b;">Credits Added:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{credits_added}}</td></tr>
-        <tr><td style="padding: 8px 0; color: #64748b;">Balance:</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{{final_balance}}</td></tr>
+        <tr>
+          <td style="padding: 12px 0; color: #64748b;">Plan:</td>
+          <td style="padding: 12px 0; text-align: right; font-weight: bold; color: #0f172a;">{{plan_name}} Plan</td>
+        </tr>
+        <tr>
+          <td style="padding: 12px 0; color: #64748b;">Credits Added:</td>
+          <td style="padding: 12px 0; text-align: right; font-weight: bold; color: #0f172a;">{{credits_added}} AI Credits</td>
+        </tr>
+        <tr style="border-top: 1px dashed #e2e8f0;">
+          <td style="padding: 20px 0 0 0; font-size: 18px; font-weight: bold; color: #0f172a;">Total Paid:</td>
+          <td style="padding: 20px 0 0 0; text-align: right; font-size: 18px; font-weight: 900; color: #EA580C;">{{amount}} {{currency}}</td>
+        </tr>
       </table>
     </div>
-    <p>You can view and download your full invoice in your <a href="{{settings_url}}">Account Settings</a>.</p>`,
+    <p>A persistent copy of this invoice is always available in your <a href="{{settings_url}}">billing portal</a>.</p>`,
     active: true
   },
   'low_credits': {
@@ -213,6 +225,17 @@ const DEFAULT_EMAIL_TEMPLATES = {
     <p>Your new credit balance is: <strong>{{credits}}</strong></p>
     <p>You can now enjoy all the benefits of your new plan. If you have any questions about this change, please contact our support team.</p>
     <p><a href="{{settings_url}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">View Account Settings</a></p>`,
+    active: true
+  },
+  'plan_changed': {
+    name: 'Plan Changed',
+    subject: 'Your Redditgo plan has been updated! 🔄',
+    body: `<h1>Plan Updated</h1>
+    <p>Hi {{name}},</p>
+    <p>We're confirming that your account has been successfully switched to the <strong>{{plan_name}}</strong> plan.</p>
+    <p>Any previous subscription benefits have been updated according to your new plan. Your current credit balance is: <strong>{{credits}}</strong></p>
+    <p>If you have any questions about this change, we're here to help!</p>
+    <p><a href="{{settings_url}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">View Your Dashboard</a></p>`,
     active: true
   }
 };
@@ -1890,8 +1913,11 @@ app.post('/api/user/subscribe', async (req, res) => {
 
       await user.save();
 
-      await sendEmail('welcome', user.email, {
+      await sendEmail(oldPlan ? 'plan_changed' : 'welcome', user.email, {
         name: user.name || 'User',
+        plan_name: plan.name,
+        credits: user.credits.toString(),
+        settings_url: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/settings?tab=billing`
       });
 
       addSystemLog('INFO', `User switched/activated free plan: ${user.email} (${plan.name}) from ${oldPlan}`);
