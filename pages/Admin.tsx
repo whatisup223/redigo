@@ -3201,12 +3201,6 @@ export const Admin: React.FC = () => {
                                                 </div>
                                             )}
                                             <button
-                                                onClick={() => toggleUserSuspension(detailUser.id, !!detailUser.isSuspended)}
-                                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${detailUser.isSuspended ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}
-                                            >
-                                                {detailUser.isSuspended ? 'Unsuspend' : 'Suspend Account'}
-                                            </button>
-                                            <button
                                                 onClick={() => fetchDetailUser(detailUser.id, true)}
                                                 className={`p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-700 ${detailRefreshing ? 'animate-spin text-orange-500' : ''}`}
                                                 title="Refresh now"
