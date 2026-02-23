@@ -3575,6 +3575,7 @@ app.post('/api/user/reddit/disconnect', async (req, res) => {
 app.post('/api/generate', async (req, res) => {
   try {
     const { prompt, context, userId, type } = req.body; // type can be 'comment' or 'post'
+    const { aiSettings, redditSettings } = loadSettings();
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     if (!keyToUse) {
@@ -3734,6 +3735,7 @@ app.post('/api/generate', async (req, res) => {
 app.post('/api/generate-image', async (req, res) => {
   try {
     const { prompt, userId } = req.body;
+    const { aiSettings } = loadSettings();
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     if (!keyToUse || !keyToUse.startsWith('sk-')) {
