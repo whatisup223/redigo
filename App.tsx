@@ -53,7 +53,6 @@ const App: React.FC = () => {
           <Route path="/admin/analytics" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/communicate" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/churn" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/support" element={<ProtectedRoute adminOnly={true}><AdminLayout><Support /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />

@@ -158,7 +158,6 @@ export const Admin: React.FC = () => {
     const getActiveTab = () => {
         const path = location.pathname;
         if (path.includes('/analytics')) return 'analytics';
-        if (path.includes('/churn')) return 'churn';
         if (path.includes('/users')) return 'users';
         if (path.includes('/communicate')) return 'communicate';
         if (path.includes('/settings')) return 'settings';
@@ -167,6 +166,7 @@ export const Admin: React.FC = () => {
     };
 
     const activeTab = getActiveTab();
+    const [analyticsTab, setAnalyticsTab] = useState<'overview' | 'churn'>('overview');
     const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email'>('ai');
 
     const [users, setUsers] = useState<User[]>([]);
@@ -556,13 +556,17 @@ export const Admin: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (activeTab === 'analytics' || activeTab === 'overview') {
+        if (activeTab === 'overview') {
             fetchAnalytics();
         }
-        if (activeTab === 'analytics' || activeTab === 'churn') {
-            fetchCancellationFeedback();
+        if (activeTab === 'analytics') {
+            if (analyticsTab === 'overview') {
+                fetchAnalytics();
+            } else if (analyticsTab === 'churn') {
+                fetchCancellationFeedback();
+            }
         }
-    }, [activeTab]);
+    }, [activeTab, analyticsTab]);
 
     const handleSaveSettings = async () => {
         const token = localStorage.getItem('token');
@@ -1195,364 +1199,394 @@ export const Admin: React.FC = () => {
 
                         {/* Analytics Tab */}
                         {activeTab === 'analytics' && (
-                            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                {analyticsLoading ? (
-                                    <div className="flex flex-col items-center justify-center h-64 gap-4">
-                                        <RefreshCw className="animate-spin text-orange-600" size={48} />
-                                        <p className="text-slate-400 font-bold">Aggregating system data...</p>
-                                    </div>
-                                ) : !analytics ? (
-                                    <div className="flex flex-col items-center justify-center h-64 gap-4 text-slate-400">
-                                        <Activity size={64} className="opacity-10" />
-                                        <p className="font-bold">No analytics data available.</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* Top Cards */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                                            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                        <DollarSign size={24} />
-                                                    </div>
-                                                    <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Gross Revenue</span>
-                                                </div>
-                                                <div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Earnings</p>
-                                                    <p className="text-3xl font-black text-slate-900">${analytics.totalRevenue?.toLocaleString()}</p>
-                                                </div>
+                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex items-center gap-2 p-1.5 bg-slate-100/80 backdrop-blur-sm shadow-inner rounded-2xl w-fit border border-slate-200/50">
+                                    <button
+                                        onClick={() => setAnalyticsTab('overview')}
+                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${analyticsTab === 'overview' ? 'bg-white text-slate-900 shadow-slate-200 shadow-md ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                                    >
+                                        <Activity size={16} className={analyticsTab === 'overview' ? 'text-blue-600' : 'text-slate-400'} />
+                                        System Overview
+                                    </button>
+                                    <button
+                                        onClick={() => setAnalyticsTab('churn')}
+                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${analyticsTab === 'churn' ? 'bg-white text-slate-900 shadow-slate-200 shadow-md ring-1 ring-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                                    >
+                                        <TrendingDown size={16} className={analyticsTab === 'churn' ? 'text-red-600' : 'text-slate-400'} />
+                                        Churn Analysis
+                                    </button>
+                                </div>
+
+                                {analyticsTab === 'overview' && (
+                                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        {analyticsLoading ? (
+                                            <div className="flex flex-col items-center justify-center h-64 gap-4">
+                                                <RefreshCw className="animate-spin text-orange-600" size={48} />
+                                                <p className="text-slate-400 font-bold">Aggregating system data...</p>
                                             </div>
-                                            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
-                                                <div className="flex items-center justify-between mb-4">
-                                                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                        <ZapIcon size={24} />
-                                                    </div>
-                                                    <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Paid Obligation</span>
-                                                </div>
-                                                <div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Paid Credits in Circulation</p>
-                                                    <p className="text-3xl font-black text-slate-900">{analytics.totalPaidCreditsCirculating?.toLocaleString()}</p>
-                                                </div>
+                                        ) : !analytics ? (
+                                            <div className="flex flex-col items-center justify-center h-64 gap-4 text-slate-400">
+                                                <Activity size={64} className="opacity-10" />
+                                                <p className="font-bold">No analytics data available.</p>
                                             </div>
+                                        ) : (
+                                            <>
+                                                {/* Top Cards */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <DollarSign size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Gross Revenue</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Earnings</p>
+                                                            <p className="text-3xl font-black text-slate-900">${analytics.totalRevenue?.toLocaleString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <ZapIcon size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Paid Obligation</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Paid Credits in Circulation</p>
+                                                            <p className="text-3xl font-black text-slate-900">{analytics.totalPaidCreditsCirculating?.toLocaleString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <ZapIcon size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-lg">Free Obligation</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Free Credits in Circulation</p>
+                                                            <p className="text-3xl font-black text-slate-900">{analytics.totalFreeCreditsCirculating?.toLocaleString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <TrendingUp size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Daily Pulse</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Today's Consumption</p>
+                                                            <p className="text-3xl font-black text-slate-900">{(analytics.chartData?.[analytics.chartData.length - 1]?.consumption || 0).toLocaleString()} <span className="text-sm font-bold text-slate-400">pts</span></p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <Users size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">Scale</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Users</p>
+                                                            <p className="text-3xl font-black text-slate-900">{analytics.totalUsers?.toLocaleString()}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Main Charts */}
+                                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                                    <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200/60 shadow-sm">
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
+                                                            <div>
+                                                                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Financial & Usage Growth</h2>
+                                                                <p className="text-sm font-bold text-slate-400 mt-1">Cross-analyzing revenue vs credit consumption (Last 30 Days)</p>
+                                                            </div>
+                                                            <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/50">
+                                                                <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-100">
+                                                                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+                                                                    <span className="text-[10px] font-black text-slate-600 uppercase">Revenue</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-100">
+                                                                    <div className="w-2.5 h-2.5 bg-orange-500 rounded-full" />
+                                                                    <span className="text-[10px] font-black text-slate-600 uppercase">Usage</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="h-80 w-full">
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <AreaChart data={analytics.chartData}>
+                                                                    <defs>
+                                                                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                                                                        <linearGradient id="usageGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient>
+                                                                    </defs>
+                                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                                                    <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                                                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
+                                                                    <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)', padding: '20px' }} />
+                                                                    <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#revenueGrad)" />
+                                                                    <Area type="monotone" dataKey="consumption" stroke="#f97316" strokeWidth={4} fillOpacity={1} fill="url(#usageGrad)" />
+                                                                </AreaChart>
+                                                            </ResponsiveContainer>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-white p-10 rounded-[3rem] border border-slate-200/60 shadow-sm">
+                                                        <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">Plan Distribution</h2>
+                                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">User Subscription Tiers</p>
+                                                        <div className="h-64 w-full relative">
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <PieChart>
+                                                                    <Pie
+                                                                        data={analytics.planDistribution}
+                                                                        cx="50%"
+                                                                        cy="50%"
+                                                                        innerRadius={60}
+                                                                        outerRadius={90}
+                                                                        paddingAngle={10}
+                                                                        dataKey="value"
+                                                                    >
+                                                                        {analytics.planDistribution.map((entry: any, index: number) => (
+                                                                            <Cell key={`cell-${index}`} fill={['#f97316', '#3b82f6', '#10b981', '#6366f1'][index % 4]} strokeWidth={0} />
+                                                                        ))}
+                                                                    </Pie>
+                                                                    <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }} />
+                                                                </PieChart>
+                                                            </ResponsiveContainer>
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                                                <p className="text-3xl font-black text-slate-900">{analytics.totalUsers}</p>
+                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Users</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-8 space-y-3">
+                                                            {analytics.planDistribution.map((item: any, i: number) => (
+                                                                <div key={item.name} className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#f97316', '#3b82f6', '#10b981', '#6366f1'][i % 4] }} />
+                                                                        <span className="text-sm font-bold text-slate-600">{item.name}</span>
+                                                                    </div>
+                                                                    <span className="text-sm font-black text-slate-900">{item.value}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Bottom Grid: Top Consumers & Live Activity */}
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                    {/* Top Consumers */}
+                                                    <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden h-fit">
+                                                        <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+                                                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Top Consumers</h2>
+                                                            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                                                                <BarChart2 size={20} />
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-4">
+                                                            <div className="overflow-x-auto">
+                                                                <table className="w-full text-sm">
+                                                                    <thead>
+                                                                        <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-50">
+                                                                            <th className="px-4 py-4 text-left">User</th>
+                                                                            <th className="px-4 py-4 text-left">Plan</th>
+                                                                            <th className="px-4 py-4 text-right">Lifetime Spends</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-slate-50">
+                                                                        {analytics.topConsumers?.map((u: any, i: number) => (
+                                                                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                                                                <td className="px-4 py-4">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 uppercase">
+                                                                                            {u.name?.substring(0, 2) || '??'}
+                                                                                        </div>
+                                                                                        <div className="min-w-0">
+                                                                                            <p className="font-bold text-slate-900 truncate">{u.name}</p>
+                                                                                            <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="px-4 py-4">
+                                                                                    <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase shadow-sm ${u.plan === 'Pro' ? 'bg-indigo-50 text-indigo-600' :
+                                                                                        u.plan === 'Enterprise' ? 'bg-purple-50 text-purple-600' : 'bg-slate-100 text-slate-500'
+                                                                                        }`}>
+                                                                                        {u.plan}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td className="px-4 py-4 text-right">
+                                                                                    <div className="flex flex-col items-end">
+                                                                                        <span className="font-black text-slate-900">{u.totalSpent?.toLocaleString()} <span className="text-slate-400 text-[10px]">pts</span></span>
+                                                                                        <div className="w-24 h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+                                                                                            <div className="h-full bg-orange-500" style={{ width: `${(u.totalSpent / (analytics.topConsumers[0]?.totalSpent || 1)) * 100}%` }} />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Live Activity Feed */}
+                                                    <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col h-[600px]">
+                                                        <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
+                                                            <h2 className="text-xl font-black text-slate-900 tracking-tight">System Activity Pulse</h2>
+                                                            <span className="flex h-2 w-2 relative">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                                            </span>
+                                                        </div>
+                                                        <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+                                                            <div className="space-y-4">
+                                                                {analytics.recentActivity?.map((act: any, i: number) => (
+                                                                    <div key={i} className="group p-4 bg-white hover:bg-slate-50 rounded-2xl border border-slate-100/50 transition-all flex items-start gap-4">
+                                                                        <div className={`p-3 rounded-xl shrink-0 ${act.type === 'post' ? 'bg-blue-50 text-blue-600' :
+                                                                            act.type === 'comment' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'
+                                                                            }`}>
+                                                                            {act.type === 'post' ? <FileText size={18} /> :
+                                                                                act.type === 'comment' ? <MessageSquare size={18} /> : <Image size={18} />}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                                <p className="text-sm font-black text-slate-900 truncate">{act.userName}</p>
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap ml-2">
+                                                                                    {new Date(act.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-[11px] font-bold text-slate-500">
+                                                                                Generated a <span className="text-slate-900">{act.type}</span> costing <span className="text-orange-600">-{act.cost} credits</span>
+                                                                            </p>
+                                                                        </div>
+                                                                        <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 self-center" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Churn Analysis Sub-Tab */}
+                                {analyticsTab === 'churn' && (
+                                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        {/* Insights Overlay */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
                                                 <div className="flex items-center justify-between mb-4">
-                                                    <div className="p-3 bg-slate-50 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                        <ZapIcon size={24} />
+                                                    <div className="p-3 bg-red-50 text-red-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                        <TrendingDown size={24} />
                                                     </div>
-                                                    <span className="text-xs font-black text-slate-600 bg-slate-50 px-2 py-1 rounded-lg">Free Obligation</span>
+                                                    <span className="text-xs font-black text-red-600 bg-red-50 px-2 py-1 rounded-lg">Impact Indicator</span>
                                                 </div>
                                                 <div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Free Credits in Circulation</p>
-                                                    <p className="text-3xl font-black text-slate-900">{analytics.totalFreeCreditsCirculating?.toLocaleString()}</p>
+                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Cancellations</p>
+                                                    <p className="text-3xl font-black text-slate-900">{cancellationFeedback.length}</p>
                                                 </div>
                                             </div>
                                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
                                                 <div className="flex items-center justify-between mb-4">
                                                     <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                        <TrendingUp size={24} />
+                                                        <AlertCircle size={24} />
                                                     </div>
-                                                    <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Daily Pulse</span>
+                                                    <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Top Reason</span>
                                                 </div>
                                                 <div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Today's Consumption</p>
-                                                    <p className="text-3xl font-black text-slate-900">{(analytics.chartData?.[analytics.chartData.length - 1]?.consumption || 0).toLocaleString()} <span className="text-sm font-bold text-slate-400">pts</span></p>
+                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Critical Insight</p>
+                                                    {(() => {
+                                                        const res = cancellationFeedback.reduce((acc, fb) => {
+                                                            acc[fb.reason] = (acc[fb.reason] || 0) + 1;
+                                                            return acc;
+                                                        }, {} as any);
+                                                        let top = 'None';
+                                                        let max = 0;
+                                                        for (const k in res) { if (res[k] > max) { max = res[k]; top = k; } }
+                                                        const percentage = cancellationFeedback.length > 0 ? Math.round((max / cancellationFeedback.length) * 100) : 0;
+                                                        return (
+                                                            <div className="mt-2 w-full">
+                                                                <div className="flex items-end justify-between mb-2">
+                                                                    <p className="text-lg font-black text-slate-900 leading-tight truncate mr-3" title={top}>{top}</p>
+                                                                    <span className="text-sm font-bold text-orange-600">{percentage}%</span>
+                                                                </div>
+                                                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-orange-500 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
                                                 <div className="flex items-center justify-between mb-4">
-                                                    <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform">
                                                         <Users size={24} />
                                                     </div>
-                                                    <span className="text-xs font-black text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">Scale</span>
+                                                    <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">Grace Recovery</span>
                                                 </div>
                                                 <div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Users</p>
-                                                    <p className="text-3xl font-black text-slate-900">{analytics.totalUsers?.toLocaleString()}</p>
+                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Saved Accounts</p>
+                                                    <p className="text-3xl font-black text-slate-900">0 <span className="text-sm text-slate-400">/ 14d</span></p>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Main Charts */}
-                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                            <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-200/60 shadow-sm">
-                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-                                                    <div>
-                                                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Financial & Usage Growth</h2>
-                                                        <p className="text-sm font-bold text-slate-400 mt-1">Cross-analyzing revenue vs credit consumption (Last 30 Days)</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/50">
-                                                        <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-100">
-                                                            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
-                                                            <span className="text-[10px] font-black text-slate-600 uppercase">Revenue</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-100">
-                                                            <div className="w-2.5 h-2.5 bg-orange-500 rounded-full" />
-                                                            <span className="text-[10px] font-black text-slate-600 uppercase">Usage</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="h-80 w-full">
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <AreaChart data={analytics.chartData}>
-                                                            <defs>
-                                                                <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
-                                                                <linearGradient id="usageGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient>
-                                                            </defs>
-                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
-                                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
-                                                            <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)', padding: '20px' }} />
-                                                            <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#revenueGrad)" />
-                                                            <Area type="monotone" dataKey="consumption" stroke="#f97316" strokeWidth={4} fillOpacity={1} fill="url(#usageGrad)" />
-                                                        </AreaChart>
-                                                    </ResponsiveContainer>
-                                                </div>
+                                        {/* Detailed Feed */}
+                                        <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+                                            <div className="p-10 border-b border-slate-50 bg-slate-50/20">
+                                                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Post-Cancellation Feed</h2>
+                                                <p className="text-sm text-slate-500 font-bold mt-1">Real-time feedback collected during the subscription cancellation process.</p>
                                             </div>
-
-                                            <div className="bg-white p-10 rounded-[3rem] border border-slate-200/60 shadow-sm">
-                                                <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">Plan Distribution</h2>
-                                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">User Subscription Tiers</p>
-                                                <div className="h-64 w-full relative">
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <PieChart>
-                                                            <Pie
-                                                                data={analytics.planDistribution}
-                                                                cx="50%"
-                                                                cy="50%"
-                                                                innerRadius={60}
-                                                                outerRadius={90}
-                                                                paddingAngle={10}
-                                                                dataKey="value"
-                                                            >
-                                                                {analytics.planDistribution.map((entry: any, index: number) => (
-                                                                    <Cell key={`cell-${index}`} fill={['#f97316', '#3b82f6', '#10b981', '#6366f1'][index % 4]} strokeWidth={0} />
-                                                                ))}
-                                                            </Pie>
-                                                            <Tooltip contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }} />
-                                                        </PieChart>
-                                                    </ResponsiveContainer>
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                                        <p className="text-3xl font-black text-slate-900">{analytics.totalUsers}</p>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Users</p>
-                                                    </div>
-                                                </div>
-                                                <div className="mt-8 space-y-3">
-                                                    {analytics.planDistribution.map((item: any, i: number) => (
-                                                        <div key={item.name} className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#f97316', '#3b82f6', '#10b981', '#6366f1'][i % 4] }} />
-                                                                <span className="text-sm font-bold text-slate-600">{item.name}</span>
-                                                            </div>
-                                                            <span className="text-sm font-black text-slate-900">{item.value}</span>
+                                            <div className="p-8 flex-1">
+                                                {cancellationFeedback.length === 0 ? (
+                                                    <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
+                                                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
+                                                            <Archive size={40} className="opacity-20" />
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Bottom Grid: Top Consumers & Live Activity */}
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                            {/* Top Consumers */}
-                                            <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden h-fit">
-                                                <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
-                                                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Top Consumers</h2>
-                                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                                                        <BarChart2 size={20} />
+                                                        <p className="font-black text-slate-400 uppercase tracking-widest text-xs">No feedback received yet.</p>
                                                     </div>
-                                                </div>
-                                                <div className="p-4">
-                                                    <div className="overflow-x-auto">
-                                                        <table className="w-full text-sm">
-                                                            <thead>
-                                                                <tr className="text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-50">
-                                                                    <th className="px-4 py-4 text-left">User</th>
-                                                                    <th className="px-4 py-4 text-left">Plan</th>
-                                                                    <th className="px-4 py-4 text-right">Lifetime Spends</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-slate-50">
-                                                                {analytics.topConsumers?.map((u: any, i: number) => (
-                                                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                                                                        <td className="px-4 py-4">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 uppercase">
-                                                                                    {u.name?.substring(0, 2) || '??'}
-                                                                                </div>
-                                                                                <div className="min-w-0">
-                                                                                    <p className="font-bold text-slate-900 truncate">{u.name}</p>
-                                                                                    <p className="text-[10px] text-slate-400 truncate">{u.email}</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-4 py-4">
-                                                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase shadow-sm ${u.plan === 'Pro' ? 'bg-indigo-50 text-indigo-600' :
-                                                                                u.plan === 'Enterprise' ? 'bg-purple-50 text-purple-600' : 'bg-slate-100 text-slate-500'
-                                                                                }`}>
-                                                                                {u.plan}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td className="px-4 py-4 text-right">
-                                                                            <div className="flex flex-col items-end">
-                                                                                <span className="font-black text-slate-900">{u.totalSpent?.toLocaleString()} <span className="text-slate-400 text-[10px]">pts</span></span>
-                                                                                <div className="w-24 h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                                                                                    <div className="h-full bg-orange-500" style={{ width: `${(u.totalSpent / (analytics.topConsumers[0]?.totalSpent || 1)) * 100}%` }} />
-                                                                                </div>
-                                                                            </div>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Live Activity Feed */}
-                                            <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col h-[600px]">
-                                                <div className="p-8 border-b border-slate-50 bg-slate-50/30 flex items-center justify-between">
-                                                    <h2 className="text-xl font-black text-slate-900 tracking-tight">System Activity Pulse</h2>
-                                                    <span className="flex h-2 w-2 relative">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-                                                    </span>
-                                                </div>
-                                                <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
-                                                    <div className="space-y-4">
-                                                        {analytics.recentActivity?.map((act: any, i: number) => (
-                                                            <div key={i} className="group p-4 bg-white hover:bg-slate-50 rounded-2xl border border-slate-100/50 transition-all flex items-start gap-4">
-                                                                <div className={`p-3 rounded-xl shrink-0 ${act.type === 'post' ? 'bg-blue-50 text-blue-600' :
-                                                                    act.type === 'comment' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'
-                                                                    }`}>
-                                                                    {act.type === 'post' ? <FileText size={18} /> :
-                                                                        act.type === 'comment' ? <MessageSquare size={18} /> : <Image size={18} />}
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center justify-between mb-0.5">
-                                                                        <p className="text-sm font-black text-slate-900 truncate">{act.userName}</p>
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap ml-2">
-                                                                            {new Date(act.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                                        </span>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        {cancellationFeedback.map((fb, idx) => (
+                                                            <div key={idx} className="p-6 bg-slate-50/50 border border-slate-100 rounded-[2rem] space-y-4 hover:shadow-xl transition-all duration-300 group">
+                                                                <div className="flex items-start justify-between">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-xs font-black text-slate-500">
+                                                                            {fb.userName ? fb.userName.substring(0, 2).toUpperCase() : '??'}
+                                                                        </div>
+                                                                        <div className="space-y-0.5">
+                                                                            <p className="text-sm font-black text-slate-900">{fb.userName}</p>
+                                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{fb.userEmail}</p>
+                                                                        </div>
                                                                     </div>
-                                                                    <p className="text-[11px] font-bold text-slate-500">
-                                                                        Generated a <span className="text-slate-900">{act.type}</span> costing <span className="text-orange-600">-{act.cost} credits</span>
-                                                                    </p>
+                                                                    <span className="text-[10px] font-black px-3 py-1 bg-white border border-slate-200 text-slate-500 rounded-lg group-hover:border-orange-200 group-hover:text-orange-600 transition-colors">
+                                                                        {new Date(fb.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                    </span>
                                                                 </div>
-                                                                <ChevronRight size={14} className="text-slate-200 group-hover:text-slate-400 self-center" />
+                                                                <div className="p-5 bg-white rounded-2xl border border-slate-100/60 shadow-sm space-y-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
+                                                                        <p className="text-xs font-black text-slate-900 tracking-tight uppercase">Reason: {fb.reason}</p>
+                                                                    </div>
+                                                                    {fb.comment && (
+                                                                        <div className="mt-2 pt-2 border-t border-slate-50">
+                                                                            <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic">"{fb.comment}"</p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
-
                                         </div>
-                                    </>
+                                    </div>
                                 )}
-                            </div>
-                        )}
-
-                        {/* Churn Analysis Tab */}
-                        {activeTab === 'churn' && (
-                            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                {/* Insights Overlay */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="p-3 bg-red-50 text-red-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                <TrendingDown size={24} />
-                                            </div>
-                                            <span className="text-xs font-black text-red-600 bg-red-50 px-2 py-1 rounded-lg">Impact Indicator</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Cancellations</p>
-                                            <p className="text-3xl font-black text-slate-900">{cancellationFeedback.length}</p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                <AlertCircle size={24} />
-                                            </div>
-                                            <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Top Reason</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Critical Insight</p>
-                                            <p className="text-3xl font-black text-slate-900 truncate">
-                                                {(() => {
-                                                    const res = cancellationFeedback.reduce((acc, fb) => {
-                                                        acc[fb.reason] = (acc[fb.reason] || 0) + 1;
-                                                        return acc;
-                                                    }, {} as any);
-                                                    let top = 'None';
-                                                    let max = 0;
-                                                    for (const k in res) { if (res[k] > max) { max = res[k]; top = k; } }
-                                                    return top;
-                                                })()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform">
-                                                <Users size={24} />
-                                            </div>
-                                            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">Grace Recovery</span>
-                                        </div>
-                                        <div>
-                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Saved Accounts</p>
-                                            <p className="text-3xl font-black text-slate-900">0 <span className="text-sm text-slate-400">/ 14d</span></p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Detailed Feed */}
-                                <div className="bg-white rounded-[3rem] border border-slate-200/60 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-                                    <div className="p-10 border-b border-slate-50 bg-slate-50/20">
-                                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Post-Cancellation Feed</h2>
-                                        <p className="text-sm text-slate-500 font-bold mt-1">Real-time feedback collected during the subscription cancellation process.</p>
-                                    </div>
-                                    <div className="p-8 flex-1">
-                                        {cancellationFeedback.length === 0 ? (
-                                            <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
-                                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
-                                                    <Archive size={40} className="opacity-20" />
-                                                </div>
-                                                <p className="font-black text-slate-400 uppercase tracking-widest text-xs">No feedback received yet.</p>
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                {cancellationFeedback.map((fb, idx) => (
-                                                    <div key={idx} className="p-6 bg-slate-50/50 border border-slate-100 rounded-[2rem] space-y-4 hover:shadow-xl transition-all duration-300 group">
-                                                        <div className="flex items-start justify-between">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-xs font-black text-slate-500">
-                                                                    {fb.userName ? fb.userName.substring(0, 2).toUpperCase() : '??'}
-                                                                </div>
-                                                                <div className="space-y-0.5">
-                                                                    <p className="text-sm font-black text-slate-900">{fb.userName}</p>
-                                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{fb.userEmail}</p>
-                                                                </div>
-                                                            </div>
-                                                            <span className="text-[10px] font-black px-3 py-1 bg-white border border-slate-200 text-slate-500 rounded-lg group-hover:border-orange-200 group-hover:text-orange-600 transition-colors">
-                                                                {new Date(fb.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                            </span>
-                                                        </div>
-                                                        <div className="p-5 bg-white rounded-2xl border border-slate-100/60 shadow-sm space-y-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
-                                                                <p className="text-xs font-black text-slate-900 tracking-tight uppercase">Reason: {fb.reason}</p>
-                                                            </div>
-                                                            {fb.comment && (
-                                                                <div className="mt-2 pt-2 border-t border-slate-50">
-                                                                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic">"{fb.comment}"</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
                             </div>
                         )}
 

@@ -1609,6 +1609,7 @@ const applyPlanToUser = async ({ email, planName, billingCycle, transactionId, g
     dbUser.lowCreditsNotified = false;
     dbUser.subscriptionStart = now.toISOString();
     dbUser.subscriptionEnd = expirationDate.toISOString();
+    dbUser.autoRenew = true;
 
     if (!dbUser.transactions) dbUser.transactions = [];
     const newBalance = dbUser.credits;
@@ -1666,6 +1667,7 @@ const revokePlanFromUser = async ({ email, transactionId, gateway, reason = 'ref
     dbUser.billingCycle = 'monthly';
     dbUser.credits = Math.max(0, previousCredits - creditsToRevoke);
     dbUser.subscriptionEnd = null;
+    dbUser.autoRenew = true;
 
     if (!dbUser.transactions) dbUser.transactions = [];
     dbUser.transactions.push({
@@ -2450,6 +2452,7 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
       if (req.body.statusMessage !== undefined) updateData.statusMessage = req.body.statusMessage;
 
       if (updateData.plan && updateData.plan !== oldPlanName) {
+        updateData.autoRenew = true; // Reset auto-renewal state on plan change
         const newPlanObj = await Plan.findOne({ name: updateData.plan });
         const newPlanCredits = newPlanObj?.credits ?? oldCredits;
         updateData.credits = newPlanCredits;
@@ -2634,6 +2637,7 @@ app.get('/api/users/:id', async (req, res) => {
         // Here we'll reset to Starter default to encourage upgrade.
         user.credits = freePlan ? freePlan.credits : 100;
         user.subscriptionEnd = null;
+        user.autoRenew = true; // Reset to true so it doesn't show 'Cancelling soon'
 
         if (!user.transactions) user.transactions = [];
         user.transactions.push({
