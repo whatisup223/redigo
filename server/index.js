@@ -310,8 +310,18 @@ const runGlobalCheck = async () => {
 
     for (const u of usersToDelete) {
       addSystemLog('WARN', `Deleting user account ${u.email} after 14-day cooling period.`);
-      await User.deleteOne({ _id: u._id });
-      // In a real app, you might want to delete related brandProfiles, posts, etc.
+
+      // CASCADE DELETION: Clean up all associated data
+      const userId = u.id || u._id;
+      await Promise.all([
+        BrandProfile.deleteMany({ userId: userId.toString() }),
+        RedditReply.deleteMany({ userId: userId.toString() }),
+        RedditPost.deleteMany({ userId: userId.toString() }),
+        TrackingLink.deleteMany({ userId: userId.toString() }),
+        User.deleteOne({ _id: u._id })
+      ]);
+
+      addSystemLog('SUCCESS', `Cascading deletion complete for ${u.email}. All associated data removed.`);
     }
 
   } catch (err) {
@@ -1643,8 +1653,17 @@ const applyPlanToUser = async ({ email, planName, billingCycle, transactionId, g
     }
 
     const currentCredits = dbUser.credits || 0;
-    const now = new Date();
-    const expirationDate = new Date(now);
+
+    // LOGIC FIX: Handle Subscription Extension
+    // If user already has a future expiration date, add the new period to it
+    // instead of resetting to Now + Period.
+    let startDate = new Date();
+    if (dbUser.subscriptionEnd && new Date(dbUser.subscriptionEnd) > startDate) {
+      startDate = new Date(dbUser.subscriptionEnd);
+      addSystemLog('INFO', `[Activation] Existing active period found for ${email}. Extending expiration date.`);
+    }
+
+    const expirationDate = new Date(startDate);
     if (billingCycle === 'yearly') expirationDate.setFullYear(expirationDate.getFullYear() + 1);
     else expirationDate.setMonth(expirationDate.getMonth() + 1);
 
@@ -1653,7 +1672,7 @@ const applyPlanToUser = async ({ email, planName, billingCycle, transactionId, g
     dbUser.status = 'Active';
     dbUser.credits = currentCredits + creditsToAdd;
     dbUser.lowCreditsNotified = false;
-    dbUser.subscriptionStart = now.toISOString();
+    dbUser.subscriptionStart = new Date().toISOString(); // Tracks when the *transaction* happened
     dbUser.subscriptionEnd = expirationDate.toISOString();
     dbUser.autoRenew = true;
 
@@ -2080,7 +2099,6 @@ const adminAuth = (req, res, next) => {
   if (!authHeader) return res.status(403).json({ error: 'Unauthorized access to admin API' });
 
   const token = authHeader.replace('Bearer ', '');
-  if (token === 'mock-jwt-token-123') return next(); // Fallback for hardcoded frontends
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -2098,29 +2116,39 @@ const adminAuth = (req, res, next) => {
 app.get('/api/admin/stats', adminAuth, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const allUsers = await User.find({});
-    const allPlans = await Plan.find({});
-    const allTickets = await Ticket.find({});
 
-    const activeSubs = allUsers.filter(u =>
-      u.status === 'Active' &&
-      u.plan !== 'Starter' &&
-      (u.role !== 'admin' || (u.email !== process.env.ADMIN_EMAIL))
-    ).length;
+    // Optimization: Use countDocuments for simple totals
+    const totalUsers = await User.countDocuments({});
+    const totalTickets = await Ticket.countDocuments({});
+
+    const activeSubs = await User.countDocuments({
+      status: 'Active',
+      plan: { $ne: 'Starter' },
+      email: { $ne: process.env.ADMIN_EMAIL }
+    });
+
+    const allPlans = await Plan.find({});
+
+    // Optimization: Only fetch fields needed for capacity calculation to save memory
+    const usageData = await User.find({ status: 'Active' }, {
+      dailyUsagePoints: 1,
+      lastUsageDate: 1,
+      plan: 1,
+      billingCycle: 1,
+      customDailyLimit: 1
+    });
 
     let totalPointsSpentToday = 0;
     let totalDailyCapacity = 0;
 
-    allUsers.forEach(u => {
+    usageData.forEach(u => {
       if (u.lastUsageDate === today) {
         totalPointsSpentToday += (u.dailyUsagePoints || 0);
       }
-      if (u.status === 'Active') {
-        const plan = allPlans.find(p => (p.name || '').toLowerCase() === (u.plan || '').toLowerCase());
-        const planLimit = u.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
-        const effectiveLimit = (Number(u.customDailyLimit) > 0) ? Number(u.customDailyLimit) : (Number(planLimit) || 0);
-        totalDailyCapacity += effectiveLimit;
-      }
+      const plan = allPlans.find(p => (p.name || '').toLowerCase() === (u.plan || '').toLowerCase());
+      const planLimit = u.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const effectiveLimit = (Number(u.customDailyLimit) > 0) ? Number(u.customDailyLimit) : (Number(planLimit) || 0);
+      totalDailyCapacity += effectiveLimit;
     });
 
     const apiUsagePercent = totalDailyCapacity > 0
@@ -2128,10 +2156,10 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
       : 0;
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const systemLogs = await SystemLog.find({ timestamp: { $gte: oneHourAgo } });
-    const recentErrors = systemLogs.filter(log =>
-      log.level === 'ERROR'
-    ).length;
+    const recentErrors = await SystemLog.countDocuments({
+      timestamp: { $gte: oneHourAgo },
+      level: 'ERROR'
+    });
 
     let healthStatus = 'Healthy';
     let healthPercent = '100%';
@@ -2147,19 +2175,21 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
       healthPercent = '99%';
     }
 
+    const ticketStats = {
+      total: totalTickets,
+      open: await Ticket.countDocuments({ status: 'open' }),
+      inProgress: await Ticket.countDocuments({ status: 'in_progress' }),
+      resolved: await Ticket.countDocuments({ status: 'resolved' }),
+      closed: await Ticket.countDocuments({ status: 'closed' })
+    };
+
     res.json({
-      totalUsers: allUsers.length,
+      totalUsers,
       activeSubscriptions: activeSubs,
       apiUsage: apiUsagePercent,
       systemHealth: healthPercent,
       healthLabel: healthStatus,
-      ticketStats: {
-        total: allTickets.length,
-        open: allTickets.filter(t => t.status === 'open').length,
-        inProgress: allTickets.filter(t => t.status === 'in_progress').length,
-        resolved: allTickets.filter(t => t.status === 'resolved').length,
-        closed: allTickets.filter(t => t.status === 'closed').length
-      }
+      ticketStats
     });
   } catch (err) {
     console.error('Error fetching admin stats:', err);
@@ -2506,6 +2536,10 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
       const oldCredits = user.credits || 0;
 
       if (req.body.status) {
+        // SafeGuard: Never suspend the primary admin
+        if (user.email === process.env.ADMIN_EMAIL && (req.body.status === 'Suspended' || req.body.status === 'Banned')) {
+          return res.status(403).json({ error: 'The primary administrator account cannot be suspended or banned.' });
+        }
         updateData.status = req.body.status;
         if (req.body.status === 'Suspended' || req.body.status === 'Banned') {
           updateData.isSuspended = true;
@@ -3618,27 +3652,37 @@ app.post('/api/generate', async (req, res) => {
       }
     }
 
-    // UPDATE STATS AND USAGE (FOR EVERYONE)
-    if (user.role !== 'admin') {
-      user.credits = Math.max(0, (user.credits || 0) - cost);
+    // ATOMIC UPDATE: Deduct credits and update usage atomically to prevent race conditions
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        id: userId.toString(),
+        $or: [
+          { role: 'admin' },
+          { credits: { $gte: cost } }
+        ]
+      },
+      {
+        $inc: {
+          credits: user.role === 'admin' ? 0 : -cost,
+          dailyUsage: 1,
+          dailyUsagePoints: cost,
+          "usageStats.posts": type === 'post' ? 1 : 0,
+          "usageStats.comments": type === 'post' ? 0 : 1,
+          "usageStats.postsCredits": type === 'post' ? cost : 0,
+          "usageStats.commentsCredits": type === 'post' ? 0 : cost,
+          "usageStats.totalSpent": cost
+        },
+        $set: { lastUsageDate: today },
+        $push: { "usageStats.history": { date: new Date().toISOString(), type, cost } }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(402).json({ error: 'Insufficient credits or update conflict. Please try again.' });
     }
-    user.dailyUsage = (user.dailyUsage || 0) + 1;
-    user.dailyUsagePoints = (user.dailyUsagePoints || 0) + cost;
-    user.lastUsageDate = today;
 
-    // Track usage stats
-    if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
-    const statKey = type === 'post' ? 'posts' : 'comments';
-    const creditKey = type === 'post' ? 'postsCredits' : 'commentsCredits';
-    user.usageStats[statKey] = (user.usageStats[statKey] || 0) + 1;
-    user.usageStats[creditKey] = (user.usageStats[creditKey] || 0) + cost;
-    user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
-    user.usageStats.history = user.usageStats.history || [];
-    user.usageStats.history.push({ date: new Date().toISOString(), type, cost });
-    user.markModified('usageStats');
-
-    await user.save();
-    addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
+    addSystemLog('INFO', `AI Generation (${type}) by User ${userId}`, { cost, creditsRemaining: updatedUser.credits, role: updatedUser.role });
 
     // Check low credits (fire and forget)
     checkLowCredits(user).catch(e => console.error('Low credits check error:', e));
