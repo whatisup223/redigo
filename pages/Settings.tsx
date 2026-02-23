@@ -609,9 +609,9 @@ export const Settings: React.FC = () => {
                                         profileName ? profileName.substring(0, 2).toUpperCase() : user.name.substring(0, 2).toUpperCase()
                                     )}
                                 </div>
-                                <div className="space-y-1 flex-1">
-                                    <h3 className="font-bold text-slate-900 text-lg">{user.email}</h3>
-                                    <p className="text-xs text-slate-400">Profile ID: #{user.id}</p>
+                                <div className="space-y-1 flex-1 min-w-0">
+                                    <h3 className="font-bold text-slate-900 text-lg truncate" title={user.email}>{user.email}</h3>
+                                    <p className="text-xs text-slate-400 truncate">Profile ID: #{user.id}</p>
                                 </div>
                             </div>
 
