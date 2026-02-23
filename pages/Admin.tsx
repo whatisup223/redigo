@@ -1554,17 +1554,17 @@ export const Admin: React.FC = () => {
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                         {cancellationFeedback.map((fb, idx) => (
                                                             <div key={idx} className="p-6 bg-slate-50/50 border border-slate-100 rounded-[2rem] space-y-4 hover:shadow-xl transition-all duration-300 group">
-                                                                <div className="flex items-start justify-between">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-xs font-black text-slate-500">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center items-start justify-between gap-3">
+                                                                    <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto overflow-hidden">
+                                                                        <div className="w-10 h-10 shrink-0 rounded-full bg-white border border-slate-100 flex items-center justify-center text-xs font-black text-slate-500">
                                                                             {fb.userName ? fb.userName.substring(0, 2).toUpperCase() : '??'}
                                                                         </div>
-                                                                        <div className="space-y-0.5">
-                                                                            <p className="text-sm font-black text-slate-900">{fb.userName}</p>
-                                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{fb.userEmail}</p>
+                                                                        <div className="space-y-0.5 min-w-0 flex-1">
+                                                                            <p className="text-sm font-black text-slate-900 truncate">{fb.userName || 'Unknown User'}</p>
+                                                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{fb.userEmail}</p>
                                                                         </div>
                                                                     </div>
-                                                                    <span className="text-[10px] font-black px-3 py-1 bg-white border border-slate-200 text-slate-500 rounded-lg group-hover:border-orange-200 group-hover:text-orange-600 transition-colors">
+                                                                    <span className="shrink-0 text-[10px] font-black px-3 py-1 bg-white border border-slate-200 text-slate-500 rounded-lg group-hover:border-orange-200 group-hover:text-orange-600 transition-colors">
                                                                         {new Date(fb.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                                                     </span>
                                                                 </div>
