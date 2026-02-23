@@ -19,11 +19,20 @@ export const LoginPage: React.FC = () => {
     const location = useLocation();
 
     useEffect(() => {
-        // Handle redirect from ProtectedRoute with ban status
         if (location.state?.isBlocked) {
             setError(location.state.message);
             setErrorReason(location.state.reason);
             setIsBlocked(true);
+        } else {
+            const params = new URLSearchParams(location.search);
+            const queryError = params.get('error');
+            if (queryError === 'suspended' || queryError === 'banned') {
+                setError(`Your account has been ${queryError}.`);
+                setErrorReason('Contact support for details.');
+                setIsBlocked(true);
+                // Clean up the URL
+                window.history.replaceState({}, document.title, '/login');
+            }
         }
     }, [location]);
 

@@ -78,6 +78,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (response.ok) {
                 const freshUser = await response.json();
 
+                if (freshUser.status === 'Banned' || freshUser.status === 'Suspended') {
+                    logout();
+                    window.location.href = '/login?error=' + freshUser.status.toLowerCase();
+                    return;
+                }
+
                 // Only update if data is actually different to avoid unnecessary re-renders
                 setUser(prev => {
                     const isDifferent = JSON.stringify(prev) !== JSON.stringify(freshUser);
