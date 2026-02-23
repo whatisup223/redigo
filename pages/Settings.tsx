@@ -1562,7 +1562,7 @@ export const Settings: React.FC = () => {
             {/* Cancellation Survey Modal */}
             {isCancelModalOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-200 space-y-8">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-6 md:p-10 animate-in zoom-in-95 duration-200 space-y-6 md:space-y-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <div className="text-center space-y-2">
                             <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
                                 <Archive size={32} />
@@ -1621,7 +1621,7 @@ export const Settings: React.FC = () => {
             {/* Deletion Modal */}
             {isDeleteModalOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-10 animate-in zoom-in-95 duration-200 space-y-8">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-6 md:p-10 animate-in zoom-in-95 duration-200 space-y-6 md:space-y-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
                         <div className="text-center space-y-2">
                             <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
                                 <Trash2 size={32} />
