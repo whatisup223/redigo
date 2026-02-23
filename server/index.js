@@ -237,6 +237,18 @@ const DEFAULT_EMAIL_TEMPLATES = {
     <p>If you have any questions about this change, we're here to help!</p>
     <p><a href="{{settings_url}}" style="background:#EA580C;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;display:inline-block;">View Your Dashboard</a></p>`,
     active: true
+  },
+  'two_factor_updated': {
+    name: '2FA Status Updated',
+    subject: 'Security Alert: 2FA settings changed - Redditgo',
+    body: `<h1>2FA Status Updated</h1><p>Hi {{name}},</p><p>This is a security notification to inform you that Two-Factor Authentication (2FA) has been <strong>{{status}}</strong> on your account at {{time}}.</p><p>If you did not perform this action, please secure your account immediately by changing your password.</p>`,
+    active: true
+  },
+  'password_updated': {
+    name: 'Password Updated',
+    subject: 'Security Alert: Password changed - Redditgo',
+    body: `<h1>Password Updated</h1><p>Hi {{name}},</p><p>Your account password was successfully changed on {{time}}.</p><p>If you did not perform this action, please contact our support team immediately.</p>`,
+    active: true
   }
 };
 
@@ -1410,9 +1422,13 @@ app.post('/api/auth/reset-password', async (req, res) => {
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
-    await user.save();
-
     addSystemLog('SUCCESS', `[Password Reset] Password successfully reset for: ${user.email}`);
+
+    // SECURITY NOTIFICATION
+    sendEmail('password_updated', user.email, {
+      name: user.name || 'there',
+      time: new Date().toLocaleString()
+    });
 
     res.json({ success: true, message: 'Your password has been reset successfully. You can now log in.' });
   } catch (err) {
@@ -2855,6 +2871,13 @@ app.put('/api/users/:id/2fa', async (req, res) => {
     user.twoFactorEnabled = !!enabled;
     await user.save();
 
+    // SECURITY NOTIFICATION
+    sendEmail('two_factor_updated', user.email, {
+      name: user.name || 'there',
+      status: enabled ? 'enabled' : 'disabled',
+      time: new Date().toLocaleString()
+    });
+
     addSystemLog('INFO', `User ${user.email} ${enabled ? 'enabled' : 'disabled'} 2FA`);
     res.json({ success: true, twoFactorEnabled: user.twoFactorEnabled });
   } catch (err) {
@@ -3728,9 +3751,11 @@ app.post('/api/generate-image', async (req, res) => {
 
     // Reset daily usage if date changed (FOR EVERYONE)
     if (user.lastUsageDate !== today) {
+      await User.updateOne({ id: userId.toString() }, {
+        $set: { dailyUsage: 0, dailyUsagePoints: 0, lastUsageDate: today }
+      });
       user.dailyUsage = 0;
       user.dailyUsagePoints = 0;
-      user.lastUsageDate = today;
     }
 
     if (user.role !== 'admin') {
@@ -3765,44 +3790,57 @@ app.post('/api/generate-image', async (req, res) => {
       })
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'Image AI API Error');
+    const responseData = await response.json();
+    if (!response.ok) throw new Error(responseData.error?.message || 'Image AI API Error');
 
-    // UPDATE STATS (FOR EVERYONE)
-    if (user.role !== 'admin') {
-      user.credits = Math.max(0, (user.credits || 0) - cost);
+    const imageUrl = responseData.data?.[0]?.url;
+    if (!imageUrl) throw new Error('No image URL returned from AI');
+
+    // ATOMIC UPDATE: Deduct credits and update usage atomically
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        id: userId.toString(),
+        $or: [
+          { role: 'admin' },
+          { credits: { $gte: cost } }
+        ]
+      },
+      {
+        $inc: {
+          credits: user.role === 'admin' ? 0 : -cost,
+          dailyUsage: 1,
+          dailyUsagePoints: cost,
+          "usageStats.images": 1,
+          "usageStats.imagesCredits": cost,
+          "usageStats.totalSpent": cost
+        },
+        $set: {
+          lastUsageDate: today,
+          latestImage: {
+            url: imageUrl,
+            prompt: prompt,
+            date: new Date().toISOString()
+          }
+        },
+        $push: { "usageStats.history": { date: new Date().toISOString(), type: 'image', cost } }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      throw new Error('Insufficient credits or update conflict. Please try again.');
     }
-    user.dailyUsage = (user.dailyUsage || 0) + 1;
-    user.dailyUsagePoints = (user.dailyUsagePoints || 0) + cost;
-    user.lastUsageDate = today;
 
-    // Track usage stats
-    if (!user.usageStats) user.usageStats = { posts: 0, comments: 0, images: 0, postsCredits: 0, commentsCredits: 0, imagesCredits: 0, totalSpent: 0, history: [] };
-    user.usageStats.images = (user.usageStats.images || 0) + 1;
-    user.usageStats.imagesCredits = (user.usageStats.imagesCredits || 0) + cost;
-    user.usageStats.totalSpent = (user.usageStats.totalSpent || 0) + cost;
-    user.usageStats.history = user.usageStats.history || [];
-    user.usageStats.history.push({ date: new Date().toISOString(), type: 'image', cost });
-    user.markModified('usageStats');
+    addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: updatedUser.credits, role: updatedUser.role });
 
-    // SAVE LATEST IMAGE FOR RECOVERY
-    user.latestImage = {
-      url: data.data[0].url,
-      prompt: prompt,
-      date: new Date().toISOString()
-    };
-
-    await user.save();
-    addSystemLog('INFO', `AI Image Generated by User ${userId}`, { cost, creditsRemaining: user.credits, role: user.role });
-
-    // Check low credits
-    checkLowCredits(user).catch(e => console.error('Low credits check error:', e));
+    // Check low credits (fire and forget)
+    checkLowCredits(updatedUser).catch(e => console.error('Low credits check error:', e));
 
     res.json({
-      url: data.data[0].url,
-      credits: user.credits,
-      dailyUsage: user.dailyUsage,
-      dailyUsagePoints: user.dailyUsagePoints
+      url: imageUrl,
+      credits: updatedUser.credits,
+      dailyUsage: updatedUser.dailyUsage,
+      dailyUsagePoints: updatedUser.dailyUsagePoints
     });
   } catch (error) {
     console.error("Image Gen Error:", error);
