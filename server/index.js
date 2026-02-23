@@ -57,6 +57,22 @@ const initSettings = async () => {
 
 await initSettings();
 
+// Emergency Check: Ensure primary admin is never suspended
+if (process.env.ADMIN_EMAIL) {
+  try {
+    const adminUser = await User.findOne({ email: process.env.ADMIN_EMAIL });
+    if (adminUser && (adminUser.isSuspended || adminUser.status !== 'Active')) {
+      await User.updateOne(
+        { email: process.env.ADMIN_EMAIL },
+        { $set: { isSuspended: false, status: 'Active', statusMessage: '' } }
+      );
+      console.log(`🛡️ Emergency: Primary admin ${process.env.ADMIN_EMAIL} has been unsuspended.`);
+    }
+  } catch (err) {
+    console.error('Failed to run admin safeguard:', err);
+  }
+}
+
 // Email Templates Logic (removed older seeder call to avoid duplication with setupAdmin below)
 
 const loadSettings = () => settingsCache;
@@ -1615,11 +1631,15 @@ const applyPlanToUser = async ({ email, planName, billingCycle, transactionId, g
     await dbUser.save();
     addSystemLog('SUCCESS', `[Activation] User ${email} upgraded to ${planName} via ${gateway}`);
 
+    const shortTxId = transactionId.startsWith('cs_') || transactionId.length > 20
+      ? `INV-${transactionId.substring(transactionId.length - 8).toUpperCase()}`
+      : transactionId;
+
     sendEmail('payment_success', email, {
       plan_name: planName,
       credits_added: creditsToAdd.toString(),
       final_balance: newBalance.toString(),
-      transaction_id: transactionId,
+      transaction_id: shortTxId,
       amount: (amount || 0).toFixed(2),
       currency: (currency || 'USD').toUpperCase(),
       settings_url: `${process.env.BASE_URL || process.env.APP_URL || 'http://localhost:3000'}/settings?tab=billing`
@@ -1662,9 +1682,13 @@ const revokePlanFromUser = async ({ email, transactionId, gateway, reason = 'ref
     addSystemLog('WARN', `[Revocation] User ${email} downgraded due to ${reason} on ${gateway}`, { transactionId });
 
     if (reason === 'refund') {
+      const shortTxId = transactionId.startsWith('cs_') || transactionId.length > 20
+        ? `REF-${transactionId.substring(transactionId.length - 8).toUpperCase()}`
+        : transactionId;
+
       sendEmail('refund_processed', email, {
         name: dbUser.name || 'there',
-        transaction_id: transactionId
+        transaction_id: shortTxId
       });
     }
 
@@ -2377,6 +2401,16 @@ app.get('/api/admin/logs', adminAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/admin/logs', adminAuth, async (req, res) => {
+  try {
+    await SystemLog.deleteMany({});
+    addSystemLog('WARN', 'System logs cleared by administrator');
+    res.json({ success: true, message: 'All logs have been cleared.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to clear logs' });
+  }
+});
+
 // User Management
 app.get('/api/admin/users', adminAuth, async (req, res) => {
   try {
@@ -2867,6 +2901,11 @@ app.patch('/api/admin/users/:id/suspend', adminAuth, async (req, res) => {
     });
 
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Safeguard: Prevent admin from suspending themselves
+    if (isSuspended && req.user && (user.email === req.user.email || user.id === req.user.id)) {
+      return res.status(403).json({ error: 'You cannot suspend your own administrative account. This is a safety measure to prevent lockout.' });
+    }
 
     user.isSuspended = isSuspended;
     user.status = isSuspended ? 'Suspended' : 'Active';

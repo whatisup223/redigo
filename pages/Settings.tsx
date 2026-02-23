@@ -242,7 +242,10 @@ export const Settings: React.FC = () => {
                 ctx.fillText('TRANSACTION ID', 750, 275);
                 ctx.font = 'bold 13px Courier New';
                 ctx.fillStyle = '#0f172a';
-                const displayId = tx?.id ? String(tx.id) : 'N/A';
+                let displayId = tx?.id ? String(tx.id) : 'N/A';
+                if (displayId.startsWith('cs_') || displayId.length > 20) {
+                    displayId = `INV-${displayId.slice(-8).toUpperCase()}`;
+                }
                 ctx.fillText(displayId, 750, 300);
 
                 // Table Header
