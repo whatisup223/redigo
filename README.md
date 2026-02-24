@@ -3,7 +3,7 @@
   <p align="center"><b>The Ultimate AI-Powered Reddit Growth Engine</b></p>
   <p align="center"><i>Transform Your Reddit Presence into a High-Conversion Sales Machine.</i></p>
   
-  [![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+  [![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg?style=for-the-badge)]()
   [![Stack: MERN](https://img.shields.io/badge/Stack-MERN-61DAFB?style=for-the-badge&logo=react)]()
   [![AI: Gemini Pro 1.5](https://img.shields.io/badge/AI-Gemini_Pro_1.5-EA4335?style=for-the-badge&logo=google-gemini)]()
   [![SaaS: Ready](https://img.shields.io/badge/SaaS-Ready-00D1B2?style=for-the-badge)]()
@@ -87,6 +87,19 @@ npm run dev
 ## 📖 Complete Technical Documentation
 For a deep dive into the system logic, folder structure, and handover instructions, check out the:
 👉 **[FULL TECHNICAL DOCUMENTATION](./DOCUMENTATION.md)**
+
+---
+
+## ⚖️ License & Legal Notice
+**Proprietary Software - All Rights Reserved**
+
+Usage of this codebase is strictly prohibited without explicit written permission from the developer. Any unauthorized use, reproduction, or distribution will result in immediate legal action and prosecution to the fullest extent of the law.
+
+---
+
+**حقوق الملكية - جميع الحقوق محفوظة**
+
+الاستخدام غير مسموح به إلا بإذن كتابي صريح من المطور. أي استخدام، نسخ، أو توزيع غير مصرح به يعرض صاحبه للمساءلة القانونية والملاحقة القضائية فوراً وبأقصى عقوبة يقررها القانون.
 
 ---
 
