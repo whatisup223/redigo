@@ -1,8 +1,7 @@
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" alt="RedditGo Banner" width="100%">
-  
-  # 🚀 RedditGo: The Ultimate AI-Powered Reddit Growth Engine
-  ### *Transform Your Reddit Presence into a High-Conversion Sales Machine.*
+  <h1 align="center">🚀 RedditGo</h1>
+  <p align="center"><b>The Ultimate AI-Powered Reddit Growth Engine</b></p>
+  <p align="center"><i>Transform Your Reddit Presence into a High-Conversion Sales Machine.</i></p>
   
   [![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
   [![Stack: MERN](https://img.shields.io/badge/Stack-MERN-61DAFB?style=for-the-badge&logo=react)]()
