@@ -757,6 +757,11 @@ export const Comments: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-widest">r/{post.subreddit}</span>
                       <span className="text-[10px] font-bold text-slate-400">u/{post.author}</span>
+                      {['1', '2', '3', '4'].includes(post.id) && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                          <ShieldCheck size={10} /> Demo Post
+                        </span>
+                      )}
                     </div>
                     <h3 className="text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors">{post.title}</h3>
                     <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed font-medium">{post.selftext}</p>

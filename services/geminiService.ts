@@ -230,8 +230,19 @@ Return STRICT JSON (no markdown code blocks, no extra text outside the JSON):
     if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
 
     const data = await response.json();
-    const cleanJson = data.text.replace(/```json\n?|`\n?```/g, '').trim();
-    const result = JSON.parse(cleanJson) as GeneratedReply;
+
+    // Robust JSON extraction: Find the first '{' and last '}'
+    let text = data.text || '';
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error('AI returned a response without valid JSON formatting.');
+    }
+
+    const jsonStr = text.substring(startIndex, endIndex + 1);
+    const result = JSON.parse(jsonStr) as GeneratedReply;
+
     return { ...result, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
   } catch (error) {
     console.error("Error generating reply via backend:", error);
@@ -372,8 +383,19 @@ Return STRICT JSON (no markdown code blocks, no extra text):
     if (!response.ok) throw new Error('Generation failed');
 
     const data = await response.json();
-    const cleanJson = data.text.replace(/```json\n?|\n?```/g, '').trim();
-    const result = JSON.parse(cleanJson);
+
+    // Robust JSON extraction
+    let text = data.text || '';
+    const startIndex = text.indexOf('{');
+    const endIndex = text.lastIndexOf('}');
+
+    if (startIndex === -1 || endIndex === -1) {
+      throw new Error('AI returned a response without valid JSON formatting.');
+    }
+
+    const jsonStr = text.substring(startIndex, endIndex + 1);
+    const result = JSON.parse(jsonStr);
+
     return { ...result, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
   } catch (error) {
     console.error("Error generating post:", error);

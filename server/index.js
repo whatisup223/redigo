@@ -3936,9 +3936,19 @@ app.post('/api/reddit/reply', async (req, res) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[Reddit Reply Error]', errorData);
-        throw new Error('Failed to post to Reddit API');
+        let errorMsg = 'Failed to post to Reddit API';
+        try {
+          const errorData = await response.json();
+          console.error('[Reddit Reply Error Detail]', JSON.stringify(errorData));
+          if (errorData.json?.errors?.[0]) {
+            errorMsg = `Reddit Error: ${errorData.json.errors[0][1] || errorData.json.errors[0][0]}`;
+          } else if (errorData.message) {
+            errorMsg = `Reddit Error: ${errorData.message}`;
+          }
+        } catch (e) {
+          console.error('[Reddit Reply Error Context]', response.status, response.statusText);
+        }
+        throw new Error(errorMsg);
       }
 
       const redditResponse = await response.json();
@@ -4043,8 +4053,22 @@ app.post('/api/reddit/post', async (req, res) => {
       body: bodyParams
     });
 
-    const redditResponse = await response.json();
-    if (!response.ok) throw new Error(redditResponse.json?.errors?.[0]?.[1] || 'Failed to submit to Reddit API');
+    let redditResponse;
+    try {
+      redditResponse = await response.json();
+    } catch (e) {
+      console.error('[Reddit Post JSON Parse Error]', response.status);
+    }
+
+    if (!response.ok) {
+      let errorMsg = 'Failed to submit to Reddit API';
+      if (redditResponse?.json?.errors?.[0]) {
+        errorMsg = `Reddit Error: ${redditResponse.json.errors[0][1] || redditResponse.json.errors[0][0]}`;
+      } else if (redditResponse?.message) {
+        errorMsg = `Reddit Error: ${redditResponse.message}`;
+      }
+      throw new Error(errorMsg);
+    }
 
     const entry = new RedditPost({
       id: Math.random().toString(36).substring(2, 11),
