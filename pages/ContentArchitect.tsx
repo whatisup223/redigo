@@ -128,8 +128,8 @@ export const ContentArchitect: React.FC = () => {
     const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
 
     const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
-    const canGenerateImages = user?.role === 'admin' || (currentPlan && currentPlan.allowImages === true);
-    const canTrack = user?.role === 'admin' || (currentPlan && currentPlan.allowTracking === true);
+    const canGenerateImages = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowImages));
+    const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
 
     const [useTracking, setUseTracking] = useState(false);
 

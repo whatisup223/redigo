@@ -849,7 +849,7 @@ app.post('/api/tracking/create', async (req, res) => {
 
     const userPlan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
 
-    if (user.role !== 'admin' && userPlan && userPlan.allowTracking === false) {
+    if (user.role !== 'admin' && userPlan && !userPlan.allowTracking) {
       return res.status(403).json({ error: 'Link tracking is not included in your current plan.' });
     }
 
@@ -3773,7 +3773,7 @@ app.post('/api/generate-image', async (req, res) => {
     const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
 
     // PLAN FEATURE CHECK
-    if (user.role !== 'admin' && plan && plan.allowImages === false) {
+    if (user.role !== 'admin' && plan && !plan.allowImages) {
       addSystemLog('WARN', `Feature Blocked: Image generation attempted by ${user.plan} user: ${user.email}`);
       return res.status(403).json({
         error: 'AI Image Generation is not included in your current plan.',

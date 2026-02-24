@@ -105,7 +105,7 @@ export const Comments: React.FC = () => {
   const [plans, setPlans] = useState<any[]>([]);
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
-  const canTrack = user?.role === 'admin' || (currentPlan && currentPlan.allowTracking === true);
+  const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
 
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
