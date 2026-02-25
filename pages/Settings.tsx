@@ -830,6 +830,20 @@ export const Settings: React.FC = () => {
                         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
                             <LinkIcon className="text-blue-600" size={20} /> Connected Accounts
                         </h2>
+                        {/* Reddit Data & Permission Notice — Required for Reddit API Compliance */}
+                        <div className="flex gap-3 items-start bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                            <span className="text-blue-500 mt-0.5 flex-shrink-0">ℹ️</span>
+                            <div className="text-xs text-blue-700 font-medium leading-relaxed">
+                                <p className="font-bold text-blue-800 mb-1">Reddit Account Permissions</p>
+                                <p>Connecting your Reddit account grants RedditGo the following limited permissions via Reddit's official OAuth2:</p>
+                                <ul className="list-disc ml-4 mt-1 space-y-0.5 text-blue-700">
+                                    <li><strong>identity</strong> — Read your username, karma, and profile icon</li>
+                                    <li><strong>read</strong> — Browse posts and comments you have access to</li>
+                                    <li><strong>submit</strong> — Post comments and submissions <em>only when you explicitly click "Post"</em></li>
+                                </ul>
+                                <p className="mt-1.5">We store your username and activity history to track your outreach performance. <strong>Nothing is ever posted automatically</strong> — every action requires your manual approval. You can disconnect at any time below.</p>
+                            </div>
+                        </div>
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
                             {loading ? (
                                 <div className="flex items-center justify-center py-4">

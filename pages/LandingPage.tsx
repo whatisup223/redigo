@@ -122,23 +122,23 @@ export const LandingPage: React.FC = () => {
           {/* Trust Badge / Version Pill */}
           <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md border border-slate-200/60 rounded-full pl-2 pr-4 py-1.5 text-sm font-bold text-slate-600 shadow-sm shadow-slate-200 hover:scale-105 transition-transform cursor-default animate-fade-in-up">
             <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">New</span>
-            <span>v2.0: The AI Agent for Founders</span>
+            <span>v2.0: The AI Assistant for Founders</span>
           </div>
 
           {/* Main Headline */}
           <h1 className="text-6xl md:text-8xl font-extrabold text-slate-900 tracking-tight leading-[0.95] max-w-5xl mx-auto animate-fade-in-up delay-100">
-            Dominate <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF4500] to-[#FF8700] relative">
-              Reddit
+            Grow on <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF4500] to-[#FF8700] relative">
+              Reddit.
               {/* Underline Decoration */}
               <svg className="absolute w-full h-3 -bottom-1 left-0 text-orange-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                 <path d="M0 5 Q 50 10 100 5" stroke="currentColor" strokeWidth="8" fill="none" />
               </svg>
-            </span> <br className="hidden md:block" /> without being spammy.
+            </span> <br className="hidden md:block" /> Authentically.
           </h1>
 
           {/* Subheadline */}
           <p className="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed animate-fade-in-up delay-200">
-            The all-in-one growth engine. Identify high-intent conversations, generate value-first AI replies, and turn karma into customers.
+            The AI-powered assistant for Reddit. Find relevant conversations, craft value-first replies, and build authentic connections that grow your brand — with you in control every step of the way.
           </p>
 
           {/* Feature Highlights Row */}
@@ -149,11 +149,11 @@ export const LandingPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2.5 bg-white/50 backdrop-blur-sm px-4 py-2 rounded-full border border-slate-200/50 shadow-sm">
               <PenTool size={20} className="text-orange-500" fill="currentColor" fillOpacity={0.2} />
-              <span>Auto Posts</span>
+              <span>AI-Drafted Posts</span>
             </div>
             <div className="flex items-center gap-2.5 bg-white/50 backdrop-blur-sm px-4 py-2 rounded-full border border-slate-200/50 shadow-sm">
               <Bot size={20} className="text-orange-500" fill="currentColor" fillOpacity={0.2} />
-              <span>Full Autopilot</span>
+              <span>Human-Approved</span>
             </div>
           </div>
 
@@ -161,7 +161,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 animate-fade-in-up delay-300">
             <Link to="/signup" className="w-full sm:w-auto px-10 py-5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-[2rem] font-bold text-xl hover:shadow-2xl hover:shadow-orange-500/40 hover:-translate-y-1 transition-all flex items-center justify-center gap-3">
               <Zap size={24} className="text-white fill-white" />
-              Activate Your AI Agent
+              Start Growing on Reddit
             </Link>
             <button
               onClick={() => document.getElementById('approach')?.scrollIntoView({ behavior: 'smooth' })}
@@ -207,7 +207,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 relative z-10">
           <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Everything you need to scale.</h2>
-            <p className="text-slate-500 text-lg font-medium">We've automated the tedious parts of Reddit marketing so you can focus on building relationships.</p>
+            <p className="text-slate-500 text-lg font-medium">We handle the research and drafting so you can focus on building authentic relationships — you always review and approve before anything is posted.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -263,7 +263,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Launch in 60 seconds.</h2>
-            <p className="text-slate-500 text-lg">Define your goals, and let our AI handle the heavy lifting while you focus on growth.</p>
+            <p className="text-slate-500 text-lg">Define your brand, search for relevant discussions, and let our AI draft replies — you review and post.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
@@ -282,8 +282,8 @@ export const LandingPage: React.FC = () => {
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
               <div className="relative z-10">
                 <div className="w-16 h-16 bg-white border-2 border-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-bold mb-8 shadow-sm group-hover:scale-110 transition-transform">02</div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-3">Auto-Engage</h3>
-                <p className="text-slate-500 leading-relaxed font-medium">Turn on 'Smart Reply'. We find high-intent threads and draft authentic, value-first responses 24/7.</p>
+                <h3 className="text-2xl font-bold text-slate-900 mb-3">Smart Suggestions</h3>
+                <p className="text-slate-500 leading-relaxed font-medium">Turn on 'Smart Reply'. We find high-intent threads and draft authentic, value-first responses — you review and approve before anything is posted.</p>
               </div>
             </div>
 
@@ -293,7 +293,7 @@ export const LandingPage: React.FC = () => {
               <div className="relative z-10">
                 <div className="w-16 h-16 bg-white border-2 border-green-50 text-green-600 rounded-2xl flex items-center justify-center text-2xl font-bold mb-8 shadow-sm group-hover:scale-110 transition-transform">03</div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3">Watch It Grow</h3>
-                <p className="text-slate-500 leading-relaxed font-medium">Track traffic, leads, and karma growth. Scale your presence effortlessly while you sleep.</p>
+                <p className="text-slate-500 leading-relaxed font-medium">Track engagement, traffic, and brand visibility in real-time. Scale your presence through consistent, quality interactions.</p>
               </div>
             </div>
           </div>
@@ -304,7 +304,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 relative z-10">
           <div className="text-center max-w-3xl mx-auto mb-20 space-y-4">
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">How the Engine works</h2>
-            <p className="text-slate-500 text-lg">A completely autonomous growth loop designed to build authority.</p>
+            <p className="text-slate-500 text-lg">A human-in-the-loop workflow designed to help you build genuine authority on Reddit — every action requires your approval.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
@@ -323,8 +323,8 @@ export const LandingPage: React.FC = () => {
               },
               {
                 icon: MessageSquare,
-                title: "Drops Comments",
-                desc: "Engages with value-first comments that naturally position your product.",
+                title: "Suggests Comments",
+                desc: "Drafts value-first comment suggestions for relevant threads — you review and post with one click.",
                 textColor: 'text-blue-600',
                 cornerBg: 'bg-blue-50',
                 borderColor: 'border-blue-50',
@@ -381,7 +381,7 @@ export const LandingPage: React.FC = () => {
                 Smart enough to sound <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">human.</span>
               </h2>
               <p className="text-lg text-slate-500 leading-relaxed">
-                Most bots spam generic comments. Our engine analyzes the thread's context, sentiment, and nuances to craft replies that add actual value.
+                Most tools send generic comments automatically. Our assistant analyzes the thread's context, sentiment, and nuances to craft reply suggestions that add actual value — and you decide what gets posted.
               </p>
 
               <div className="space-y-6">
@@ -740,16 +740,16 @@ export const LandingPage: React.FC = () => {
 
             <div className="relative z-10 max-w-3xl mx-auto space-y-8">
               <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-                Stop scrolling Reddit. <br />
-                Let your AI agent do the work.
+                Work smarter on Reddit. <br />
+                Let AI do the heavy lifting.
               </h2>
               <p className="text-orange-100 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
-                Set up once. Your agent comments, posts, and grows your presence every single day.
+                Set up your brand voice once. Your AI assistant surfaces the right conversations, drafts quality replies, and you publish with a single click.
               </p>
 
               <div className="flex flex-col items-center pt-4">
                 <Link to="/signup" className="px-10 py-5 bg-white text-orange-600 rounded-full font-bold text-lg hover:bg-orange-50 hover:scale-105 transition-all shadow-xl shadow-orange-900/10 mb-6">
-                  Activate Your AI Agent
+                  Start Growing on Reddit
                 </Link>
                 <p className="text-orange-200 text-sm font-bold tracking-wide">
                   Free to start • No credit card required
@@ -760,16 +760,49 @@ export const LandingPage: React.FC = () => {
         </div>
       </section>
 
+      {/* You're Always in Control Section */}
+      <section className="py-20 bg-white border-t border-slate-100">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="bg-slate-50 rounded-[2.5rem] p-10 md:p-14 border border-slate-100">
+            <div className="text-center mb-10">
+              <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest inline-flex items-center gap-2 mb-4">
+                <ShieldCheck size={12} /> Our Commitment
+              </span>
+              <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">You're Always in Control</h2>
+              <p className="text-slate-500 mt-3 text-lg max-w-2xl mx-auto">RedditGo is a human-first assistant. We suggest, you decide. Nothing is ever posted without your explicit approval.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { icon: Users, title: 'Human-in-the-Loop', desc: 'Every reply and post suggestion requires your manual review and one-click approval before anything goes live on Reddit.' },
+                { icon: ShieldCheck, title: 'Reddit API Compliant', desc: 'We operate strictly within Reddit\'s Data API Terms, Responsible Builder Policy, and all applicable rate limits.' },
+                { icon: BarChart, title: 'Transparent & Honest', desc: 'We clearly disclose how we access Reddit data, what permissions we request, and how your data is handled and protected.' },
+              ].map((item, i) => (
+                <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-3">
+                  <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
+                    <item.icon size={20} />
+                  </div>
+                  <h4 className="font-bold text-slate-900">{item.title}</h4>
+                  <p className="text-slate-500 text-sm leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Minimal Footer */}
-      <footer className="py-12 bg-white text-slate-500">
+      <footer className="py-12 bg-white text-slate-500 border-t border-slate-100">
         <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center gap-6">
           <div className="text-sm font-medium">
-            © 2026 RedditGo AI. All rights reserved.
+            © 2026 RedditGo. All rights reserved.
           </div>
           <div className="flex items-center gap-8 text-sm font-medium">
             <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-slate-900 transition-colors">Terms of Service</Link>
           </div>
+          <p className="text-xs text-slate-400 text-center max-w-lg">
+            RedditGo operates in compliance with Reddit's <a href="https://support.reddithelp.com/hc/en-us/articles/42728983564564" target="_blank" rel="noopener noreferrer" className="underline hover:text-orange-600 transition-colors">Responsible Builder Policy</a> and Data API Terms. All content is user-initiated and human-approved.
+          </p>
         </div>
       </footer>
     </div>

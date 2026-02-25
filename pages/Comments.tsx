@@ -85,6 +85,7 @@ export const Comments: React.FC = () => {
   const [editedComment, setEditedComment] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [reloadCooldown, setReloadCooldown] = useState(0);
 
   const [progressStep, setProgressStep] = useState(0);
   const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
@@ -93,7 +94,7 @@ export const Comments: React.FC = () => {
   // Wizard & Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
-  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5 });
+  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1 });
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [regenType, setRegenType] = useState<'full' | 'refine'>('full');
   const [refinePrompt, setRefinePrompt] = useState('');
@@ -130,7 +131,7 @@ export const Comments: React.FC = () => {
     fetch('/api/config')
       .then(res => res.json())
       .then(data => {
-        if (data.creditCosts) setCosts(data.creditCosts);
+        if (data.creditCosts) setCosts(prev => ({ ...prev, ...data.creditCosts, fetch: Number(data.creditCosts.fetch) ?? 1 }));
       })
       .catch(console.error);
 
@@ -446,32 +447,80 @@ export const Comments: React.FC = () => {
 
   const fetchPosts = async () => {
     if (!user?.id) return;
+    if (reloadCooldown > 0) return;
+
+    // ── Credit Pre-check ────────────────────────────────────────────────
+    const cost = costs.fetch || 1;
+    if (user && user.role !== 'admin') {
+      // Daily limit check
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+      if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
+        setShowDailyLimitModal(true);
+        return;
+      }
+      // Credits check
+      if ((user.credits || 0) < cost) {
+        setShowNoCreditsModal(true);
+        return;
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────
+
     setIsFetching(true);
+
+    // Start 30s cooldown to prevent rapid re-fetching
+    setReloadCooldown(30);
+    const cooldownTimer = setInterval(() => {
+      setReloadCooldown(prev => {
+        if (prev <= 1) { clearInterval(cooldownTimer); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+
     try {
       const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}`);
-      if (!response.ok) throw new Error('Fetch failed');
-      const data = await response.json();
 
-      // Update posts list, but preserve selectedPost if it's already set (e.g. via Resume Draft)
+      if (response.status === 402) {
+        setShowNoCreditsModal(true);
+        return;
+      }
+      if (response.status === 429) {
+        const errData = await response.json();
+        if (errData.error === 'DAILY_LIMIT_REACHED') { setShowDailyLimitModal(true); return; }
+        showToast('Too many requests. Please wait before refreshing again.', 'error');
+        return;
+      }
+      if (!response.ok) throw new Error('Fetch failed');
+
+      const data = await response.json();
+      // New API returns { posts: [...], credits, dailyUsagePoints, dailyUsage, cost }
+      const postsArray = Array.isArray(data) ? data : (data.posts || []);
+
+      // Immediately sync credits if returned
+      if (data.credits !== undefined && data.credits !== null) {
+        updateUser({
+          credits: data.credits,
+          dailyUsagePoints: data.dailyUsagePoints,
+          dailyUsage: data.dailyUsage
+        });
+      }
+
       setPosts(prev => {
-        const merged = [...data];
-        if (selectedPost && !data.find(p => p.id === selectedPost.id)) {
+        const merged = [...postsArray];
+        if (selectedPost && !postsArray.find((p: any) => p.id === selectedPost.id)) {
           merged.unshift(selectedPost);
         }
         return merged;
       });
 
-      // Avoid default selection if we have a draft pending or already a post selected
       const hasDraft = localStorage.getItem('redditgo_comment_draft');
-      if (data.length > 0 && !selectedPost && !hasDraft) {
-        setSelectedPost(data[0]);
+      if (postsArray.length > 0 && !selectedPost && !hasDraft) {
+        setSelectedPost(postsArray[0]);
       }
     } catch (err: any) {
-      setPosts(MOCK_POSTS);
-      const hasDraft = localStorage.getItem('redditgo_comment_draft');
-      if (MOCK_POSTS.length > 0 && !selectedPost && !hasDraft) {
-        setSelectedPost(MOCK_POSTS[0]);
-      }
+      showToast('Failed to load posts. Please try again.', 'error');
     } finally {
       setIsFetching(false);
     }
@@ -479,7 +528,8 @@ export const Comments: React.FC = () => {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetchPosts();
+    // NOTE: No auto-fetch here intentionally. Every fetch costs credits.
+    // The user must manually press the Reload button.
     fetchBrandProfile(user.id).then(p => { if (p?.brandName) setBrandProfile(p); });
     fetch(`/api/user/reddit/status?userId=${user.id}`)
       .then(res => res.json())
@@ -671,7 +721,7 @@ export const Comments: React.FC = () => {
               <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
               <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Comment Agent</h1>
             </div>
-            <p className="text-slate-400 font-medium text-sm pl-4">Find & join relevant Reddit discussions automatically.</p>
+            <p className="text-slate-400 font-medium text-sm pl-4">Find relevant Reddit discussions and craft the perfect reply.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -696,11 +746,16 @@ export const Comments: React.FC = () => {
             </div>
             <button
               onClick={fetchPosts}
-              disabled={isFetching}
-              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
+              disabled={isFetching || reloadCooldown > 0}
+              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-              Reload Feed
+              <div className="flex items-center gap-2">
+                <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+                {reloadCooldown > 0 ? `Wait ${reloadCooldown}s` : 'Search Posts'}
+              </div>
+              {reloadCooldown === 0 && !isFetching && (
+                <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT REQUIRED</span>
+              )}
             </button>
           </div>
         </div>

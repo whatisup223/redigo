@@ -133,6 +133,8 @@ const RedditReplySchema = new mongoose.Schema({
     redditCommentId: String,
     postTitle: String,
     postUrl: String,
+    // postContent is third-party Reddit content — stored temporarily per Reddit's Data API Policy.
+    // The TTL index below auto-deletes this document after 90 days.
     postContent: String,
     subreddit: String,
     comment: String,
@@ -142,7 +144,10 @@ const RedditReplySchema = new mongoose.Schema({
     status: String,
     ups: { type: Number, default: 0 },
     replies: { type: Number, default: 0 },
-    sentiment: String
+    sentiment: String,
+    // TTL field: MongoDB will auto-delete this document 90 days after creation
+    // This ensures compliance with Reddit's policy on third-party content storage
+    createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 } // 90 days in seconds
 }, { strict: false });
 
 const RedditPostSchema = new mongoose.Schema({
@@ -150,6 +155,8 @@ const RedditPostSchema = new mongoose.Schema({
     userId: String,
     subreddit: String,
     postTitle: String,
+    // postContent stores our own generated content (not third-party).
+    // TTL is still applied for good data hygiene.
     postContent: String,
     postUrl: String,
     redditUsername: String,
@@ -158,7 +165,9 @@ const RedditPostSchema = new mongoose.Schema({
     status: String,
     ups: { type: Number, default: 0 },
     replies: { type: Number, default: 0 },
-    sentiment: String
+    sentiment: String,
+    // TTL field: auto-delete after 90 days for data hygiene
+    createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 } // 90 days in seconds
 }, { strict: false });
 
 const SystemLogSchema = new mongoose.Schema({

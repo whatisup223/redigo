@@ -471,6 +471,39 @@ app.use(helmet({
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
+// --- Reddit API Rate Limiters (Compliance) ---
+// Per Reddit's Responsible Builder Policy, clients must respect rate limits.
+
+// Fetch limiter: prevents abusive feed scraping
+const redditFetchLimiter = rateLimit({
+  windowMs: 2 * 60 * 1000,   // 2 minutes
+  max: 10,                    // max 10 feed refreshes per user per 2 min
+  keyGenerator: (req) => req.query.userId || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many Reddit requests. Please wait a moment before refreshing again.' }
+});
+
+// Post/Reply limiter: prevents abusive posting (5 posts per 10 minutes per user)
+const redditPostLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,  // 10 minutes
+  max: 5,                    // 5 posts or replies per user per 10 min
+  keyGenerator: (req) => (req.body && req.body.userId) || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'RATE_LIMIT_POSTING', details: 'Too many posting requests. Reddit requires a cool-down period between posts. Please wait before trying again.' }
+});
+
+// Generate limiter: prevents credit-bypass abuse on AI endpoint
+const generateLimiter = rateLimit({
+  windowMs: 60 * 1000,       // 1 minute
+  max: 20,                   // 20 AI generation requests per user per minute
+  keyGenerator: (req) => (req.body && req.body.userId) || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many generation requests. Please slow down.' }
+});
+
 // --- 2. Webhook (Needs Raw Body) ---
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
   const sig = request.headers['stripe-signature'];
@@ -1566,7 +1599,8 @@ STRUCTURE:
   creditCosts: {
     comment: 1,
     post: 2,
-    image: 5
+    image: 5,
+    fetch: 1  // Cost per Reddit post search/fetch
   }
 };
 
@@ -1575,6 +1609,7 @@ aiSettings.creditCosts = {
   comment: Number(aiSettings.creditCosts?.comment) || 1,
   post: Number(aiSettings.creditCosts?.post) || 2,
   image: Number(aiSettings.creditCosts?.image) || 5,
+  fetch: Number(aiSettings.creditCosts?.fetch) ?? 1, // Default 1pt per fetch
   ...aiSettings.creditCosts
 };
 
@@ -1601,7 +1636,7 @@ let redditSettings = savedData.reddit || {
   clientId: '',
   clientSecret: '',
   redirectUri: '',
-  userAgent: 'RedigoApp/1.0',
+  userAgent: 'web:redditgo.online:2.0 (by /u/Fun-Club-8513)',
   minDelay: 5,
   maxDelay: 15,
   antiSpam: true
@@ -1609,9 +1644,14 @@ let redditSettings = savedData.reddit || {
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
+const REDDIT_USER_AGENT = 'web:redditgo.online:2.0 (by /u/Fun-Club-8513)';
+
 const getDynamicUserAgent = (userId) => {
-  const base = redditSettings.userAgent || 'RedigoApp/1.0';
-  return userId ? `${base} (UID: ${userId})` : base;
+  // Always enforce the correct Reddit-compliant User-Agent format
+  const base = (redditSettings.userAgent && redditSettings.userAgent.includes('by /u/'))
+    ? redditSettings.userAgent
+    : REDDIT_USER_AGENT;
+  return base;
 };
 
 const getPaypalAccessToken = async () => {
@@ -2966,6 +3006,9 @@ app.post('/api/user/cancel-subscription', async (req, res) => {
 });
 
 // 2. Schedule Account Deletion (User)
+// Reddit Compliance: Upon account deletion request, Reddit-sourced data is purged IMMEDIATELY
+// (OAuth tokens + stored posts/replies). Other account data follows the 14-day grace period.
+// This satisfies Reddit's Data API Terms requirement to delete user data within 48 hours.
 app.post('/api/user/schedule-deletion', async (req, res) => {
   try {
     const { userId, password } = req.body;
@@ -2982,8 +3025,35 @@ app.post('/api/user/schedule-deletion', async (req, res) => {
 
     if (!isMatch) return res.status(401).json({ error: 'Incorrect password' });
 
+    const userIdStr = (user.id || user._id).toString();
+
+    // ── REDDIT IMMEDIATE PURGE (Reddit API Compliance) ──────────────────────
+    // Per Reddit's Data API Terms: Reddit-sourced data must be deleted promptly.
+    // We delete it immediately upon deletion request, not waiting for the 14-day grace period.
+    try {
+      // 1. Revoke all Reddit OAuth tokens immediately
+      if (userRedditTokens[userIdStr]) {
+        delete userRedditTokens[userIdStr];
+        saveSettings({ userRedditTokens });
+        addSystemLog('INFO', `[Reddit Compliance] OAuth tokens immediately revoked for ${user.email}`);
+      }
+
+      // 2. Delete all stored Reddit posts and replies from our DB
+      const [repliesResult, postsResult] = await Promise.all([
+        RedditReply.deleteMany({ userId: userIdStr }),
+        RedditPost.deleteMany({ userId: userIdStr })
+      ]);
+
+      addSystemLog('INFO', `[Reddit Compliance] Immediate Reddit data purge for ${user.email}: ${repliesResult.deletedCount} replies, ${postsResult.deletedCount} posts deleted.`);
+    } catch (redditPurgeErr) {
+      // Log but don't block the deletion flow — Reddit data purge should not fail silently
+      console.error('[Reddit Compliance] Reddit immediate purge error:', redditPurgeErr);
+      addSystemLog('ERROR', `[Reddit Compliance] Immediate purge failed for ${user.email}: ${redditPurgeErr.message}`);
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const deletionDate = new Date();
-    deletionDate.setDate(deletionDate.getDate() + 14); // 14 days from now
+    deletionDate.setDate(deletionDate.getDate() + 14); // 14-day grace period for remaining account data
 
     user.deletionScheduledDate = deletionDate;
     await user.save();
@@ -2993,8 +3063,8 @@ app.post('/api/user/schedule-deletion', async (req, res) => {
       deletion_date: deletionDate.toLocaleDateString()
     });
 
-    addSystemLog('WARN', `User ${user.email} scheduled account deletion for ${deletionDate.toLocaleDateString()}`);
-    res.json({ success: true, message: 'Account deletion scheduled for 14 days from now.' });
+    addSystemLog('WARN', `User ${user.email} scheduled account deletion for ${deletionDate.toLocaleDateString()}. Reddit data purged immediately.`);
+    res.json({ success: true, message: 'Account deletion scheduled for 14 days from now. Your Reddit data has been removed immediately.' });
   } catch (err) {
     console.error('Deletion scheduling error:', err);
     res.status(500).json({ error: 'Failed to schedule deletion' });
@@ -3528,7 +3598,7 @@ const getValidToken = async (userId, username) => {
       headers: {
         'Authorization': `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': redditSettings.userAgent
+        'User-Agent': getDynamicUserAgent(userId) // Always use compliant dynamic UA, not static admin setting
       },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
@@ -3598,7 +3668,7 @@ app.post('/api/user/reddit/disconnect', async (req, res) => {
 
 
 
-app.post('/api/generate', async (req, res) => {
+app.post('/api/generate', generateLimiter, async (req, res) => {
   try {
     const { prompt, context, userId, type } = req.body; // type can be 'comment' or 'post'
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
@@ -3896,7 +3966,7 @@ app.get('/api/user/latest-image', async (req, res) => {
 
 // Reddit Fetching Proxy (Free JSON Method)
 // Post Reply to Reddit
-app.post('/api/reddit/reply', async (req, res) => {
+app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
   try {
     const { userId, postId, comment, postTitle, subreddit, productMention, redditUsername } = req.body;
     if (!userId || !comment) return res.status(400).json({ error: 'Missing required fields' });
@@ -3906,8 +3976,10 @@ app.post('/api/reddit/reply', async (req, res) => {
     const token = await getValidToken(userId, redditUsername);
     let redditCommentId = null;
 
-    // If it's a real Reddit post (not from MOCK_POSTS), attempt real API call
-    if (token && postId && !['1', '2', '3', '4'].includes(postId)) {
+    // Only call Reddit API if postId looks like a real Reddit ID (alphanumeric, 4-10 chars)
+    // This prevents MOCK_POSTS (id: '1','2','3','4') from accidentally triggering API calls
+    const isRealRedditId = postId && /^[a-z0-9]{4,10}$/i.test(postId) && !['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(String(postId));
+    if (token && isRealRedditId) {
       // SAFETY: Double-Reply Check (Final Guard before API call)
       if (redditSettings.antiSpam) {
         const doubleCheck = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
@@ -4007,7 +4079,7 @@ app.get('/api/user/replies', async (req, res) => {
 });
 
 // Create New Reddit Post
-app.post('/api/reddit/post', async (req, res) => {
+app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
   try {
     const { userId, subreddit, title, text, kind, redditUsername } = req.body;
     if (!userId || !subreddit || !title) return res.status(400).json({ error: 'Missing required fields' });
@@ -4124,7 +4196,7 @@ app.get('/api/user/posts/sync', async (req, res) => {
         const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'User-Agent': redditSettings.userAgent
+            'User-Agent': getDynamicUserAgent(userId) // Always use compliant User-Agent
           }
         });
 
@@ -4167,7 +4239,7 @@ app.get('/api/user/replies/sync', async (req, res) => {
         const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'User-Agent': redditSettings.userAgent
+            'User-Agent': getDynamicUserAgent(userId) // Always use compliant User-Agent
           }
         });
 
@@ -4206,7 +4278,7 @@ app.get('/api/user/reddit/profile', async (req, res) => {
     const response = await fetch('https://oauth.reddit.com/api/v1/me', {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'User-Agent': redditSettings.userAgent
+        'User-Agent': getDynamicUserAgent(userId) // Always use compliant User-Agent
       }
     });
 
@@ -4227,93 +4299,138 @@ app.get('/api/user/reddit/profile', async (req, res) => {
   }
 });
 
-app.get('/api/reddit/posts', async (req, res) => {
+app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   try {
     const { subreddit = 'saas', keywords = '', userId } = req.query;
     console.log(`[Reddit] Fetching for User ${userId} from r/${subreddit}`);
 
-    const token = userId ? await getValidToken(userId) : null;
+    if (!userId) return res.status(401).json({ error: 'User ID required' });
 
-    let url, headers;
+    const token = await getValidToken(userId);
+    if (!token) return res.status(401).json({ error: 'Reddit account not linked. Please go to Settings to link your account.' });
 
-    if (token) {
-      // Use Official API with OAuth Token
-      const searchQuery = keywords ? `${keywords} subreddit:${subreddit}` : `subreddit:${subreddit}`;
-      url = `https://oauth.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&limit=25`;
-      headers = {
-        'Authorization': `Bearer ${token}`,
-        'User-Agent': getDynamicUserAgent(userId)
-      };
-    } else {
-      return res.status(401).json({ error: 'Reddit account not linked. Please go to Settings to link your account.' });
-    }
+    // ── CREDIT CHECK & DEDUCTION ────────────────────────────────────────────
+    const cost = Number(aiSettings.creditCosts?.fetch) ?? 1;
 
-    const response = await fetch(url, { headers });
+    if (cost > 0) {
+      const user = await User.findOne({ id: userId.toString() });
+      if (!user) return res.status(404).json({ error: 'User not found' });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[Reddit Error] Status: ${response.status} - ${errorText.substring(0, 100)}`);
-      throw new Error(`Reddit API Blocked (Status ${response.status}). Please link your Reddit account in Dashboard.`);
-    }
+      const today = new Date().toISOString().split('T')[0];
 
-    const data = await response.json();
-    const keywordList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+      // Reset daily usage if new day
+      if (user.lastUsageDate !== today) {
+        await User.updateOne({ id: userId.toString() }, {
+          $set: { dailyUsage: 0, dailyUsagePoints: 0, lastUsageDate: today }
+        });
+        user.dailyUsage = 0;
+        user.dailyUsagePoints = 0;
+      }
 
-    const posts = data.data.children.map(child => {
-      const post = child.data;
+      // Daily limit check (skip for admin)
+      if (user.role !== 'admin') {
+        const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
+        const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+        const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
 
-      // Relevance & Opportunity Scoring
-      let score = 0;
-      const content = (post.title + ' ' + post.selftext).toLowerCase();
-
-      // Keyword matching
-      let matchCount = 0;
-      keywordList.forEach(word => {
-        if (content.includes(word)) {
-          score += 40;
-          matchCount++;
+        if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
+          addSystemLog('WARN', `Daily limit reached (Fetch) for user: ${user.email}`, { dailyLimit, usagePoints: user.dailyUsagePoints, cost });
+          return res.status(429).json({ error: 'DAILY_LIMIT_REACHED', used: user.dailyUsagePoints, limit: dailyLimit });
         }
+
+        if ((user.credits || 0) < cost) {
+          return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+        }
+      }
+
+      // Atomic credit deduction
+      const updatedUser = await User.findOneAndUpdate(
+        { id: userId.toString(), $or: [{ role: 'admin' }, { credits: { $gte: cost } }] },
+        {
+          $inc: {
+            credits: user.role === 'admin' ? 0 : -cost,
+            dailyUsage: 1,
+            dailyUsagePoints: cost,
+            'usageStats.totalSpent': cost
+          },
+          $set: { lastUsageDate: today },
+          $push: { 'usageStats.history': { date: new Date().toISOString(), type: 'fetch', cost } }
+        },
+        { new: true }
+      );
+
+      if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+
+      addSystemLog('INFO', `Reddit Fetch by User ${userId}`, { subreddit, cost, creditsRemaining: updatedUser.credits });
+
+      // ── PERFORM REDDIT API FETCH ────────────────────────────────────────
+      const searchQuery = keywords ? `${keywords} subreddit:${subreddit}` : `subreddit:${subreddit}`;
+      const fetchUrl = `https://oauth.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&limit=25`;
+      const fetchHeaders = { 'Authorization': `Bearer ${token}`, 'User-Agent': getDynamicUserAgent(userId) };
+
+      const response = await fetch(fetchUrl, { headers: fetchHeaders });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Reddit Error] Status: ${response.status} - ${errorText.substring(0, 100)}`);
+        throw new Error(`Reddit API Blocked (Status ${response.status}). Please link your Reddit account in Dashboard.`);
+      }
+
+      const data = await response.json();
+      const keywordList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+
+      const posts = data.data.children.map(child => {
+        const post = child.data;
+        let score = 0;
+        const content = (post.title + ' ' + post.selftext).toLowerCase();
+        keywordList.forEach(word => { if (content.includes(word)) score += 40; });
+        let intent = 'General';
+        if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
+        else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
+        else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
+        else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
+        if (intent !== 'General') score += 20;
+        score += Math.min(post.ups / 5, 20);
+        score += Math.min(post.num_comments * 2, 20);
+        const opportunityScore = Math.min(Math.round(score), 100);
+        const competitors = ['hubspot', 'salesforce', 'buffer', 'hootsuite'];
+        return {
+          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
+          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
+          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
+          opportunityScore, intent, isHot: post.ups > 100 || post.num_comments > 50,
+          competitors: competitors.filter(c => content.includes(c))
+        };
       });
 
-      // Intent Detection
-      let intent = 'General';
-      if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
-      else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
-      else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
-      else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
+      // Return posts + updated credits for immediate frontend sync
+      return res.json({
+        posts: posts.sort((a, b) => b.opportunityScore - a.opportunityScore).slice(0, 20),
+        credits: updatedUser.credits,
+        dailyUsagePoints: updatedUser.dailyUsagePoints,
+        dailyUsage: updatedUser.dailyUsage,
+        cost
+      });
 
-      // Score for intent
-      if (intent !== 'General') score += 20;
+    } else {
+      // cost = 0: Admin set fetch as free
+      const searchQuery = keywords ? `${keywords} subreddit:${subreddit}` : `subreddit:${subreddit}`;
+      const freeUrl = `https://oauth.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&limit=25`;
+      const response = await fetch(freeUrl, { headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': getDynamicUserAgent(userId) } });
+      if (!response.ok) throw new Error(`Reddit API Blocked (Status ${response.status}).`);
+      const data = await response.json();
+      const posts = data.data.children.map(child => {
+        const post = child.data;
+        return {
+          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
+          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
+          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
+          opportunityScore: 50, intent: 'General', isHot: false, competitors: []
+        };
+      });
+      return res.json({ posts, credits: null, cost: 0 });
+    }
 
-      // Engagement score (capped)
-      score += Math.min(post.ups / 5, 20);
-      score += Math.min(post.num_comments * 2, 20);
-
-      // Final normalized score (0-100)
-      const opportunityScore = Math.min(Math.round(score), 100);
-
-      // Competitor Detection (Mock list for demo, could be dynamic)
-      const competitors = ['hubspot', 'salesforce', 'buffer', 'hootsuite'];
-      const mentionedCompetitors = competitors.filter(c => content.includes(c));
-
-      return {
-        id: post.id,
-        title: post.title,
-        author: post.author,
-        subreddit: post.subreddit,
-        ups: post.ups,
-        num_comments: post.num_comments,
-        selftext: post.selftext,
-        url: `https://reddit.com${post.permalink}`,
-        created_utc: post.created_utc,
-        opportunityScore,
-        intent,
-        isHot: post.ups > 100 || post.num_comments > 50,
-        competitors: mentionedCompetitors
-      };
-    });
-
-    res.json(posts.sort((a, b) => b.opportunityScore - a.opportunityScore).slice(0, 20));
   } catch (error) {
     console.error('Reddit Fetch Error:', error);
     res.status(500).json({ error: error.message });

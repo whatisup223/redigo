@@ -1435,6 +1435,14 @@ export const ContentArchitect: React.FC = () => {
                                 </div>
 
 
+                                {/* Subreddit Compliance Reminder */}
+                                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+                                    <AlertCircle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                                    <p className="text-xs text-amber-700 font-medium leading-relaxed">
+                                        <span className="font-black">Before posting:</span> Please ensure this content complies with <span className="font-bold">r/{postData.subreddit}&apos;s</span> specific rules and Reddit&apos;s Content Policy. You are responsible for all content posted under your account.
+                                    </p>
+                                </div>
+
                                 <button
                                     onClick={handlePost}
                                     disabled={isPosting}

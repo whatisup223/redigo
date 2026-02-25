@@ -91,6 +91,7 @@ interface AISettings {
         comment: number;
         post: number;
         image: number;
+        fetch?: number;
     };
 }
 
@@ -203,7 +204,8 @@ export const Admin: React.FC = () => {
         creditCosts: {
             comment: 1,
             post: 2,
-            image: 5
+            image: 5,
+            fetch: 1
         }
     });
     const [stripeSettings, setStripeSettings] = useState<StripeSettings>({
@@ -2312,6 +2314,27 @@ export const Admin: React.FC = () => {
                                                                         });
                                                                     }}
                                                                 />
+                                                            </label>
+                                                            <label className="block">
+                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Fetch Posts 🔄</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                    value={aiSettings.creditCosts?.fetch ?? 1}
+                                                                    onChange={(e) => {
+                                                                        const val = parseInt(e.target.value) || 0;
+                                                                        setAiSettings({
+                                                                            ...aiSettings,
+                                                                            creditCosts: {
+                                                                                comment: 1, post: 2, image: 5,
+                                                                                ...aiSettings.creditCosts,
+                                                                                fetch: val
+                                                                            }
+                                                                        });
+                                                                    }}
+                                                                />
+                                                                <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make fetching free</p>
                                                             </label>
                                                         </div>
                                                     </div>
