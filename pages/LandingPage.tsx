@@ -449,7 +449,7 @@ export const LandingPage: React.FC = () => {
                   </div>
 
                   <p className="text-slate-300 leading-relaxed mb-5 text-sm font-medium">
-                    Cold email is tough in 2026. Instead of outbound, have you tried <span className="text-white bg-orange-500/20 px-1 py-0.5 rounded border border-orange-500/20">engaging in existing discussions</span>? We built a tool that automatically finds these threads...
+                    Cold email is tough in 2026. Instead of outbound, have you tried <span className="text-white bg-orange-500/20 px-1 py-0.5 rounded border border-orange-500/20">engaging in existing discussions</span>? RedditGo helps you find these threads — and you decide what to post.
                   </p>
 
                   <div className="flex gap-3">
@@ -474,7 +474,7 @@ export const LandingPage: React.FC = () => {
           <div className="relative min-h-[450px] flex items-center justify-center">
             {[
               { name: 'Sarah Jenkins', role: 'CTO, TechFlow', text: "I was skeptical about Reddit marketing, but this tool made it feel authentic. We got our first 100 users in a week.", image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=60" },
-              { name: 'Mike Ross', role: 'Indie Hacker', text: "The AI replies are actually good. They don't sound robotic. It's like having a co-founder handling support 24/7.", image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=60" },
+              { name: 'Mike Ross', role: 'Indie Hacker', text: "The AI reply suggestions are actually good. They don't sound robotic — it's like having a co-writer who drafts, while I approve and post.", image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=60" },
               { name: 'David Chen', role: 'Founder, SaaSI', text: "Finally, a tool that respects Reddit's culture while helping businesses grow. Absolute game changer for us.", image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=60" }
             ].map((t, index) => (
               <div
