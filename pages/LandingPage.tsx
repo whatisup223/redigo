@@ -283,7 +283,7 @@ export const LandingPage: React.FC = () => {
               <div className="relative z-10">
                 <div className="w-16 h-16 bg-white border-2 border-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-bold mb-8 shadow-sm group-hover:scale-110 transition-transform">02</div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-3">Smart Suggestions</h3>
-                <p className="text-slate-500 leading-relaxed font-medium">Turn on 'Smart Reply'. We find high-intent threads and draft authentic, value-first responses — you review and approve before anything is posted.</p>
+                <p className="text-slate-500 leading-relaxed font-medium">Search for high-intent threads in any subreddit. Our AI drafts authentic, value-first response suggestions — you review and approve before anything is posted.</p>
               </div>
             </div>
 
@@ -315,7 +315,7 @@ export const LandingPage: React.FC = () => {
               {
                 icon: Search,
                 title: "Scans Your Niche",
-                desc: "Identifies relevant subreddits and tracks keyword mentions in real-time.",
+                desc: "Helps you manually discover relevant subreddits and surface keyword-based discussions when you search.",
                 textColor: 'text-orange-600',
                 cornerBg: 'bg-orange-50',
                 borderColor: 'border-orange-50',
@@ -333,7 +333,7 @@ export const LandingPage: React.FC = () => {
               {
                 icon: PenTool,
                 title: "Generates Posts",
-                desc: "Researches viral hooks and crafts original posts to spark discussion.",
+                desc: "Helps you craft original posts using your brand voice — you review, edit, and publish when ready.",
                 textColor: 'text-purple-600',
                 cornerBg: 'bg-purple-50',
                 borderColor: 'border-purple-50',
@@ -741,7 +741,7 @@ export const LandingPage: React.FC = () => {
             <div className="relative z-10 max-w-3xl mx-auto space-y-8">
               <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
                 Work smarter on Reddit. <br />
-                Let AI do the heavy lifting.
+                Let AI draft — you decide.
               </h2>
               <p className="text-orange-100 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
                 Set up your brand voice once. Your AI assistant surfaces the right conversations, drafts quality replies, and you publish with a single click.
