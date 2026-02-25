@@ -1604,13 +1604,15 @@ STRUCTURE:
   }
 };
 
-// Ensure creditCosts always exists and is fully populated
+// Ensure creditCosts always exists and is fully populated with defaults
 aiSettings.creditCosts = {
   comment: Number(aiSettings.creditCosts?.comment) || 1,
   post: Number(aiSettings.creditCosts?.post) || 2,
   image: Number(aiSettings.creditCosts?.image) || 5,
-  fetch: Number(aiSettings.creditCosts?.fetch) ?? 1, // Default 1pt per fetch
-  ...aiSettings.creditCosts
+  // For fetch: use explicit check so 0 (free) is preserved, and NaN/undefined falls back to 1
+  fetch: (aiSettings.creditCosts?.fetch !== undefined && aiSettings.creditCosts?.fetch !== null && !isNaN(Number(aiSettings.creditCosts?.fetch)))
+    ? Number(aiSettings.creditCosts.fetch)
+    : 1,
 };
 
 // Stripe Settings (In-memory storage for demo)
@@ -3235,12 +3237,16 @@ app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
   if (newSettings.apiKey && newSettings.apiKey.includes('****')) {
     delete newSettings.apiKey;
   }
-  // Deep merge creditCosts if present
+  // Deep merge creditCosts if present — MUST include ALL cost keys to prevent data loss
   if (newSettings.creditCosts) {
     newSettings.creditCosts = {
       comment: Number(newSettings.creditCosts.comment) || (aiSettings.creditCosts?.comment || 1),
       post: Number(newSettings.creditCosts.post) || (aiSettings.creditCosts?.post || 2),
-      image: Number(newSettings.creditCosts.image) || (aiSettings.creditCosts?.image || 5)
+      image: Number(newSettings.creditCosts.image) || (aiSettings.creditCosts?.image || 5),
+      // fetch uses ?? not || so that 0 (free) is preserved and not replaced by default
+      fetch: (newSettings.creditCosts.fetch !== undefined && newSettings.creditCosts.fetch !== null)
+        ? Number(newSettings.creditCosts.fetch)
+        : (aiSettings.creditCosts?.fetch ?? 1)
     };
   }
 
