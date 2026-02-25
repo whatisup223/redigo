@@ -314,7 +314,7 @@ export const LandingPage: React.FC = () => {
             {[
               {
                 icon: Search,
-                title: "Scans Your Niche",
+                title: "Find Your Niche",
                 desc: "Helps you manually discover relevant subreddits and surface keyword-based discussions when you search.",
                 textColor: 'text-orange-600',
                 cornerBg: 'bg-orange-50',
@@ -440,7 +440,7 @@ export const LandingPage: React.FC = () => {
 
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 text-orange-400 font-bold text-xs uppercase tracking-wider">
-                      <Bot size={16} className="animate-pulse" /> AI Agent Reply
+                      <Bot size={16} className="animate-pulse" /> AI Draft Suggestion
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-slate-500 text-xs font-semibold">Quality Score:</span>
@@ -744,7 +744,7 @@ export const LandingPage: React.FC = () => {
                 Let AI draft — you decide.
               </h2>
               <p className="text-orange-100 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
-                Set up your brand voice once. Your AI assistant surfaces the right conversations, drafts quality replies, and you publish with a single click.
+                Set up your brand voice once. Your AI assistant helps you find conversations and drafts reply suggestions — you review and publish with a single click.
               </p>
 
               <div className="flex flex-col items-center pt-4">
