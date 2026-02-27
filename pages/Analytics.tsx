@@ -209,7 +209,7 @@ export const Analytics: React.FC = () => {
   }, [user?.id, selectedAccount]);
 
   const filteredHistory = (activeTab === 'comments' ? history : postsHistory).filter(item => {
-    const itemDate = new Date(item.deployedAt);
+    const itemDate = new Date(item.deployedAt || item.createdAt);
     const now = new Date();
 
     if (dateFilter === '24h') return (now.getTime() - itemDate.getTime()) <= 24 * 60 * 60 * 1000;
@@ -229,9 +229,6 @@ export const Analytics: React.FC = () => {
   });
 
   const filteredTrackingLinks = useMemo(() => {
-    // If 'all' is selected, show everything
-    if (dateFilter === 'all') return trackingLinks;
-
     const now = new Date();
     let msLimit = 0;
     if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
