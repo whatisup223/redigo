@@ -336,6 +336,29 @@ export const Analytics: React.FC = () => {
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
   const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
 
+  const filteredModalClicks = useMemo(() => {
+    if (!selectedEntry || activeTab !== 'links' || !selectedEntry.clickDetails) return [];
+
+    let msLimit = 0;
+    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+    const nowTime = new Date().getTime();
+
+    return selectedEntry.clickDetails.filter((c: any) => {
+      if (c.isBot || c.isSpam) return false;
+      const clickDate = new Date(c.timestamp);
+      if (msLimit > 0 && (nowTime - clickDate.getTime()) > msLimit) return false;
+      if (dateFilter === 'custom' && customRange.start && customRange.end) {
+        const s = new Date(customRange.start);
+        const e = new Date(customRange.end);
+        e.setHours(23, 59, 59);
+        if (clickDate < s || clickDate > e) return false;
+      }
+      return true;
+    });
+  }, [selectedEntry, activeTab, dateFilter, customRange]);
+
   // Precise Clicks Calculation helper
   const getLinkStats = useCallback((link: any) => {
     if (dateFilter === 'all') return Number(link.clicks) || 0;
@@ -495,8 +518,9 @@ export const Analytics: React.FC = () => {
     return current > 0 ? `+${Math.floor(Math.random() * 5) + 2}%` : '0%';
   };
 
-  const exportToCSV = (link: any) => {
-    if (!link || !link.clickDetails || link.clickDetails.length === 0) {
+  const exportToCSV = (link: any, customClicks?: any[]) => {
+    const dataToExport = customClicks && customClicks.length > 0 ? customClicks : (link?.clickDetails || []);
+    if (!link || dataToExport.length === 0) {
       showToast('No clicks to export', 'error');
       return;
     }
@@ -505,7 +529,7 @@ export const Analytics: React.FC = () => {
     const headers = ['Timestamp', 'IP', 'Country', 'City', 'Region', 'OS', 'Browser', 'Referer', 'User Agent', 'Type'];
 
     // Create rows and handle CSV escaping (basic)
-    const rows = link.clickDetails.map((c: any) => [
+    const rows = dataToExport.map((c: any) => [
       new Date(c.timestamp).toLocaleString(),
       c.ip,
       `"${c.country || ''}"`,
@@ -658,17 +682,17 @@ export const Analytics: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col items-center justify-center text-center">
                   <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4"><MousePointer2 size={24} /></div>
-                  <span className="text-3xl font-black text-slate-900">{selectedEntry.clicks}</span>
+                  <span className="text-3xl font-black text-slate-900">{getLinkStats(selectedEntry)}</span>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Total Clicks</span>
                 </div>
                 <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 flex flex-col items-center justify-center text-center">
                   <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-4"><Globe size={24} /></div>
-                  <span className="text-3xl font-black text-slate-900">{new Set((selectedEntry.clickDetails || []).map((c: any) => c.ip)).size}</span>
+                  <span className="text-3xl font-black text-slate-900">{new Set(filteredModalClicks.map((c: any) => c.ip)).size}</span>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Unique IPs</span>
                 </div>
               </div>
 
-              {selectedEntry.clickDetails && selectedEntry.clickDetails.length > 0 && (
+              {filteredModalClicks.length > 0 && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 mb-6">
                     <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
@@ -677,7 +701,7 @@ export const Analytics: React.FC = () => {
                   <div className="space-y-3">
                     {(() => {
                       const getDevice = (ua: string) => ua.toLowerCase().includes('mobile') || ua.toLowerCase().includes('android') || ua.toLowerCase().includes('iphone') ? 'Mobile Devices' : 'Desktop / PC';
-                      const devices = (selectedEntry.clickDetails || []).reduce((acc: any, curr: any) => {
+                      const devices = filteredModalClicks.reduce((acc: any, curr: any) => {
                         const dev = getDevice(curr.userAgent || '');
                         acc[dev] = (acc[dev] || 0) + 1;
                         return acc;
@@ -698,14 +722,14 @@ export const Analytics: React.FC = () => {
                 </div>
               )}
 
-              {selectedEntry.clickDetails && selectedEntry.clickDetails.length > 0 && (
+              {filteredModalClicks.length > 0 && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 mb-6">
                     <span className="w-1.5 h-6 bg-slate-900 rounded-full"></span>
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Recent Click Timeline</h3>
                   </div>
                   <div className="border-l-2 border-slate-100 ml-4 pl-6 space-y-6">
-                    {[...(selectedEntry.clickDetails)].reverse().slice(0, 15).map((click: any, idx) => (
+                    {[...filteredModalClicks].reverse().slice(0, 15).map((click: any, idx) => (
                       <div key={idx} className="relative">
                         <div className="absolute -left-[31px] w-4 h-4 bg-white border-4 border-blue-500 rounded-full top-1 shadow-sm"></div>
                         <div className="space-y-2">
@@ -743,7 +767,7 @@ export const Analytics: React.FC = () => {
               <button onClick={() => { const url = `${window.location.origin}/t/${selectedEntry.id}`; navigator.clipboard.writeText(url); showToast('Tracking URL Copied!'); }} className="flex-1 min-w-[140px] px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
                 <Copy size={18} /> Copy Link
               </button>
-              <button onClick={() => exportToCSV(selectedEntry)} className="flex-1 min-w-[140px] px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
+              <button onClick={() => exportToCSV(selectedEntry, filteredModalClicks)} className="flex-1 min-w-[140px] px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] hover:text-blue-600 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
                 <LayoutList size={18} /> Export CSV
               </button>
               <button onClick={() => setSelectedEntry(null)} className="w-full md:w-fit px-10 py-4 bg-slate-900 text-white rounded-[1.5rem] shadow-lg shadow-slate-200 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95">
@@ -836,7 +860,7 @@ export const Analytics: React.FC = () => {
         />
         <StatCard
           label={activeTab === 'links' ? "Avg Click Rate" : "Account Authority"}
-          value={activeTab === 'links' ? (trackingLinks.length > 0 ? (totalClicks / trackingLinks.length).toFixed(1) : "0.0") : (profile ? (activeTab === 'comments' ? (profile.commentKarma || 0).toLocaleString() : (profile.linkKarma || profile.totalKarma || 0).toLocaleString()) : "---")}
+          value={activeTab === 'links' ? (activeLinks.length > 0 ? (totalClicks / activeLinks.length).toFixed(1) : "0.0") : (profile ? (activeTab === 'comments' ? (profile.commentKarma || 0).toLocaleString() : (profile.linkKarma || profile.totalKarma || 0).toLocaleString()) : "---")}
           trend={getGrowthTrend(totalUpvotes || totalClicks)}
           icon={activeTab === 'links' ? TrendingUp : Users}
           color={activeTab === 'links' ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"}
