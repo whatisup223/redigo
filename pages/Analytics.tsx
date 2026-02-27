@@ -520,8 +520,36 @@ export const Analytics: React.FC = () => {
                   <span className="text-slate-400 flex items-center gap-1.5"><Clock size={12} /> {new Date(selectedEntry.createdAt).toLocaleDateString()}</span>
                 </div>
                 <h2 className="text-lg md:text-2xl font-black text-slate-900 tracking-tight break-all" title={selectedEntry.originalUrl}>{selectedEntry.originalUrl}</h2>
-                <div className="flex items-center gap-2 text-slate-500 font-bold mt-2">
-                  Targeted: <span className="text-orange-600">r/{selectedEntry.subreddit}</span>
+                <div className="flex items-center gap-4 text-slate-500 font-bold mt-2">
+                  <div className="flex items-center gap-1.5">
+                    Targeted: <span className="text-orange-600">r/{selectedEntry.subreddit}</span>
+                  </div>
+                  <div className="w-1 h-1 bg-slate-300 rounded-full" />
+                  <div className="flex items-center gap-1.5">
+                    By: <span className="text-blue-600">u/{selectedEntry.redditUsername}</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col gap-2 group/link">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Share2 size={10} /> Active Tracking URL
+                    </span>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/t/${selectedEntry.id}`;
+                        navigator.clipboard.writeText(url);
+                        if (typeof showToast === 'function') showToast('Tracking URL Copied!');
+                        else alert('Link Copied!');
+                      }}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-md font-black text-[10px] uppercase flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <Copy size={12} /> Copy Link
+                    </button>
+                  </div>
+                  <div className="text-sm font-mono text-blue-600 truncate bg-slate-50 p-3 rounded-xl border border-slate-100 font-bold">
+                    {window.location.origin}/t/{selectedEntry.id}
+                  </div>
                 </div>
               </div>
               <button onClick={() => setSelectedEntry(null)} className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors mt-auto mb-auto bg-white border border-slate-100 shadow-sm active:scale-95">

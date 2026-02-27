@@ -797,28 +797,44 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
     const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
 
     // 1. Improved Bot/Crawler Detection
-    // Use word boundaries/specific names to avoid flagging real browsers
-    const botPatterns = [
-      'bot', 'crawler', 'spider', 'slurp', 'facebookexternalhit',
-      'whatsapp', 'linkpreview', 'headless', 'puppeteer', 'selenium',
-      'mediapartners-google', 'adsbot-google', 'bingpreview'
-    ];
-    const isBot = new RegExp(`(${botPatterns.join('|')})`, 'i').test(userAgent) || userAgent === 'unknown';
+    // We use more specific patterns to avoid flagging legitimate browsers that might contain 'bot' in their name
 
-    // 2. Simple OS & Browser Detection
+    const botPatterns = [
+      'googlebot', 'bingbot', 'yandexbot', 'duckduckbot', 'slurp', 'baiduspider',
+      'facebookexternalhit', 'whatsapp', 'linkpreview', 'headless', 'puppeteer', 'selenium',
+      'mediapartners-google', 'adsbot-google', 'bingpreview', 'crawler', 'spider'
+    ];
+    // A UA is a bot if it hits common bot patterns OR is completely unknown (though mobile apps can sometimes be bare)
+    // We explicitly exclude the word "Reddit" from being flagged as a bot by the generic 'spider/crawler' check if needed
+    const isBot = userAgent !== 'unknown' &&
+      new RegExp(`(${botPatterns.join('|')})`, 'i').test(userAgent);
+
+
+    // 2. Advanced OS & Browser Detection
     let os = 'Unknown OS';
-    if (userAgent.includes('Windows')) os = 'Windows';
-    else if (userAgent.includes('Android')) os = 'Android';
-    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
-    else if (userAgent.includes('Macintosh')) os = 'macOS';
-    else if (userAgent.includes('Linux')) os = 'Linux';
+    const ua = userAgent || '';
+    if (ua.includes('Windows NT 10.0')) os = 'Windows 10/11';
+    else if (ua.includes('Windows NT 6.1')) os = 'Windows 7';
+    else if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone')) os = 'iPhone';
+    else if (ua.includes('iPad')) os = 'iPad';
+    else if (ua.includes('Macintosh')) os = 'macOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('CrOS')) os = 'ChromeOS';
 
     let browser = 'Unknown Browser';
-    if (userAgent.includes('Edg/')) browser = 'Edge';
-    else if (userAgent.includes('Chrome/') && !userAgent.includes('Edg/')) browser = 'Chrome';
-    else if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) browser = 'Safari';
-    else if (userAgent.includes('Firefox/')) browser = 'Firefox';
-    else if (userAgent.includes('Opera/') || userAgent.includes('OPR/')) browser = 'Opera';
+    if (ua.includes('SamsungBrowser')) browser = 'Samsung Browser';
+    else if (ua.includes('Reddit')) browser = 'Reddit App';
+    else if (ua.includes('FBAN') || ua.includes('FBAV')) browser = 'Facebook App';
+    else if (ua.includes('Instagram')) browser = 'Instagram App';
+    else if (ua.includes('Edg/')) browser = 'Edge';
+    else if (ua.includes('OPR/') || ua.includes('Opera/')) browser = 'Opera';
+    else if (ua.includes('Firefox/')) browser = 'Firefox';
+    else if (ua.includes('Chrome/') && !ua.includes('Edg/')) browser = 'Chrome';
+    else if (ua.includes('Safari/') && !ua.includes('Chrome/')) browser = 'Safari';
+    else if (ua.includes('DuckDuckGo')) browser = 'DuckDuckGo';
+
 
     // 3. Anti-Spam Check (Ignore clicks from same IP within 10 seconds for the same link)
     if (!link.clickDetails) link.clickDetails = [];
