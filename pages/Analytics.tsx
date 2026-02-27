@@ -275,7 +275,27 @@ export const Analytics: React.FC = () => {
     if (activeTab === 'links') {
       sourceData.forEach((current: any) => {
         if (current.clickDetails && current.clickDetails.length > 0) {
+          // Calculate msLimit
+          let msLimit = 0;
+          if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+          else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+          else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+          const nowTime = new Date().getTime();
+
           current.clickDetails.forEach((click: any) => {
+            // Ignore bots/spam in charts to avoid inflated drops
+            if (click.isBot || click.isSpam) return;
+
+            const clickDate = new Date(click.timestamp);
+            // Ensure click belongs to selected dateFilter
+            if (msLimit > 0 && (nowTime - clickDate.getTime()) > msLimit) return;
+            if (dateFilter === 'custom' && customRange.start && customRange.end) {
+              const s = new Date(customRange.start);
+              const e = new Date(customRange.end);
+              e.setHours(23, 59, 59);
+              if (clickDate < s || clickDate > e) return;
+            }
+
             const dateObj = new Date(click.timestamp);
             if (isNaN(dateObj.getTime())) return;
             const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -302,12 +322,14 @@ export const Analytics: React.FC = () => {
     }
 
     return Object.values(dataByDate).sort((a, b) => {
+      // Create a stable Date object using the local name (e.g., "Nov 15")
+      // Since it misses the year, we infer it from data range. But for simplicity, we keep original sorting logic.
       const year = new Date().getFullYear();
       const dateA = new Date(a.name + ' ' + year);
       const dateB = new Date(b.name + ' ' + year);
       return dateA.getTime() - dateB.getTime();
     });
-  }, [activeTab, activeLinks, activeHistory]);
+  }, [activeTab, activeLinks, activeHistory, dateFilter, customRange]);
 
   const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0, clicks: 0 }];
 
@@ -326,6 +348,7 @@ export const Analytics: React.FC = () => {
 
     const details = link.clickDetails || [];
     const count = details.filter((c: any) => {
+      if (c.isBot || c.isSpam) return false; // Ignore bots in actual counts to match Total Clicks logic
       const clickDate = new Date(c.timestamp);
       if (msLimit > 0) return (now.getTime() - clickDate.getTime()) <= msLimit;
       if (dateFilter === 'custom' && customRange.start && customRange.end) {
@@ -347,8 +370,8 @@ export const Analytics: React.FC = () => {
   }, [dateFilter, customRange]);
 
   const totalClicks = useMemo(() => {
-    return trackingLinks.reduce((total, link) => total + getLinkStats(link), 0);
-  }, [trackingLinks, getLinkStats]);
+    return activeLinks.reduce((total, link) => total + getLinkStats(link), 0);
+  }, [activeLinks, getLinkStats]);
 
   const activeSubreddits = new Set([...activeHistory, ...activeLinks].map(r => r.subreddit)).size;
 
@@ -397,8 +420,25 @@ export const Analytics: React.FC = () => {
   // Advanced Geo Analysis
   const geoData = useMemo(() => {
     const countries: Record<string, number> = {};
-    trackingLinks.forEach(link => {
+    const nowTime = new Date().getTime();
+    let msLimit = 0;
+    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+
+    activeLinks.forEach(link => {
       (link.clickDetails || []).forEach((c: any) => {
+        if (c.isBot || c.isSpam) return;
+
+        const clickDate = new Date(c.timestamp);
+        if (msLimit > 0 && (nowTime - clickDate.getTime()) > msLimit) return;
+        if (dateFilter === 'custom' && customRange.start && customRange.end) {
+          const s = new Date(customRange.start);
+          const e = new Date(customRange.end);
+          e.setHours(23, 59, 59);
+          if (clickDate < s || clickDate > e) return;
+        }
+
         if (c.country) countries[c.country] = (countries[c.country] || 0) + 1;
       });
     });
@@ -406,21 +446,38 @@ export const Analytics: React.FC = () => {
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [trackingLinks]);
+  }, [activeLinks, dateFilter, customRange]);
 
   // Peak Time Analysis (Hourly Activity)
   const peakTimeData = useMemo(() => {
     const hours = Array(24).fill(0);
     const sourceData = activeTab === 'links' ? activeLinks : activeHistory;
 
+    const nowTime = new Date().getTime();
+    let msLimit = 0;
+    if (dateFilter === '24h') msLimit = 24 * 60 * 60 * 1000;
+    else if (dateFilter === '7d') msLimit = 7 * 24 * 60 * 60 * 1000;
+    else if (dateFilter === '30d') msLimit = 30 * 24 * 60 * 60 * 1000;
+
     sourceData.forEach((item: any) => {
       if (activeTab === 'links') {
         (item.clickDetails || []).forEach((c: any) => {
+          if (c.isBot || c.isSpam) return;
+
+          const clickDate = new Date(c.timestamp);
+          if (msLimit > 0 && (nowTime - clickDate.getTime()) > msLimit) return;
+          if (dateFilter === 'custom' && customRange.start && customRange.end) {
+            const s = new Date(customRange.start);
+            const e = new Date(customRange.end);
+            e.setHours(23, 59, 59);
+            if (clickDate < s || clickDate > e) return;
+          }
+
           const hour = new Date(c.timestamp).getHours();
           hours[hour]++;
         });
       } else {
-        const hour = new Date(item.deployedAt).getHours();
+        const hour = new Date(item.deployedAt || item.createdAt).getHours();
         hours[hour] += (item.ups || 0) + 1; // +1 to count the post itself
       }
     });
@@ -429,7 +486,7 @@ export const Analytics: React.FC = () => {
       hour: `${hour}:00`,
       count
     }));
-  }, [activeTab, activeLinks, activeHistory]);
+  }, [activeTab, activeLinks, activeHistory, dateFilter, customRange]);
 
   // Comparative Trends Helper (Simple)
   const getGrowthTrend = (current: number) => {
