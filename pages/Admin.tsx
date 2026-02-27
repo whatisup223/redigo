@@ -2537,69 +2537,97 @@ export const Admin: React.FC = () => {
                                                             </div>
                                                         </div>
 
-                                                        {/* Global Refund Policy */}
-                                                        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col h-full lg:col-span-2">
-                                                            <div className="flex items-center gap-4 border-b border-slate-100 pb-6 mb-6">
-                                                                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm">
-                                                                    <AlertTriangle size={24} />
-                                                                </div>
-                                                                <div>
-                                                                    <h2 className="text-xl font-bold text-slate-900">Global Refund Policy</h2>
-                                                                    <p className="text-slate-400 text-sm">Rules that trigger warnings during manual refunds.</p>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                                                <label className="block space-y-2">
-                                                                    <span className="text-sm font-bold text-slate-700">Refund Window (Days)</span>
-                                                                    <div className="relative">
-                                                                        <input
-                                                                            type="number"
-                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-50 focus:border-amber-500 focus:outline-none transition-all font-bold"
-                                                                            value={refundPolicy.days}
-                                                                            onChange={(e) => setRefundPolicy({ ...refundPolicy, days: parseInt(e.target.value) })}
-                                                                        />
-                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold uppercase">Days</div>
-                                                                    </div>
-                                                                    <p className="text-[10px] text-slate-400 font-medium">Policy allows refunds up to X days after purchase.</p>
-                                                                </label>
-
-                                                                <label className="block space-y-2">
-                                                                    <span className="text-sm font-bold text-slate-700">Usage Threshold (%)</span>
-                                                                    <div className="relative">
-                                                                        <input
-                                                                            type="number"
-                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-50 focus:border-amber-500 focus:outline-none transition-all font-bold"
-                                                                            value={refundPolicy.usageLimit}
-                                                                            onChange={(e) => setRefundPolicy({ ...refundPolicy, usageLimit: parseInt(e.target.value) })}
-                                                                        />
-                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold uppercase">% Credits</div>
-                                                                    </div>
-                                                                    <p className="text-[10px] text-slate-400 font-medium">Policy allows refunds if used credits are below X%.</p>
-                                                                </label>
-                                                            </div>
-
-                                                            <button
-                                                                onClick={saveRefundPolicy}
-                                                                className="mt-8 py-4 bg-amber-600 text-white rounded-[2rem] font-bold shadow-xl shadow-amber-100 hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
-                                                            >
-                                                                <Save size={20} />
-                                                                Apply Refund Policy Rules
-                                                            </button>
-                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center gap-8 shadow-2xl">
-                                                    <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center flex-shrink-0">
+                                                {/* Global Refund Policy - Spans Full Width */}
+                                                <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-200/60 shadow-xl shadow-slate-200/40 flex flex-col relative overflow-hidden group transition-all hover:border-slate-300">
+                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50/50 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-amber-100/50 transition-colors" />
+
+                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8 mb-8">
+                                                        <div className="flex items-center gap-5">
+                                                            <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-200 rotate-3 group-hover:rotate-0 transition-transform duration-500">
+                                                                <AlertTriangle size={28} />
+                                                            </div>
+                                                            <div>
+                                                                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Global Refund Policy</h2>
+                                                                <p className="text-slate-400 text-sm font-medium">System-wide rules that safeguard your revenue while maintaining customer trust.</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-100">
+                                                            <Shield size={12} />
+                                                            Global Enforcement
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                                        <div className="space-y-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <label className="text-sm font-black text-slate-700 uppercase tracking-wider">Refund Window</label>
+                                                                <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">Safety Margin</span>
+                                                            </div>
+                                                            <div className="relative group/input">
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full p-5 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-50 focus:border-amber-500 focus:bg-white focus:outline-none transition-all font-black text-xl text-slate-800"
+                                                                    value={refundPolicy.days}
+                                                                    onChange={(e) => setRefundPolicy({ ...refundPolicy, days: parseInt(e.target.value) || 0 })}
+                                                                />
+                                                                <div className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black uppercase tracking-widest pointer-events-none group-focus-within/input:text-amber-500 transition-colors">Days</div>
+                                                            </div>
+                                                            <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                                                                Maximum time allowed for a refund request after purchase. Requests beyond this window will trigger a
+                                                                <span className="text-slate-600 font-bold ml-1 uppercase">Denial Warning</span>.
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="space-y-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <label className="text-sm font-black text-slate-700 uppercase tracking-wider">Usage Threshold</label>
+                                                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Fair Use</span>
+                                                            </div>
+                                                            <div className="relative group/input">
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full p-5 bg-slate-50/50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-amber-50 focus:border-amber-500 focus:bg-white focus:outline-none transition-all font-black text-xl text-slate-800"
+                                                                    value={refundPolicy.usageLimit}
+                                                                    onChange={(e) => setRefundPolicy({ ...refundPolicy, usageLimit: parseInt(e.target.value) || 0 })}
+                                                                />
+                                                                <div className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-black uppercase tracking-widest pointer-events-none group-focus-within/input:text-amber-500 transition-colors">% Credits</div>
+                                                            </div>
+                                                            <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                                                                Refunds are restricted if the user has consumed more than this percentage of their plan credits.
+                                                                Prevents <span className="text-slate-600 font-bold ml-1 uppercase">Consumption Abuse</span>.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-10 pt-8 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+                                                        <div className="flex items-center gap-3 text-slate-400 text-xs font-medium">
+                                                            <RefreshCw size={14} className="animate-spin-slow" />
+                                                            Changes take effect immediately across all gateways.
+                                                        </div>
+                                                        <button
+                                                            onClick={saveRefundPolicy}
+                                                            className="w-full sm:w-auto px-10 py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl hover:bg-amber-600 hover:shadow-amber-200 transition-all active:scale-95 flex items-center justify-center gap-3 group"
+                                                        >
+                                                            <Save size={20} className="group-hover:scale-110 transition-transform" />
+                                                            Synchronize Policies
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Intelligent Orchestration Info */}
+                                                <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white flex flex-col md:flex-row items-center gap-8 shadow-2xl relative overflow-hidden group">
+                                                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                                                    <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center flex-shrink-0 backdrop-blur-md border border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500">
                                                         <Shield size={40} className="text-emerald-400" />
                                                     </div>
-                                                    <div>
-                                                        <h3 className="text-xl font-bold mb-2">Multi-Gateway Logic</h3>
-                                                        <p className="text-slate-400 text-sm max-w-2xl">
-                                                            When both gateways are enabled, users will be presented with a choice during checkout.
-                                                            If only one is enabled, users will be redirected to that gateway immediately.
-                                                            Disabling both will effectively pause all payments on the platform.
+                                                    <div className="relative z-10">
+                                                        <h3 className="text-2xl font-black mb-3 tracking-tight">Intelligent Multi-Gateway Orchestration</h3>
+                                                        <p className="text-slate-400 text-sm md:text-base max-w-2xl leading-relaxed">
+                                                            Our smart routing logic automatically detects active gateways. When both <span className="text-indigo-400 font-bold">Stripe</span> and <span className="text-blue-400 font-bold">PayPal</span> are active, users enjoy full choice.
+                                                            If a single gateway is configured, we bypass selection for a <span className="text-white font-bold italic">frictionless checkout experience</span>.
                                                         </p>
                                                     </div>
                                                 </div>

@@ -796,17 +796,29 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
     const userAgent = req.headers['user-agent'] || 'unknown';
     const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
 
-    // 1. Basic Bot Detection
-    const bots = /bot|crawler|spider|slurp|facebookexternalhit|whatsapp|linkpreview/i;
-    const isBot = bots.test(userAgent);
+    // 1. Improved Bot/Crawler Detection
+    // Use word boundaries/specific names to avoid flagging real browsers
+    const botPatterns = [
+      'bot', 'crawler', 'spider', 'slurp', 'facebookexternalhit',
+      'whatsapp', 'linkpreview', 'headless', 'puppeteer', 'selenium',
+      'mediapartners-google', 'adsbot-google', 'bingpreview'
+    ];
+    const isBot = new RegExp(`(${botPatterns.join('|')})`, 'i').test(userAgent) || userAgent === 'unknown';
 
-    // 2. Simple OS Detection
+    // 2. Simple OS & Browser Detection
     let os = 'Unknown OS';
     if (userAgent.includes('Windows')) os = 'Windows';
     else if (userAgent.includes('Android')) os = 'Android';
     else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
     else if (userAgent.includes('Macintosh')) os = 'macOS';
     else if (userAgent.includes('Linux')) os = 'Linux';
+
+    let browser = 'Unknown Browser';
+    if (userAgent.includes('Edg/')) browser = 'Edge';
+    else if (userAgent.includes('Chrome/') && !userAgent.includes('Edg/')) browser = 'Chrome';
+    else if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) browser = 'Safari';
+    else if (userAgent.includes('Firefox/')) browser = 'Firefox';
+    else if (userAgent.includes('Opera/') || userAgent.includes('OPR/')) browser = 'Opera';
 
     // 3. Anti-Spam Check (Ignore clicks from same IP within 10 seconds for the same link)
     if (!link.clickDetails) link.clickDetails = [];
@@ -817,12 +829,14 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
     let country = '', city = '', region = '';
     try {
       if (ip && ip !== 'unknown' && ip !== '127.0.0.1' && ip !== '::1' && !ip.startsWith('192.168.') && !ip.startsWith('10.')) {
-        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,regionName`);
+        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,city,regionName`);
         if (geoRes.ok) {
           const geoData = await geoRes.json();
-          country = geoData.country || '';
-          city = geoData.city || '';
-          region = geoData.regionName || '';
+          if (geoData.status === 'success') {
+            country = geoData.country || '';
+            city = geoData.city || '';
+            region = geoData.regionName || '';
+          }
         }
       }
     } catch (err) {
@@ -844,6 +858,7 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
       city: city,
       region: region,
       os: os,
+      browser: browser,
       isBot: isBot,
       isSpam: isSpam
     });
@@ -4198,25 +4213,46 @@ app.get('/api/user/posts/sync', async (req, res) => {
     if (userPosts.length > 0) {
       const token = await getValidToken(userId);
       if (token) {
-        const ids = userPosts.map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`).join(',');
-        const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'User-Agent': getDynamicUserAgent(userId) // Always use compliant User-Agent
-          }
-        });
+        // Collect all valid IDs, ensuring t3_ prefix for posts
+        const ids = userPosts
+          .filter(r => r.redditCommentId)
+          .map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`)
+          .join(',');
 
-        if (response.ok) {
-          const data = await response.json();
-          const liveItems = data.data.children;
+        if (ids) {
+          const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'User-Agent': getDynamicUserAgent(userId)
+            }
+          });
 
-          for (const child of liveItems) {
-            const liveData = child.data;
-            const entryIdMatch = liveData.name || `t3_${liveData.id}`;
-            await RedditPost.updateOne(
-              { $or: [{ redditCommentId: entryIdMatch }, { redditCommentId: entryIdMatch.replace('t3_', '') }] },
-              { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
-            );
+          if (response.ok) {
+            const data = await response.json();
+            const liveItems = data.data?.children || [];
+
+            for (const child of liveItems) {
+              const liveData = child.data;
+              const entryIdMatch = liveData.name; // t3_xxxx
+              const shortId = liveData.id; // xxxx
+
+              // Determine status
+              let status = 'Sent';
+              if (liveData.removed_by_category) status = 'Removed';
+              else if (liveData.author === '[deleted]') status = 'Deleted';
+              else if (liveData.selftext === '[removed]') status = 'Removed';
+
+              await RedditPost.updateOne(
+                { $or: [{ redditCommentId: entryIdMatch }, { redditCommentId: shortId }] },
+                {
+                  $set: {
+                    ups: liveData.ups || 0,
+                    replies: liveData.num_comments || 0,
+                    status: status
+                  }
+                }
+              );
+            }
           }
         }
       }
@@ -4241,24 +4277,43 @@ app.get('/api/user/replies/sync', async (req, res) => {
     if (userReplies.length > 0) {
       const token = await getValidToken(userId);
       if (token) {
-        const ids = userReplies.map(r => r.redditCommentId).join(',');
-        const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'User-Agent': getDynamicUserAgent(userId) // Always use compliant User-Agent
-          }
-        });
+        const ids = userReplies
+          .filter(r => r.redditCommentId)
+          .map(r => r.redditCommentId.startsWith('t1_') ? r.redditCommentId : `t1_${r.redditCommentId}`)
+          .join(',');
 
-        if (response.ok) {
-          const data = await response.json();
-          const liveItems = data.data.children;
+        if (ids) {
+          const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'User-Agent': getDynamicUserAgent(userId)
+            }
+          });
 
-          for (const child of liveItems) {
-            const liveData = child.data;
-            await RedditReply.updateOne(
-              { redditCommentId: liveData.name },
-              { $set: { ups: liveData.ups, replies: liveData.num_comments || 0 } }
-            );
+          if (response.ok) {
+            const data = await response.json();
+            const liveItems = data.data?.children || [];
+
+            for (const child of liveItems) {
+              const liveData = child.data;
+
+              // Determine status
+              let status = 'Sent';
+              if (liveData.removed_by_category) status = 'Removed';
+              else if (liveData.author === '[deleted]') status = 'Deleted';
+              else if (liveData.body === '[removed]') status = 'Removed';
+
+              await RedditReply.updateOne(
+                { redditCommentId: liveData.name },
+                {
+                  $set: {
+                    ups: liveData.ups || 0,
+                    replies: (liveData.replies?.data?.children?.length) || 0,
+                    status: status
+                  }
+                }
+              );
+            }
           }
         }
       }
