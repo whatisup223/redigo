@@ -781,14 +781,14 @@ app.get(['/t/:id', '/t/:id/'], async (req, res) => {
 
     const link = await TrackingLink.findOne({ id: new RegExp('^' + cleanId + '$', 'i') });
 
-    if (!link) {
-      console.warn(`[TRACKING] 404 - Link not found: ${cleanId}`);
-      addSystemLog('WARN', `Tracking link not found: ${cleanId}`, {
+    if (!link || link.isArchived) {
+      console.warn(`[TRACKING] 404 - Link not found or archived: ${cleanId}`);
+      addSystemLog('WARN', `Tracking link not found or archived: ${cleanId}`, {
         ip: req.ip,
         userAgent: req.headers['user-agent'],
         requestedUrl: req.originalUrl
       });
-      return res.status(404).send("Tracking link not found");
+      return res.redirect('/404');
     }
 
     const now = new Date();

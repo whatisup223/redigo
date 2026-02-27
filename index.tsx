@@ -2,6 +2,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorPage } from './pages/ErrorPage';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,6 +13,8 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary fallback={<ErrorPage type="500" />}>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );

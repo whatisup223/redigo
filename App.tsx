@@ -22,6 +22,7 @@ import { Comments } from './pages/Comments';
 import { Support } from './pages/Support';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ErrorPage } from './pages/ErrorPage';
 
 const App: React.FC = () => {
   return (
@@ -58,7 +59,8 @@ const App: React.FC = () => {
           <Route path="/admin/logs" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/404" element={<ErrorPage type="404" />} />
+          <Route path="*" element={<ErrorPage type="404" />} />
         </Routes>
       </Router>
     </AuthProvider>
