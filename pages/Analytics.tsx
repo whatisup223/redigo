@@ -40,7 +40,8 @@ import {
   Zap,
   Rocket,
   Star,
-  Tag
+  Tag,
+  Archive
 } from 'lucide-react';
 import {
   LineChart,
@@ -150,6 +151,47 @@ export const Analytics: React.FC = () => {
       console.error('Failed to fetch data', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleArchiveLink = async (id: string) => {
+    if (!confirm('Are you sure you want to archive this tracking link? It will be hidden from your analytics view.')) return;
+    try {
+      const ts = Date.now();
+      const res = await fetch(`/api/tracking/archive?_=${ts}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, id })
+      });
+      if (res.ok) {
+        showToast('Link archived successfully');
+        fetchData();
+      } else {
+        showToast('Failed to archive link', 'error');
+      }
+    } catch (e) {
+      showToast('Error archiving link', 'error');
+    }
+  };
+
+  const handleDeleteReddit = async (id: string, redditId: string, type: 'post' | 'reply') => {
+    if (!confirm(`Are you sure you want to delete this ${type} from Reddit? This will remove it from Reddit and hide it from your history.`)) return;
+    try {
+      setToast({ message: 'Deleting from Reddit...', type: 'success' });
+      const ts = Date.now();
+      const res = await fetch(`/api/reddit/delete?_=${ts}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, id, redditId, type })
+      });
+      if (res.ok) {
+        showToast(`${type === 'post' ? 'Post' : 'Comment'} deleted successfully`);
+        fetchData();
+      } else {
+        showToast(`Failed to delete ${type}`, 'error');
+      }
+    } catch (e) {
+      showToast('Error deleting from Reddit', 'error');
     }
   };
 
@@ -973,12 +1015,14 @@ export const Analytics: React.FC = () => {
                             <span className="hidden sm:inline">Details</span>
                             <span className="sm:hidden"><MousePointer2 size={14} /></span>
                           </button>
+                          <button onClick={() => handleArchiveLink(row.id)} className="p-2.5 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95 title" title="Archive Link"><Archive size={16} /></button>
                           <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-3 py-2 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl transition-all active:scale-95"><Copy size={16} /></button>
                           <a href={row.originalUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
+                          <button onClick={() => handleDeleteReddit(row.id, row.redditCommentId, activeTab === 'posts' ? 'post' : 'reply')} className="p-2.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all title" title="Delete from Reddit"><Trash2 size={16} /></button>
                           <a href={row.postUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
                         </div>
                       )}

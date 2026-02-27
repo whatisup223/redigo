@@ -949,11 +949,25 @@ app.post('/api/tracking/create', async (req, res) => {
 app.get('/api/tracking/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const userLinks = await TrackingLink.find({ userId: userId.toString() }).sort({ createdAt: -1 });
+    // Don't fetch archived links
+    const userLinks = await TrackingLink.find({ userId: userId.toString(), isArchived: { $ne: true } }).sort({ createdAt: -1 });
     res.json(userLinks);
   } catch (e) {
     console.error('Fetch user tracking link error:', e);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/tracking/archive', async (req, res) => {
+  try {
+    const { userId, id } = req.body;
+    if (!userId || !id) return res.status(400).json({ error: 'Missing required fields' });
+
+    await TrackingLink.updateOne({ id, userId: userId.toString() }, { $set: { isArchived: true } });
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[TRACKING ARCHIVE] Error: ', e);
+    res.status(500).json({ error: 'Failed to archive link' });
   }
 });
 
@@ -4108,7 +4122,7 @@ app.get('/api/user/replies', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const history = await RedditReply.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    const history = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -4211,7 +4225,7 @@ app.get('/api/user/posts', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const history = await RedditPost.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    const history = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -4274,7 +4288,7 @@ app.get('/api/user/posts/sync', async (req, res) => {
       }
     }
 
-    const updatedHistory = await RedditPost.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    const updatedHistory = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
   } catch (error) {
     console.error('[Reddit Post Sync Error]', error);
@@ -4335,11 +4349,59 @@ app.get('/api/user/replies/sync', async (req, res) => {
       }
     }
 
-    const updatedHistory = await RedditReply.find({ userId: userId.toString() }).sort({ deployedAt: -1 });
+    const updatedHistory = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
   } catch (error) {
     console.error('[Reddit Sync Error] Non-critical sync failure:', error);
     res.status(500).json({ error: 'Sync failed' });
+  }
+});
+
+// Delete Post or Reply from Reddit and soft delete in DB
+app.post('/api/reddit/delete', async (req, res) => {
+  try {
+    const { userId, type, id, redditId } = req.body; // type: 'post' | 'reply'
+    if (!userId || !type || !id) return res.status(400).json({ error: 'Missing required parameters' });
+
+    // Mark as deleted in our DB first so it instantly disappears from UI
+    if (type === 'post') {
+      await RedditPost.updateOne({ id, userId: userId.toString() }, { $set: { isDeleted: true } });
+    } else if (type === 'reply') {
+      await RedditReply.updateOne({ id, userId: userId.toString() }, { $set: { isDeleted: true } });
+    } else {
+      return res.status(400).json({ error: 'Invalid type' });
+    }
+
+    // Attempt to delete from Reddit if we have a valid redditId
+    if (redditId && !redditId.includes('deleted') && !redditId.includes('removed')) {
+      const token = await getValidToken(userId);
+      if (token) {
+        const formData = new URLSearchParams();
+        formData.append('id', redditId); // Expected format: t1_xxx for comment, t3_xxx for post
+
+        const redditDelRes = await fetch('https://oauth.reddit.com/api/del', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'User-Agent': getDynamicUserAgent(userId),
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: formData.toString()
+        });
+
+        if (!redditDelRes.ok) {
+          const bodyText = await redditDelRes.text();
+          console.warn(`[Reddit Delete Warn] Failed to delete from Reddit API. Reddit may have already removed it. Res: ${bodyText}`);
+        } else {
+          console.log(`[Reddit Delete] Successfully deleted ${redditId} from Reddit.`);
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Deleted and archived successfully' });
+  } catch (err) {
+    console.error('[Reddit Delete Error] ', err);
+    res.status(500).json({ error: 'Failed to delete' });
   }
 });
 
