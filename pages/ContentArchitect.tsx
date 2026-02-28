@@ -317,15 +317,18 @@ export const ContentArchitect: React.FC = () => {
         return (now - lastPing) < 15 * 60 * 1000; // 15 mins active window
     };
 
-    const triggerImageGeneration = async (prompt: string) => {
+    const triggerImageGeneration = async (prompt: string, skipExtensionCheck = false) => {
         // --- Extension Check ---
-        const needsCheck = !isExtensionActive();
+        // Skip this check if already confirmed by the parent flow (e.g. handleGenerateContent)
+        const needsCheck = !skipExtensionCheck && !isExtensionActive();
         if (needsCheck && !isForcedRef.current) {
             setPendingAction(() => () => triggerImageGeneration(prompt));
             setShowExtensionWarning(true);
             return;
         }
-        isForcedRef.current = false; // Reset for next time
+        if (!skipExtensionCheck) {
+            isForcedRef.current = false; // Reset for next time
+        }
         setPendingAction(null); // Clear after check passes or forced continue
         // Proactive Daily Limit Pre-check (for individual image trigger)
         if (user && user.role !== 'admin') {
@@ -490,9 +493,10 @@ export const ContentArchitect: React.FC = () => {
             }
 
             setStep(2);
-            // Non-blocking call: trigger image generation but don't AWAIT it
+            // Non-blocking call: trigger image generation but don't AWAIT it.
+            // Pass skipExtensionCheck=true because the user already confirmed in this same flow.
             if (mode === 'both' && isImageRequested) {
-                triggerImageGeneration(generated.imagePrompt);
+                triggerImageGeneration(generated.imagePrompt, true);
             }
 
             showToast('Content updated!', 'success');

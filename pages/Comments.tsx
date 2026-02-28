@@ -1022,7 +1022,7 @@ export const Comments: React.FC = () => {
               <div
                 key={post.id}
                 onClick={() => setSelectedPost(post)}
-                className={`p-5 md:p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                className={`p-5 md:p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer overflow-hidden ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
               >
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-50">
                   <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
@@ -1060,9 +1060,9 @@ export const Comments: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-                  <div className="flex-1 space-y-4">
-                    <h3 className="text-base md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors">{post.title}</h3>
-                    <p className="text-slate-500 text-sm line-clamp-6 md:line-clamp-4 leading-relaxed font-sm overflow-hidden whitespace-pre-wrap">{post.selftext}</p>
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <h3 className="text-base md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors break-words">{post.title}</h3>
+                    <p className="text-slate-500 text-sm line-clamp-6 md:line-clamp-4 leading-relaxed overflow-hidden break-words">{post.selftext}</p>
                     <div className="flex items-center gap-5 pt-4">
                       {/* Footer Meta Data */}
                       <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><ThumbsUp size={14} /> {post.ups}</div>
