@@ -512,10 +512,18 @@ export const Comments: React.FC = () => {
 
   const fetchWithExtension = (): Promise<any> => {
     return new Promise((resolve, reject) => {
-      console.log('[Extension Bridge] Setting up listener for SEARCH_RESPONSE');
+      console.log('[Extension Bridge] Setting up listener');
+
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', handleResponse);
+        console.warn('[Extension Bridge] Timeout reaching extension');
+        reject(new Error('Extension timeout'));
+      }, 15000);
+
       const handleResponse = (event: MessageEvent) => {
         if (event.data.source === 'REDIGO_EXT' && event.data.type === 'SEARCH_RESPONSE') {
-          console.log('[Extension Bridge] Received Response:', event.data.payload);
+          console.log('[Extension Bridge] Received Data from Extension');
+          clearTimeout(timeoutId); // Stop the timer!
           window.removeEventListener('message', handleResponse);
           if (event.data.payload && event.data.payload.success) {
             resolve(event.data.payload.data);
@@ -526,7 +534,6 @@ export const Comments: React.FC = () => {
       };
       window.addEventListener('message', handleResponse);
 
-      console.log('[Extension Bridge] Sending REDDIT_SEARCH to window');
       window.postMessage({
         source: 'REDIGO_WEB_APP',
         type: 'REDDIT_SEARCH',
@@ -534,12 +541,6 @@ export const Comments: React.FC = () => {
         keywords: searchKeywords,
         sortBy: sortBy
       }, '*');
-
-      setTimeout(() => {
-        window.removeEventListener('message', handleResponse);
-        console.warn('[Extension Bridge] Timeout reaching extension');
-        reject(new Error('Extension timeout'));
-      }, 15000); // Reduced to 15s for faster debugging
     });
   };
 
@@ -633,6 +634,7 @@ export const Comments: React.FC = () => {
           }
           if (!response.ok) throw new Error('Analysis failed');
           data = await response.json();
+          console.log('[Hybrid] Analysis Successful:', data.posts?.length, 'posts processed');
         } catch (extErr: any) {
           console.warn('[Hybrid] Extension fetch failed, checking fallback...', extErr);
           if (redditSettings.useServerFallback) {

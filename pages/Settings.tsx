@@ -1631,6 +1631,14 @@ export const Settings: React.FC = () => {
                                             icon = <Zap size={18} />;
                                             colorClass = 'bg-green-100 text-green-600';
                                             label = 'AI Comment Generation';
+                                        } else if (item.type === 'fetch_extension') {
+                                            icon = <Globe size={18} />;
+                                            colorClass = 'bg-orange-100 text-orange-600';
+                                            label = 'Reddit Smart Search (Extension)';
+                                        } else if (item.type === 'fetch_posts') {
+                                            icon = <Globe size={18} />;
+                                            colorClass = 'bg-slate-100 text-slate-600';
+                                            label = 'Reddit Search (Server)';
                                         }
 
                                         return (
