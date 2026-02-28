@@ -88,6 +88,7 @@ const toneActiveMap: Record<string, string> = {
 export const ContentArchitect: React.FC = () => {
     const { user, updateUser, syncUser } = useAuth();
     const [step, setStep] = useState(1);
+    const isForcedRef = useRef(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
@@ -319,11 +320,12 @@ export const ContentArchitect: React.FC = () => {
     const triggerImageGeneration = async (prompt: string) => {
         // --- Extension Check ---
         const needsCheck = !isExtensionActive();
-        if (needsCheck && !pendingAction) {
+        if (needsCheck && !isForcedRef.current) {
             setPendingAction(() => () => triggerImageGeneration(prompt));
             setShowExtensionWarning(true);
             return;
         }
+        isForcedRef.current = false; // Reset for next time
         setPendingAction(null); // Clear after check passes or forced continue
         // Proactive Daily Limit Pre-check (for individual image trigger)
         if (user && user.role !== 'admin') {
@@ -382,11 +384,12 @@ export const ContentArchitect: React.FC = () => {
 
         // --- Extension Check ---
         const needsCheck = !isExtensionActive();
-        if (needsCheck && !pendingAction) {
+        if (needsCheck && !isForcedRef.current) {
             setPendingAction(() => () => handleGenerateContent(mode));
             setShowExtensionWarning(true);
             return;
         }
+        isForcedRef.current = false; // Reset for next time
         setPendingAction(null); // Clear after check passes or forced continue
 
         const postCost = Number(costs.post) ?? 2;
@@ -1651,6 +1654,7 @@ export const ContentArchitect: React.FC = () => {
                             <button
                                 onClick={() => {
                                     setShowExtensionWarning(false);
+                                    isForcedRef.current = true;
                                     if (pendingAction) pendingAction();
                                 }}
                                 className="w-full py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-50 hover:border-slate-200 transition-all text-xs uppercase tracking-widest"
