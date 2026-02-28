@@ -58,7 +58,7 @@ const initSettings = async () => {
 await initSettings();
 
 // Emergency Check: Ensure primary admin is never suspended
-if (process.env.ADMIN_EMAIL) {
+if (process.env.ADMIN_EMAIL && mongoose.connection.readyState === 1) {
   try {
     const adminUser = await User.findOne({ email: process.env.ADMIN_EMAIL });
     if (adminUser && (adminUser.isSuspended || adminUser.status !== 'Active')) {
@@ -520,7 +520,7 @@ const redditPostLimiter = (req, res, next) => {
 const generateLimiter = rateLimit({
   windowMs: 60 * 1000,       // 1 minute
   max: 20,                   // 20 AI generation requests per user per minute
-  keyGenerator: (req) => (req.body && req.body.userId) || req.ip,
+  keyGenerator: (req) => (req.body && req.body.userId) || req.ip || '127.0.0.1',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many generation requests. Please slow down.' }

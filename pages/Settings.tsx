@@ -948,17 +948,17 @@ export const Settings: React.FC = () => {
                                     </p>
                                 </div>
 
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-3 w-full md:w-64">
                                     {!extensionDetected ? (
                                         <a
                                             href="/api/download-extension"
                                             download="redigo-extension.zip"
-                                            className="px-6 py-3 bg-slate-900 border border-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 hover:bg-orange-600 hover:border-orange-600 text-center"
+                                            className="px-6 py-3.5 bg-slate-900 border border-slate-900 text-white rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 hover:bg-orange-600 hover:border-orange-600 text-center w-full"
                                         >
                                             Download Extension
                                         </a>
                                     ) : (
-                                        <div className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-default flex items-center gap-2 shadow-lg shadow-emerald-100">
+                                        <div className="px-6 py-3.5 bg-emerald-600 text-white rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest cursor-default flex items-center justify-center gap-2 shadow-lg shadow-emerald-100 w-full">
                                             <Check size={14} strokeWidth={4} />
                                             Active & Verified
                                         </div>
@@ -969,7 +969,7 @@ export const Settings: React.FC = () => {
                                         <button
                                             onClick={triggerManualVerify}
                                             disabled={extensionDetected === null}
-                                            className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+                                            className="px-6 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all hover:bg-slate-50 active:scale-95 disabled:opacity-50 w-full"
                                         >
                                             {extensionDetected === null ? 'Checking...' : 'Verify Now'}
                                         </button>
