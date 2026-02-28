@@ -4440,10 +4440,15 @@ app.get('/api/user/reddit/profile', async (req, res) => {
 
 app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   try {
-    const { subreddit = 'saas', keywords = '', userId } = req.query;
+    const { subreddit, keywords, userId } = req.query;
     console.log(`[Reddit] Fetching for User ${userId} from r/${subreddit}`);
 
     if (!userId) return res.status(401).json({ error: 'User ID required' });
+
+    // Safety check for empty inputs to save credits
+    if (!subreddit || !subreddit.trim() || !keywords || !keywords.trim()) {
+      return res.status(400).json({ error: 'Subreddit and keywords are required for search.' });
+    }
 
     // FROZEN: Migrating to Extension Model (Bypassing OAuth Ban)
     // const token = await getValidToken(userId);

@@ -470,6 +470,13 @@ export const Comments: React.FC = () => {
 
   const fetchPosts = async () => {
     if (!user?.id) return;
+
+    // --- Validation ---
+    if (!targetSubreddit.trim() || !searchKeywords.trim()) {
+      showToast('Subreddit and Keywords are required to search.', 'error');
+      return;
+    }
+
     if (reloadCooldown > 0) return;
 
     // ── Credit Pre-check ────────────────────────────────────────────────
@@ -510,6 +517,13 @@ export const Comments: React.FC = () => {
 
       if (response.status === 402) {
         setShowNoCreditsModal(true);
+        return;
+      }
+      if (response.status === 400) {
+        const errData = await response.json();
+        showToast(errData.error || 'Subreddit and keywords required.', 'error');
+        setIsFetching(false);
+        setReloadCooldown(0); // Allow retry since it failed due to input
         return;
       }
       if (response.status === 429) {
@@ -767,8 +781,8 @@ export const Comments: React.FC = () => {
             </div>
             <button
               onClick={fetchPosts}
-              disabled={isFetching || reloadCooldown > 0}
-              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isFetching || reloadCooldown > 0 || !targetSubreddit.trim() || !searchKeywords.trim()}
+              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <div className="flex items-center gap-2">
                 <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
