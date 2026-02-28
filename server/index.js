@@ -4583,7 +4583,18 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       const remainingPosts = posts.slice(15);
 
       const analyzedPosts = await performSemanticAnalysis(postsForAnalysis);
-      posts = [...analyzedPosts, ...remainingPosts].sort((a, b) => b.opportunityScore - a.opportunityScore);
+
+      // Sort: Analyzed posts first, then sort both groups by opportunityScore descending
+      posts = [...analyzedPosts, ...remainingPosts].sort((a, b) => {
+        // Priority 1: Has analysisReason (AI processed)
+        const aHasReason = !!a.analysisReason;
+        const bHasReason = !!b.analysisReason;
+        if (aHasReason && !bHasReason) return -1;
+        if (!aHasReason && bHasReason) return 1;
+
+        // Priority 2: Standard opportunityScore
+        return b.opportunityScore - a.opportunityScore;
+      });
 
       return res.json({
         posts: posts.slice(0, 50),
