@@ -30,10 +30,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 // Connect to MongoDB
 if (process.env.MONGO_URI) {
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
-      bufferCommands: false
-    });
+    await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ Connected to MongoDB!');
   } catch (err) {
     console.error('❌ Failed to connect to MongoDB:', err);
@@ -2251,22 +2248,28 @@ const adminAuth = (req, res, next) => {
 // ─── Extension Download Tracking ──────────────────────────────────────
 app.get('/api/download-extension', async (req, res) => {
   try {
-    // Increment download counter in settings
-    await Setting.findOneAndUpdate(
+    // Robust download with tracking logic
+    // Track in background
+    Setting.findOneAndUpdate(
       { key: 'extensionDownloadCount' },
       { $inc: { 'value': 1 } },
-      { upsert: true, new: true }
-    );
+      { upsert: true }
+    ).catch(e => console.error('Download counter update failed:', e));
 
-    // Track in logs
     addSystemLog('INFO', 'Browser extension download initiated');
 
-    // Send the file
     const filePath = path.join(__dirname, '../public/redigo-extension.zip');
-    res.download(filePath, 'redigo-extension.zip');
+
+    // Check if file exists before sending
+    if (fs.existsSync(filePath)) {
+      res.download(filePath, 'redigo-extension.zip');
+    } else {
+      console.error('Extension zip file not found:', filePath);
+      res.status(404).send('Extension file not found on server.');
+    }
   } catch (err) {
-    console.error('Download tracking error:', err);
-    res.status(500).json({ error: 'Failed to process download' });
+    console.error('Fatal download error:', err);
+    res.status(500).send('Internal server error during download.');
   }
 });
 
