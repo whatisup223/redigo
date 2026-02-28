@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
     User, CreditCard, Shield, Globe, Link as LinkIcon,
@@ -35,6 +35,8 @@ const BRAND_TONES = [
 export const Settings: React.FC = () => {
     const { user, login, token, logout, updateUser, syncUser } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
+    const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null); // null = checking
+    const pingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const queryParams = new URLSearchParams(window.location.search);
@@ -52,6 +54,49 @@ export const Settings: React.FC = () => {
             syncUser();
         }
     }, [activeTab, syncUser]);
+
+    // ── Extension Real-time Detection ─────────────────────────────────────
+    useEffect(() => {
+        // Listen for PONG from the extension bridge
+        const handleExtMessage = (event: MessageEvent) => {
+            if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
+                // Clear the timeout — extension responded!
+                if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+                setExtensionDetected(true);
+
+                // Persist to server so next page load picks it up from DB
+                if (user?.id) {
+                    fetch('/api/user/extension-ping', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ userId: user.id })
+                    }).catch(() => { });
+
+                    // Also update local user state immediately
+                    updateUser({ extensionInstalled: true });
+                }
+            }
+        };
+
+        window.addEventListener('message', handleExtMessage);
+
+        // Send PING to the bridge (if installed, it will respond with PONG)
+        setExtensionDetected(null); // Reset to "checking" state
+        window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
+
+        // Timeout: if no PONG in 2 seconds → not detected
+        pingTimeoutRef.current = setTimeout(() => {
+            setExtensionDetected(prev => prev === null ? false : prev);
+        }, 2000);
+
+        return () => {
+            window.removeEventListener('message', handleExtMessage);
+            if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+        };
+    }, [user?.id]);
 
     // New state variables
     const [isUploading, setIsUploading] = useState(false);
@@ -817,27 +862,47 @@ export const Settings: React.FC = () => {
 
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-6">
                             <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-200/50">
-                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0 ${user?.extensionInstalled ? 'bg-emerald-600 shadow-emerald-200' : 'bg-slate-300 shadow-slate-200'}`}>
-                                    {user?.extensionInstalled ? <Check size={32} /> : <Globe size={32} />}
+                                {/* Status Icon */}
+                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0 transition-all duration-500 ${extensionDetected === null ? 'bg-slate-300 shadow-slate-200 animate-pulse' :
+                                        extensionDetected ? 'bg-emerald-600 shadow-emerald-200' :
+                                            'bg-slate-300 shadow-slate-200'
+                                    }`}>
+                                    {extensionDetected === null
+                                        ? <RefreshCw size={28} className="animate-spin" />
+                                        : extensionDetected
+                                            ? <Check size={32} />
+                                            : <Globe size={32} />
+                                    }
                                 </div>
+
                                 <div className="flex-1 text-center md:text-left">
                                     <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
                                         <h3 className="font-extrabold text-slate-900 text-lg">Chrome Extension Status</h3>
-                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${user?.extensionInstalled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                            {user?.extensionInstalled ? 'Active & Verified' : 'Not Detected'}
+                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${extensionDetected === null ? 'bg-slate-100 text-slate-400 animate-pulse' :
+                                                extensionDetected ? 'bg-emerald-100 text-emerald-700' :
+                                                    'bg-slate-100 text-slate-500'
+                                            }`}>
+                                            {extensionDetected === null ? 'Checking...' :
+                                                extensionDetected ? 'Active & Verified' : 'Not Detected'}
                                         </span>
                                     </div>
                                     <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                        Securely manage your Reddit interactions through our browser extension. No OAuth linking or password sharing is required.
+                                        {extensionDetected
+                                            ? 'Extension is active and connected. Your Reddit interactions are bridged securely through your browser.'
+                                            : 'Install the Redigo Chrome Extension to enable direct posting from the dashboard.'}
                                     </p>
                                 </div>
+
                                 <a
                                     href="https://chromewebstore.google.com/"
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95"
+                                    className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${extensionDetected
+                                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                            : 'bg-slate-900 text-white hover:bg-orange-600'
+                                        }`}
                                 >
-                                    Download Extension
+                                    {extensionDetected ? 'Installed ✓' : 'Download Extension'}
                                 </a>
                             </div>
 

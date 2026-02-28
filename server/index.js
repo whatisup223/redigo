@@ -3120,6 +3120,24 @@ app.post('/api/user/schedule-deletion', async (req, res) => {
   }
 });
 
+// Extension Presence Ping — called by dashboard_bridge.js when EXTENSION_PING is received
+app.post('/api/user/extension-ping', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    await User.updateOne(
+      { id: userId.toString() },
+      { $set: { extensionInstalled: true } }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Extension Ping] Error:', err);
+    res.status(500).json({ error: 'Failed to update extension status' });
+  }
+});
+
 // 2b. Cancel Account Deletion (User)
 app.post('/api/user/cancel-deletion', async (req, res) => {
   try {
