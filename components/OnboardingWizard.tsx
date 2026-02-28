@@ -124,7 +124,7 @@ export const OnboardingWizard: React.FC = () => {
 
     const handleInstallExtension = () => {
         const link = document.createElement('a');
-        link.href = '/redigo-extension.zip';
+        link.href = '/api/download-extension';
         link.download = 'redigo-extension.zip';
         document.body.appendChild(link);
         link.click();

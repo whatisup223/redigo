@@ -43,7 +43,9 @@ import {
     Zap as ZapIcon,
     Undo2,
     TrendingDown,
-    UserMinus
+    UserMinus,
+    Download,
+    Link as LinkIcon
 } from 'lucide-react';
 
 import {
@@ -1334,6 +1336,30 @@ export const Admin: React.FC = () => {
                                                         <div>
                                                             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Users</p>
                                                             <p className="text-3xl font-black text-slate-900">{analytics.totalUsers?.toLocaleString()}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-red-50 text-red-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <Download size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-red-600 bg-red-50 px-2 py-1 rounded-lg">Extension</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Total Downloads</p>
+                                                            <p className="text-3xl font-black text-slate-900">{analytics.extensionStats?.downloads?.toLocaleString() || 0}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform">
+                                                                <LinkIcon size={24} />
+                                                            </div>
+                                                            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Verified</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Connected Extensions</p>
+                                                            <p className="text-3xl font-black text-slate-900">{analytics.extensionStats?.active?.toLocaleString() || 0}</p>
                                                         </div>
                                                     </div>
                                                 </div>

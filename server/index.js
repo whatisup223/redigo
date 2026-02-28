@@ -2245,6 +2245,28 @@ const adminAuth = (req, res, next) => {
   }
 };
 
+// ─── Extension Download Tracking ──────────────────────────────────────
+app.get('/api/download-extension', async (req, res) => {
+  try {
+    // Increment download counter in settings
+    await Setting.findOneAndUpdate(
+      { key: 'extensionDownloadCount' },
+      { $inc: { 'value': 1 } },
+      { upsert: true, new: true }
+    );
+
+    // Track in logs
+    addSystemLog('INFO', 'Browser extension download initiated');
+
+    // Send the file
+    const filePath = path.join(__dirname, '../public/redigo-extension.zip');
+    res.download(filePath, 'redigo-extension.zip');
+  } catch (err) {
+    console.error('Download tracking error:', err);
+    res.status(500).json({ error: 'Failed to process download' });
+  }
+});
+
 // Admin Stats
 app.get('/api/admin/stats', adminAuth, async (req, res) => {
   try {
@@ -2316,13 +2338,22 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
       closed: await Ticket.countDocuments({ status: 'closed' })
     };
 
+    // 5. Extension Stats
+    const downloadCountSetting = await Setting.findOne({ key: 'extensionDownloadCount' });
+    const extensionDownloadCount = downloadCountSetting ? (downloadCountSetting.value || 0) : 0;
+    const activeExtensions = await User.countDocuments({ extensionInstalled: true });
+
     res.json({
       totalUsers,
       activeSubscriptions: activeSubs,
       apiUsage: apiUsagePercent,
       systemHealth: healthPercent,
       healthLabel: healthStatus,
-      ticketStats
+      ticketStats,
+      extensionStats: {
+        downloads: extensionDownloadCount,
+        active: activeExtensions
+      }
     });
   } catch (err) {
     console.error('Error fetching admin stats:', err);
@@ -2440,6 +2471,11 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
       });
     }
 
+    // 5. Extension Stats
+    const downloadCountSetting = await Setting.findOne({ key: 'extensionDownloadCount' });
+    const extensionDownloadCount = downloadCountSetting ? (downloadCountSetting.value || 0) : 0;
+    const activeExtensions = await User.countDocuments({ extensionInstalled: true });
+
     res.json({
       totalRevenue,
       totalPaidCreditsCirculating,
@@ -2449,7 +2485,11 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
       chartData,
       topConsumers,
       recentActivity: liveFeed.slice(0, 20),
-      recentTransactions: transactions.slice(0, 50)
+      recentTransactions: transactions.slice(0, 50),
+      extensionStats: {
+        downloads: extensionDownloadCount,
+        active: activeExtensions
+      }
     });
   } catch (err) {
     console.error('Error fetching admin analytics:', err);

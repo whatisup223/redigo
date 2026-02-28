@@ -951,7 +951,7 @@ export const Settings: React.FC = () => {
                                 <div className="flex flex-col gap-2">
                                     {!extensionDetected ? (
                                         <a
-                                            href="/redigo-extension.zip"
+                                            href="/api/download-extension"
                                             download="redigo-extension.zip"
                                             className="px-6 py-3 bg-slate-900 border border-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 hover:bg-orange-600 hover:border-orange-600 text-center"
                                         >

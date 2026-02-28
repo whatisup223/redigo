@@ -431,7 +431,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                 </div>
               </div>
               <a
-                href="/redigo-extension.zip"
+                href="/api/download-extension"
                 download="redigo-extension.zip"
                 onClick={() => {
                   // Optional: alert to guide the user after they click download
