@@ -758,15 +758,6 @@ export const Comments: React.FC = () => {
                 placeholder="keywords"
                 className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-28 md:w-32"
               />
-              {posts.length > 0 && (
-                <button
-                  onClick={() => setPosts([])}
-                  className="p-1.5 text-slate-300 hover:text-red-500 transition-colors ml-1"
-                  title="Clear results"
-                >
-                  <X size={14} />
-                </button>
-              )}
             </div>
             <div className="flex items-center gap-2">
               {/* Sort Dropdown */}
@@ -899,6 +890,18 @@ export const Comments: React.FC = () => {
                     </button>
                   )
                 })}
+                <div className="flex-1"></div>
+                <button
+                  onClick={() => {
+                    setPosts([]);
+                    setSelectedPost(null);
+                  }}
+                  className="flex-shrink-0 flex items-center gap-2 px-3 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest"
+                  title="Clear all results"
+                >
+                  <Trash2 size={14} />
+                  <span>Clear</span>
+                </button>
               </div>
             )}
 
