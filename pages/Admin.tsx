@@ -87,6 +87,8 @@ interface AISettings {
     systemPrompt: string;
     apiKey: string;
     baseUrl?: string;
+    redditFetchCooldown?: number;
+    redditPostCooldown?: number;
     creditCosts?: {
         comment: number;
         post: number;
@@ -125,15 +127,11 @@ interface Plan {
     isCustom?: boolean;
     allowImages: boolean;
     allowTracking: boolean;
-    maxAccounts: number;
     purchaseEnabled: boolean;
     isVisible: boolean;
 }
 
 interface RedditSettings {
-    clientId: string;
-    clientSecret: string;
-    redirectUri: string;
     userAgent: string;
     minDelay?: number;
     maxDelay?: number;
@@ -200,6 +198,8 @@ export const Admin: React.FC = () => {
         maxOutputTokens: 1024,
         systemPrompt: '',
         apiKey: '',
+        redditFetchCooldown: 30,
+        redditPostCooldown: 300,
         baseUrl: 'https://openrouter.ai/api/v1',
         creditCosts: {
             comment: 1,
@@ -223,9 +223,6 @@ export const Admin: React.FC = () => {
         enabled: false
     });
     const [redditSettings, setRedditSettings] = useState<RedditSettings>({
-        clientId: '',
-        clientSecret: '',
-        redirectUri: '',
         userAgent: 'RedigoApp/1.0',
         minDelay: 5,
         maxDelay: 15,
@@ -722,6 +719,7 @@ export const Admin: React.FC = () => {
     const handleSaveRedditSettings = async () => {
         const token = localStorage.getItem('token');
         try {
+            // Save basic reddit settings
             const res = await fetch('/api/admin/reddit-settings', {
                 method: 'POST',
                 headers: {
@@ -730,10 +728,21 @@ export const Admin: React.FC = () => {
                 },
                 body: JSON.stringify(redditSettings)
             });
-            if (res.ok) {
-                alert('Reddit settings saved successfully!');
+
+            // Save AI settings as well, since cooldowns are stored there
+            const resAI = await fetch('/api/admin/ai-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(aiSettings)
+            });
+
+            if (res.ok && resAI.ok) {
+                alert('Reddit settings and cooldowns saved successfully!');
             } else {
-                alert('Failed to save Reddit settings.');
+                alert('Failed to save some settings.');
             }
         } catch (e) {
             console.error(e);
@@ -2239,6 +2248,17 @@ export const Admin: React.FC = () => {
                                                             />
                                                         </label>
                                                     </div>
+
+                                                    <label className="block">
+                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Reddit Search Cooldown (Seconds)</span>
+                                                        <input
+                                                            type="number"
+                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                                                            value={aiSettings.redditFetchCooldown}
+                                                            onChange={(e) => setAiSettings({ ...aiSettings, redditFetchCooldown: parseInt(e.target.value) })}
+                                                        />
+                                                        <p className="text-[10px] text-slate-400 mt-1 italic">Controls the timer on the "Search Posts" button for users.</p>
+                                                    </label>
                                                     <label className="block">
                                                         <span className="text-sm font-bold text-slate-700 mb-2 block">API Key</span>
                                                         <div className="relative">
@@ -2632,8 +2652,7 @@ export const Admin: React.FC = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                        )
-                                    }
+                                        )}
 
                                     {settingsTab === 'reddit' && (
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -2648,95 +2667,65 @@ export const Admin: React.FC = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="space-y-6">
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Client ID</span>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                            value={redditSettings.clientId}
-                                                            onChange={(e) => setRedditSettings({ ...redditSettings, clientId: e.target.value })}
-                                                            placeholder="e.g. -XyZ123abc..."
-                                                        />
-                                                    </label>
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Client Secret</span>
-                                                        <input
-                                                            type="password"
-                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                            value={redditSettings.clientSecret}
-                                                            onChange={(e) => setRedditSettings({ ...redditSettings, clientSecret: e.target.value })}
-                                                        />
-                                                    </label>
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Redirect URI</span>
-                                                        <div className="flex gap-2">
+                                                <div className="p-6 bg-blue-50 border border-blue-100 rounded-[2rem] text-blue-700 space-y-3">
+                                                    <div className="flex items-center gap-2 font-bold">
+                                                        <Shield size={20} />
+                                                        <span>Extension Mode Active</span>
+                                                    </div>
+                                                    <p className="text-xs leading-relaxed">
+                                                        Reddit authentication and account management are now handled exclusively via the **Chrome Extension**.
+                                                        You no longer need to configure Client IDs or Redirect URIs here.
+                                                    </p>
+                                                </div>
+                                                <label className="block">
+                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">User Agent</span>
+                                                    <input
+                                                        type="text"
+                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                        value={redditSettings.userAgent}
+                                                        onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
+                                                    />
+                                                </label>
+
+                                                <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <Shield size={18} className="text-orange-600" />
+                                                        <h3 className="text-sm font-bold text-slate-900">Safety & Anti-Spam</h3>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <label className="block">
+                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Search Cooldown (sec)</span>
                                                             <input
-                                                                type="text"
-                                                                className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-mono text-sm text-slate-500 cursor-not-allowed"
-                                                                value={`${window.location.origin}/auth/reddit/callback`}
-                                                                readOnly
+                                                                type="number"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                value={aiSettings.redditFetchCooldown || 30}
+                                                                onChange={(e) => setAiSettings({ ...aiSettings, redditFetchCooldown: parseInt(e.target.value) })}
                                                             />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/auth/reddit/callback`)}
-                                                                className="bg-white border border-slate-200 p-4 rounded-2xl hover:text-orange-600 hover:border-orange-200 transition-colors"
-                                                                title="Copy"
-                                                            >
-                                                                <Copy size={20} />
-                                                            </button>
-                                                        </div>
-                                                    </label>
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">User Agent</span>
-                                                        <input
-                                                            type="text"
-                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                            value={redditSettings.userAgent}
-                                                            onChange={(e) => setRedditSettings({ ...redditSettings, userAgent: e.target.value })}
-                                                        />
-                                                    </label>
+                                                        </label>
+                                                        <label className="block">
+                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Post Cooldown (sec)</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                value={aiSettings.redditPostCooldown || 300}
+                                                                onChange={(e) => setAiSettings({ ...aiSettings, redditPostCooldown: parseInt(e.target.value) })}
+                                                            />
+                                                        </label>
+                                                    </div>
 
-                                                    <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <Shield size={18} className="text-orange-600" />
-                                                            <h3 className="text-sm font-bold text-slate-900">Safety & Anti-Spam</h3>
+                                                    <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                                                        <div>
+                                                            <p className="text-xs font-bold text-slate-900">Anti-Spam Guard</p>
+                                                            <p className="text-[10px] text-slate-500">Prevent double-replying to the same post</p>
                                                         </div>
-
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <label className="block">
-                                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Min Delay (sec)</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={redditSettings.minDelay || 5}
-                                                                    onChange={(e) => setRedditSettings({ ...redditSettings, minDelay: parseInt(e.target.value) })}
-                                                                />
-                                                            </label>
-                                                            <label className="block">
-                                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 block">Max Delay (sec)</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
-                                                                    value={redditSettings.maxDelay || 15}
-                                                                    onChange={(e) => setRedditSettings({ ...redditSettings, maxDelay: parseInt(e.target.value) })}
-                                                                />
-                                                            </label>
-                                                        </div>
-
-                                                        <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                                                            <div>
-                                                                <p className="text-xs font-bold text-slate-900">Anti-Spam Guard</p>
-                                                                <p className="text-[10px] text-slate-500">Prevent double-replying to the same post</p>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setRedditSettings({ ...redditSettings, antiSpam: !redditSettings.antiSpam })}
-                                                                className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.antiSpam ? 'bg-orange-600' : 'bg-slate-300'}`}
-                                                            >
-                                                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.antiSpam ? 'translate-x-6' : 'translate-x-0'}`} />
-                                                            </button>
-                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setRedditSettings({ ...redditSettings, antiSpam: !redditSettings.antiSpam })}
+                                                            className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.antiSpam ? 'bg-orange-600' : 'bg-slate-300'}`}
+                                                        >
+                                                            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.antiSpam ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                                 <button
@@ -3719,16 +3708,6 @@ export const Admin: React.FC = () => {
                                                 </label>
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Max Reddit Accounts</span>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    value={planForm.maxAccounts || 1}
-                                                    onChange={(e) => setPlanForm({ ...planForm, maxAccounts: parseInt(e.target.value) || 1 })}
-                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                                                />
-                                            </div>
 
                                             <div className="space-y-2">
                                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Features (One per line)</span>

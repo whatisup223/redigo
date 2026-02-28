@@ -113,8 +113,6 @@ export const ContentArchitect: React.FC = () => {
         secondaryColor: ''
     });
     const [plans, setPlans] = useState<any[]>([]);
-    const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
-    const [selectedAccount, setSelectedAccount] = useState<string>('');
     const [includeImage, setIncludeImage] = useState(true);
     const [includeBrandName, setIncludeBrandName] = useState(true);
     const [includeLink, setIncludeLink] = useState(true);
@@ -163,14 +161,7 @@ export const ContentArchitect: React.FC = () => {
             fetchBrandProfile(user.id).then(p => {
                 if (p?.brandName) setBrandProfile(p);
             });
-            fetch(`/api/user/reddit/status?userId=${user.id}`)
-                .then(res => res.json())
-                .then(status => {
-                    setRedditStatus(status);
-                    if (status.accounts?.length > 0) {
-                        setSelectedAccount(status.accounts[0].username);
-                    }
-                });
+
         }
     }, [user]);
 
@@ -1421,29 +1412,17 @@ export const ContentArchitect: React.FC = () => {
                                 <div className="space-y-4">
                                     <div className="p-5 bg-slate-50 rounded-2xl space-y-3">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Publishing Identity</p>
-                                        <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100">
-                                            <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-200">
-                                                {(redditStatus.accounts || []).find(a => a.username === selectedAccount)?.icon ? (
-                                                    <img src={(redditStatus.accounts || []).find(a => a.username === selectedAccount)?.icon} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full bg-orange-600 flex items-center justify-center text-white font-black">R</div>
-                                                )}
+                                        <div className="flex items-center gap-3 bg-white p-4 rounded-xl border border-slate-100">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black ${user?.extensionInstalled ? 'bg-emerald-600' : 'bg-slate-300'}`}>
+                                                {user?.extensionInstalled ? <Check size={20} /> : <AlertCircle size={20} />}
                                             </div>
                                             <div className="flex-1">
-                                                <select
-                                                    value={selectedAccount}
-                                                    onChange={(e) => setSelectedAccount(e.target.value)}
-                                                    className="w-full bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none"
-                                                >
-                                                    {(redditStatus.accounts || []).length > 0 ? (
-                                                        (redditStatus.accounts || []).map(acc => (
-                                                            <option key={acc.username} value={acc.username}>u/{acc.username}</option>
-                                                        ))
-                                                    ) : (
-                                                        <option value="">No accounts connected</option>
-                                                    )}
-                                                </select>
-                                                {(redditStatus.accounts || []).length === 0 && <p className="text-[10px] text-red-500 font-bold mt-1">Please link an account in settings</p>}
+                                                <p className="text-sm font-bold text-slate-900">
+                                                    {user?.extensionInstalled ? 'Extension Verified' : 'Extension Required'}
+                                                </p>
+                                                <p className="text-[10px] text-slate-500 font-medium">
+                                                    {user?.extensionInstalled ? 'Using active browser identity' : 'Install extension to publish'}
+                                                </p>
                                             </div>
                                         </div>
                                     </div>

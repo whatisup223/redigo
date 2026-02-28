@@ -474,25 +474,47 @@ app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 // --- Reddit API Rate Limiters (Compliance) ---
 // Per Reddit's Responsible Builder Policy, clients must respect rate limits.
 
-// Fetch limiter: prevents abusive feed scraping
-const redditFetchLimiter = rateLimit({
-  windowMs: 2 * 60 * 1000,   // 2 minutes
-  max: 10,                    // max 10 feed refreshes per user per 2 min
-  keyGenerator: (req) => req.query.userId || req.ip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many Reddit requests. Please wait a moment before refreshing again.' }
-});
+// Dynamic Cooldown Tracking
+const fetchCooldowns = new Map();
+const postCooldowns = new Map();
 
-// Post/Reply limiter: prevents abusive posting (5 posts per 10 minutes per user)
-const redditPostLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,  // 10 minutes
-  max: 5,                    // 5 posts or replies per user per 10 min
-  keyGenerator: (req) => (req.body && req.body.userId) || req.ip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'RATE_LIMIT_POSTING', details: 'Too many posting requests. Reddit requires a cool-down period between posts. Please wait before trying again.' }
-});
+const redditFetchLimiter = (req, res, next) => {
+  const userId = req.query.userId || req.ip;
+  const cooldown = (Number(aiSettings.redditFetchCooldown) || 30) * 1000;
+  const lastTime = fetchCooldowns.get(userId) || 0;
+  const now = Date.now();
+
+  if (now - lastTime < cooldown) {
+    const remaining = Math.ceil((cooldown - (now - lastTime)) / 1000);
+    return res.status(429).json({
+      error: 'RATELIMIT_COOLDOWN',
+      message: `Please wait ${remaining} seconds before searching again.`,
+      cooldown: remaining
+    });
+  }
+
+  fetchCooldowns.set(userId, now);
+  next();
+};
+
+const redditPostLimiter = (req, res, next) => {
+  const userId = req.body.userId || req.query.userId || req.ip;
+  const cooldown = (Number(aiSettings.redditPostCooldown) || 300) * 1000;
+  const lastTime = postCooldowns.get(userId) || 0;
+  const now = Date.now();
+
+  if (now - lastTime < cooldown) {
+    const remaining = Math.ceil((cooldown - (now - lastTime)) / 1000);
+    return res.status(429).json({
+      error: 'POST_COOLDOWN',
+      message: `Please wait ${remaining} seconds before posting/replying again.`,
+      cooldown: remaining
+    });
+  }
+
+  postCooldowns.set(userId, now);
+  next();
+};
 
 // Generate limiter: prevents credit-bypass abuse on AI endpoint
 const generateLimiter = rateLimit({
@@ -1646,7 +1668,9 @@ STRUCTURE:
     post: 2,
     image: 5,
     fetch: 1  // Cost per Reddit post search/fetch
-  }
+  },
+  redditFetchCooldown: 30, // seconds
+  redditPostCooldown: 300  // seconds (5 minutes)
 };
 
 // Ensure creditCosts always exists and is fully populated with defaults
@@ -1907,9 +1931,7 @@ let smtpSettings = savedData.smtp || {
   secure: false
 };
 
-// Store user Reddit tokens (Initialized from DB/Cache)
-if (!settingsCache.userRedditTokens) settingsCache.userRedditTokens = {};
-const userRedditTokens = settingsCache.userRedditTokens;
+// Reddit Integration - Extension Only (No in-memory tokens required)
 
 // Plans API Endpoints
 // Public configuration for UI
@@ -2196,27 +2218,7 @@ app.get('/api/user/brand-profile', async (req, res) => {
 
 // (Duplicate POST /api/user/brand-profile removed as it's now handled above)
 
-const saveTokens = async (userId, username, tokenData) => {
-  if (!userRedditTokens[userId]) userRedditTokens[userId] = {};
-  userRedditTokens[userId][username] = tokenData;
-  saveSettings({ userRedditTokens });
-
-  try {
-    const user = await User.findOne({ id: userId.toString() });
-    if (user && user.connectedAccounts) {
-      const acc = user.connectedAccounts.find(a => a.username === username);
-      if (acc) {
-        acc.accessToken = tokenData.accessToken;
-        acc.refreshToken = tokenData.refreshToken;
-        acc.expiresAt = tokenData.expiresAt;
-        user.markModified('connectedAccounts');
-        await user.save();
-      }
-    }
-  } catch (err) {
-    console.error('Error saving tokens to DB:', err);
-  }
-};
+// Token management removed (Handled by Extension)
 
 // Initialize Stripe Client dynamically
 const getStripe = () => {
@@ -3509,213 +3511,8 @@ app.delete('/api/support/tickets/:id', adminAuth, async (req, res) => {
   }
 });
 
-// --- Reddit OAuth2 Flow ---
-
-app.get('/api/auth/reddit/url', (req, res) => {
-  if (!redditSettings.clientId) {
-    return res.status(500).json({ error: 'Reddit Client ID not configured by Admin' });
-  }
-
-  const host = req.get('host');
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  // Use configured URI if available, otherwise construct dynamic one
-  const redirectUri = redditSettings.redirectUri && redditSettings.redirectUri.trim() !== ''
-    ? redditSettings.redirectUri
-    : `${protocol}://${host}/auth/reddit/callback`;
-
-  const state = Math.random().toString(36).substring(7);
-  const scope = 'identity read submit';
-  const url = `https://www.reddit.com/api/v1/authorize?client_id=${redditSettings.clientId}&response_type=code&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&duration=permanent&scope=${scope}`;
-
-  // Return the redirectUri used so frontend can store it if needed (optional)
-  res.json({ url, redirectUri });
-});
-
-app.post('/api/auth/reddit/callback', async (req, res) => {
-  const { code, userId } = req.body;
-  if (!code) return res.status(400).json({ error: 'Code is required' });
-
-  const host = req.get('host');
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  const redirectUri = redditSettings.redirectUri && redditSettings.redirectUri.trim() !== ''
-    ? redditSettings.redirectUri
-    : `${protocol}://${host}/auth/reddit/callback`;
-
-  try {
-    const auth = Buffer.from(`${redditSettings.clientId}:${redditSettings.clientSecret}`).toString('base64');
-    const params = new URLSearchParams();
-    params.append('grant_type', 'authorization_code');
-    params.append('code', code);
-    params.append('redirect_uri', redirectUri);
-
-    const response = await fetch('https://www.reddit.com/api/v1/access_token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': getDynamicUserAgent(userId)
-      },
-      body: params
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-
-    const meRes = await fetch('https://oauth.reddit.com/api/v1/me', {
-      headers: {
-        'Authorization': `Bearer ${data.access_token}`,
-        'User-Agent': getDynamicUserAgent(userId)
-      }
-    });
-
-    const meData = await meRes.json();
-    const redditUsername = meData.name;
-    const redditIcon = meData.icon_img;
-
-    const user = await User.findOne({ id: userId.toString() });
-    if (user) {
-      let limit = 1;
-      if (user.plan) {
-        const userPlan = await Plan.findOne({ name: { $regex: new RegExp('^' + user.plan + '$', 'i') } });
-        if (userPlan) limit = userPlan.maxAccounts || 1;
-      }
-
-      const currentAccounts = user.connectedAccounts || [];
-      const alreadyConnected = currentAccounts.find(a => a.username === redditUsername);
-
-      if (!alreadyConnected && currentAccounts.length >= limit) {
-        return res.status(403).json({ error: `Account limit reached for ${user.plan} plan (${limit} accounts max).` });
-      }
-
-      if (alreadyConnected) {
-        alreadyConnected.icon = redditIcon;
-        alreadyConnected.lastSeen = new Date().toISOString();
-      } else {
-        if (!user.connectedAccounts) user.connectedAccounts = [];
-        user.connectedAccounts.push({
-          username: redditUsername,
-          icon: redditIcon,
-          connectedAt: new Date().toISOString(),
-          lastSeen: new Date().toISOString()
-        });
-      }
-      await user.save();
-    }
-
-    saveTokens(userId, redditUsername, {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt: Date.now() + (data.expires_in * 1000)
-    });
-
-    res.json({ success: true, username: redditUsername });
-  } catch (error) {
-    console.error('[Reddit OAuth Error]', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-const getValidToken = async (userId, username) => {
-  let targetAccount = null;
-  const user = await User.findOne({ id: userId.toString() });
-
-  if (user && user.connectedAccounts && user.connectedAccounts.length > 0) {
-    targetAccount = username
-      ? user.connectedAccounts.find(a => a.username === username)
-      : user.connectedAccounts[0];
-  }
-
-  // Fallback to memory if not found in DB or DB missing tokens
-  if (!targetAccount || !targetAccount.accessToken) {
-    if (userRedditTokens[userId]) {
-      const uName = username || Object.keys(userRedditTokens[userId])[0];
-      if (userRedditTokens[userId][uName]) {
-        targetAccount = { ...userRedditTokens[userId][uName], username: uName };
-      }
-    }
-  }
-
-  if (!targetAccount || !targetAccount.accessToken) return null;
-
-  if (Date.now() < targetAccount.expiresAt - 60000) {
-    return targetAccount.accessToken;
-  }
-
-  // Refresh token
-  try {
-    const auth = Buffer.from(`${redditSettings.clientId}:${redditSettings.clientSecret}`).toString('base64');
-    const response = await fetch('https://www.reddit.com/api/v1/access_token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': getDynamicUserAgent(userId) // Always use compliant dynamic UA, not static admin setting
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: targetAccount.refreshToken
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-
-    const newTokens = {
-      accessToken: data.access_token,
-      refreshToken: targetAccount.refreshToken,
-      expiresAt: Date.now() + (data.expires_in * 1000)
-    };
-
-    await saveTokens(userId, targetAccount.username || username, newTokens);
-    return data.access_token;
-  } catch (err) {
-    console.error('[Reddit Token Refresh Error]', err);
-    return null;
-  }
-};
-
-app.get('/api/user/reddit/status', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'User ID required' });
-
-    const user = await User.findOne({ id: userId.toString() });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const accounts = user.connectedAccounts || [];
-
-    res.json({
-      connected: accounts.length > 0,
-      accounts: accounts
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/user/reddit/disconnect', async (req, res) => {
-  try {
-    const { userId, username } = req.body;
-    if (!userId || !username) return res.status(400).json({ error: 'Missing userId or username' });
-
-    const user = await User.findOne({ id: userId.toString() });
-    if (user && user.connectedAccounts) {
-      user.connectedAccounts = user.connectedAccounts.filter(a => a.username !== username);
-      await user.save();
-    }
-
-    if (userRedditTokens[userId]) {
-      delete userRedditTokens[userId][username];
-      saveSettings({ userRedditTokens });
-    }
-
-    addSystemLog('INFO', `User disconnected Reddit account: ${username}`, { userId });
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// --- Reddit Integration (Extension Model) ---
+// Legacy OAuth routes removed. All authentication handled via the Chrome Extension.
 
 
 
@@ -4440,7 +4237,7 @@ app.get('/api/user/reddit/profile', async (req, res) => {
 
 app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   try {
-    const { subreddit, keywords, userId } = req.query;
+    const { subreddit, keywords, userId, redditUsername } = req.query;
     console.log(`[Reddit] Fetching for User ${userId} from r/${subreddit}`);
 
     if (!userId) return res.status(401).json({ error: 'User ID required' });

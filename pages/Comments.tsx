@@ -89,8 +89,6 @@ export const Comments: React.FC = () => {
   const [reloadCooldown, setReloadCooldown] = useState(0);
 
   const [progressStep, setProgressStep] = useState(0);
-  const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
-  const [selectedAccount, setSelectedAccount] = useState<string>('');
 
   // Wizard & Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -176,20 +174,7 @@ export const Comments: React.FC = () => {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Load reddit status on mount/user change
-  useEffect(() => {
-    if (user?.id) {
-      fetch(`/api/user/reddit/status?userId=${user.id}`)
-        .then(res => res.json())
-        .then(status => {
-          setRedditStatus(status);
-          if (status.accounts?.length > 0 && !selectedAccount) {
-            setSelectedAccount(status.accounts[0].username);
-          }
-        })
-        .catch(console.error);
-    }
-  }, [user]);
+
 
   // Check for draft on mount
   useEffect(() => {
@@ -218,7 +203,6 @@ export const Comments: React.FC = () => {
         generatedReply,
         editedComment,
         wizardData,
-        selectedAccount,
         brandProfile,
         activeTone,
         language,
@@ -231,7 +215,7 @@ export const Comments: React.FC = () => {
       // ONLY remove if it's explicitly empty and we're not currently showing a draft banner
       localStorage.removeItem('redditgo_comment_draft');
     }
-  }, [selectedPost, generatedReply, editedComment, wizardData, selectedAccount, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
+  }, [selectedPost, generatedReply, editedComment, wizardData, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
 
   const handleResumeDraft = () => {
     setShowDraftBanner(false);
@@ -242,7 +226,6 @@ export const Comments: React.FC = () => {
       setGeneratedReply(draft.generatedReply);
       setEditedComment(draft.editedComment || draft.generatedReply?.comment || '');
       setWizardData(draft.wizardData);
-      setSelectedAccount(draft.selectedAccount);
       if (draft.brandProfile) setBrandProfile(draft.brandProfile);
       setActiveTone(draft.activeTone);
       setLanguage(draft.language || 'English');
@@ -563,15 +546,7 @@ export const Comments: React.FC = () => {
 
   useEffect(() => {
     if (!user?.id) return;
-    // NOTE: No auto-fetch here intentionally. Every fetch costs credits.
-    // The user must manually press the Reload button.
     fetchBrandProfile(user.id).then(p => { if (p?.brandName) setBrandProfile(p); });
-    fetch(`/api/user/reddit/status?userId=${user.id}`)
-      .then(res => res.json())
-      .then(status => {
-        setRedditStatus(status);
-        if (status.accounts?.length > 0) setSelectedAccount(status.accounts[0].username);
-      });
   }, [user]);
 
   return (
@@ -994,8 +969,8 @@ export const Comments: React.FC = () => {
                         {/* Preview */}
                         <div className="bg-slate-50 rounded-[2rem] p-6 border border-slate-100 space-y-4">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-[10px] font-black">YU</div>
-                            <span className="text-[10px] font-black text-slate-900">u/{selectedAccount || 'Profile'}</span>
+                            <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black">YU</div>
+                            <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">You (Verified)</span>
                             <span className="text-[10px] text-slate-400">• typing...</span>
                           </div>
                           <div className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-orange-200 pl-4">{editedComment}</div>

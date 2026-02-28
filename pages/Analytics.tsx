@@ -96,7 +96,6 @@ export const Analytics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'comments' | 'posts' | 'links'>('comments');
-  const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [trackingLinks, setTrackingLinks] = useState<any[]>([]);
 
@@ -142,11 +141,7 @@ export const Analytics: React.FC = () => {
         setProfile(profileData);
       }
 
-      const statusRes = await fetch(`/api/user/reddit/status?userId=${user.id}&_=${ts}`);
-      if (statusRes.ok) {
-        const status = await statusRes.json();
-        setRedditStatus(status);
-      }
+
     } catch (err) {
       console.error('Failed to fetch data', err);
     } finally {
@@ -821,13 +816,7 @@ export const Analytics: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2 bg-white border border-slate-200/60 rounded-[1.5rem] px-4 py-4 shadow-sm h-[60px]">
-            <Users size={18} className="text-blue-600" />
-            <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent border-none text-sm font-bold text-slate-900 focus:outline-none min-w-[140px] cursor-pointer">
-              <option value="all">All Accounts</option>
-              {redditStatus.accounts?.map(acc => <option key={acc.username} value={acc.username}>u/{acc.username}</option>)}
-            </select>
-          </div>
+          {/* Removed Reddit Account Filter as per new Extension Identity model */}
         </div>
       </div>
 

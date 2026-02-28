@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
-interface User {
+export interface User {
     id: number | string;
     _id?: string;
     name: string;
@@ -26,6 +26,7 @@ interface User {
     isSuspended?: boolean;
     transactions?: any[];
     connectedAccounts?: any[];
+    extensionInstalled?: boolean;
     usageStats?: {
         posts: number;
         comments: number;

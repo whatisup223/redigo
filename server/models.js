@@ -24,12 +24,7 @@ const UserSchema = new mongoose.Schema({
     lastUsageDate: String,
     hasCompletedOnboarding: { type: Boolean, default: false },
     usageStats: mongoose.Schema.Types.Mixed,
-    accounts: [{
-        username: String,
-        accessToken: String,
-        refreshToken: String,
-        tokenExpiry: Number
-    }],
+    // accounts: Legacy Reddit OAuth accounts (Removed for Extension-only model)
     history: [mongoose.Schema.Types.Mixed],
     postsHistory: [mongoose.Schema.Types.Mixed],
     transactions: [mongoose.Schema.Types.Mixed],
@@ -48,7 +43,8 @@ const UserSchema = new mongoose.Schema({
     autoRenew: { type: Boolean, default: true },
     deletionScheduledDate: Date,
     cancellationReason: mongoose.Schema.Types.Mixed,
-    isSuspended: { type: Boolean, default: false }
+    isSuspended: { type: Boolean, default: false },
+    extensionInstalled: { type: Boolean, default: false }
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const AnnouncementSchema = new mongoose.Schema({
@@ -104,8 +100,7 @@ const PlanSchema = new mongoose.Schema({
     allowImages: Boolean,
     allowTracking: Boolean,
     purchaseEnabled: { type: Boolean, default: true },
-    isVisible: { type: Boolean, default: true },
-    maxAccounts: { type: Number, default: 1 }
+    isVisible: { type: Boolean, default: true }
 });
 
 const TicketSchema = new mongoose.Schema({

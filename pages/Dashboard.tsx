@@ -176,10 +176,9 @@ export const Dashboard: React.FC = () => {
       // We don't necessarily need to syncUser here because AuthContext handles it on mount
       // and other components handle it after actions. But if we must, we do it safely.
 
-      const [histRes, profileRes, redditRes] = await Promise.allSettled([
+      const [histRes, profileRes] = await Promise.allSettled([
         fetch(`/api/user/replies/sync?userId=${user.id}`),
         fetch(`/api/user/reddit/profile?userId=${user.id}`),
-        fetch(`/api/user/reddit/status?userId=${user.id}`),
       ]);
 
       if (histRes.status === 'fulfilled' && histRes.value.ok) {
@@ -190,10 +189,7 @@ export const Dashboard: React.FC = () => {
         const d = await profileRes.value.json();
         if (!d.error) setProfile(d);
       }
-      if (redditRes.status === 'fulfilled' && redditRes.value.ok) {
-        const d = await redditRes.value.json();
-        setRedditConnected(d.connected);
-      }
+      // redditRes was removed
       setLastRefreshed(new Date());
 
       // Fetch Latest Announcement (Only if onboarding is finished)
@@ -446,9 +442,9 @@ export const Dashboard: React.FC = () => {
           </button>
 
           {/* Reddit connection badge */}
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold ${redditConnected ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-            <span className={`w-2 h-2 rounded-full ${redditConnected ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}`} />
-            {redditConnected ? `Reddit: u/${profile?.name || 'Connected'}` : 'Reddit: Not linked'}
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold ${user?.extensionInstalled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+            <span className={`w-2 h-2 rounded-full ${user?.extensionInstalled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+            {user?.extensionInstalled ? 'Extension Verified' : 'Extension Required'}
           </div>
 
           {user?.plan === 'Starter' && (

@@ -166,7 +166,6 @@ export const Settings: React.FC = () => {
     const navigateToSettings = (tab: Tab) => {
         setActiveTab(tab);
     };
-    const [redditStatus, setRedditStatus] = useState<{ connected: boolean; accounts: any[] }>({ connected: false, accounts: [] });
     const [loading, setLoading] = useState(true);
     const [brandSaving, setBrandSaving] = useState(false);
     const [brandSaved, setBrandSaved] = useState(false);
@@ -378,18 +377,12 @@ export const Settings: React.FC = () => {
         const fetchData = async () => {
             if (!user?.id) { setLoading(false); return; }
             try {
-                const [redditRes, brandRes, plansRes] = await Promise.all([
-                    fetch(`/api/user/reddit/status?userId=${user.id}`),
+                const [brandRes, plansRes] = await Promise.all([
                     fetch(`/api/user/brand-profile?userId=${user.id}`),
                     fetch('/api/plans')
                 ]);
 
-                if (redditRes.ok) {
-                    const status = await redditRes.json();
-                    setRedditStatus(status);
-                } else {
-                    setRedditStatus({ connected: false, accounts: [] });
-                }
+                // redditRes was removed
 
                 if (brandRes.ok) {
                     const brandData = await brandRes.json();
@@ -403,7 +396,6 @@ export const Settings: React.FC = () => {
                 }
             } catch (err) {
                 console.error("Failed to fetch settings:", err);
-                setRedditStatus({ connected: false, accounts: [] });
             } finally {
                 setLoading(false);
             }
@@ -411,15 +403,7 @@ export const Settings: React.FC = () => {
         fetchData();
     }, [user]);
 
-    const handleConnectReddit = async () => {
-        try {
-            const response = await fetch('/api/auth/reddit/url');
-            const data = await response.json();
-            if (data.url) window.location.href = data.url;
-        } catch {
-            alert('Failed to initiate Reddit connection');
-        }
-    };
+
 
     const handleSaveBrand = async () => {
         if (!user?.id) return;
@@ -828,104 +812,42 @@ export const Settings: React.FC = () => {
 
                     <section className="space-y-4">
                         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                            <LinkIcon className="text-blue-600" size={20} /> Connected Accounts
+                            <LinkIcon className="text-blue-600" size={20} /> Extension Verification
                         </h2>
-                        {/* Reddit Data & Permission Notice — Required for Reddit API Compliance */}
-                        <div className="flex gap-3 items-start bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                            <span className="text-blue-500 mt-0.5 flex-shrink-0">ℹ️</span>
-                            <div className="text-xs text-blue-700 font-medium leading-relaxed">
-                                <p className="font-bold text-blue-800 mb-1">Reddit Account Permissions</p>
-                                <p>Connecting your Reddit account grants RedditGo the following limited permissions via Reddit's official OAuth2:</p>
-                                <ul className="list-disc ml-4 mt-1 space-y-0.5 text-blue-700">
-                                    <li><strong>identity</strong> — Read your username, karma, and profile icon</li>
-                                    <li><strong>read</strong> — Browse posts and comments you have access to</li>
-                                    <li><strong>submit</strong> — Post comments and submissions <em>only when you explicitly click "Post"</em></li>
-                                </ul>
-                                <p className="mt-1.5">We store your username and activity history to track your outreach performance. <strong>Nothing is ever posted automatically</strong> — every action requires your manual approval. You can disconnect at any time below.</p>
-                            </div>
-                        </div>
-                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-4">
-                            {loading ? (
-                                <div className="flex items-center justify-center py-4">
-                                    <RefreshCw className="animate-spin text-slate-400" size={20} />
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Plan Limits Indicator */}
-                                    <div className="flex items-center justify-between px-6 py-4 bg-slate-50 rounded-2xl border border-slate-100 mb-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                                                <LinkIcon size={14} />
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Account Slots</p>
-                                                <p className="text-sm font-bold text-slate-900">
-                                                    {(redditStatus.accounts || []).length} / {plans.find(p => (p.id || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.name || '').toLowerCase() === (user.plan || '').toLowerCase())?.maxAccounts || 1} <span className="text-slate-400 font-medium ml-1">accounts connected</span>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {(redditStatus.accounts || []).length >= (plans.find(p => (p.id || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.name || '').toLowerCase() === (user.plan || '').toLowerCase())?.maxAccounts || 1) ? (
-                                            <Link to="/pricing" className="text-[10px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">UPGRADE FOR MORE</Link>
-                                        ) : (
-                                            <button
-                                                onClick={handleConnectReddit}
-                                                className="text-[10px] font-black text-white bg-slate-900 px-4 py-1.5 rounded-lg hover:bg-orange-600 transition-all flex items-center gap-2"
-                                            >
-                                                <RefreshCw size={10} /> LINK NEW ACCOUNT
-                                            </button>
-                                        )}
-                                    </div>
 
-                                    {/* Account List */}
-                                    {(redditStatus.accounts || []).length > 0 ? (
-                                        <div className="space-y-3">
-                                            {(redditStatus.accounts || []).map((acc: any) => (
-                                                <div key={acc.username} className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[1.5rem] hover:border-orange-200 transition-all group">
-                                                    <div className="flex items-center gap-4">
-                                                        {acc.icon
-                                                            ? <img src={acc.icon} alt={acc.username} className="w-10 h-10 rounded-xl border-2 border-white shadow-sm" />
-                                                            : <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white font-black">R</div>
-                                                        }
-                                                        <div>
-                                                            <p className="font-bold text-slate-900 group-hover:text-orange-600 transition-colors">u/{acc.username}</p>
-                                                            <p className="text-[10px] text-slate-400 font-medium">Linked on {new Date(acc.connectedAt).toLocaleDateString()}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="flex items-center gap-1.5 bg-green-100 text-green-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                                            <CheckCircle2 size={12} /> Active
-                                                        </span>
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (window.confirm(`Disconnect u/${acc.username}?`)) {
-                                                                    const res = await fetch('/api/user/reddit/disconnect', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ userId: user.id, username: acc.username })
-                                                                    });
-                                                                    if (res.ok) window.location.reload();
-                                                                }
-                                                            }}
-                                                            className="text-slate-300 hover:text-red-500 text-xs font-bold transition-colors py-2 px-2"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
-                                            <Globe className="mx-auto text-slate-300 mb-3" size={40} />
-                                            <p className="font-bold text-slate-900">No Reddit accounts linked</p>
-                                            <p className="text-xs text-slate-400 mb-6">Connect your first account to start using AI outreach.</p>
-                                            <button onClick={handleConnectReddit} className="px-8 py-3 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-orange-600 transition-all shadow-xl shadow-slate-200">
-                                                LINK REDDIT ACCOUNT
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                        <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-6">
+                            <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-200/50">
+                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0 ${user?.extensionInstalled ? 'bg-emerald-600 shadow-emerald-200' : 'bg-slate-300 shadow-slate-200'}`}>
+                                    {user?.extensionInstalled ? <Check size={32} /> : <Globe size={32} />}
+                                </div>
+                                <div className="flex-1 text-center md:text-left">
+                                    <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                                        <h3 className="font-extrabold text-slate-900 text-lg">Chrome Extension Status</h3>
+                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${user?.extensionInstalled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                            {user?.extensionInstalled ? 'Active & Verified' : 'Not Detected'}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                                        Securely manage your Reddit interactions through our browser extension. No OAuth linking or password sharing is required.
+                                    </p>
+                                </div>
+                                <a
+                                    href="https://chromewebstore.google.com/"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95"
+                                >
+                                    Download Extension
+                                </a>
+                            </div>
+
+                            <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex gap-3 items-start">
+                                <Shield className="text-blue-500 mt-0.5 shrink-0" size={16} />
+                                <div className="text-[11px] text-blue-700 font-medium leading-relaxed">
+                                    <p className="font-bold mb-1">Privacy & Security Focus</p>
+                                    Your accounts remain entirely private. The browser extension acts as a secure bridge between your local browser session and our AI tools, ensuring all posts are deployed by you personally.
+                                </div>
+                            </div>
                         </div>
                     </section>
 
