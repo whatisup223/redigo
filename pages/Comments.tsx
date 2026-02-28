@@ -51,6 +51,13 @@ const PROGRESS_STEPS = [
   { message: 'Finalizing your reply...', icon: '✨', duration: 800 },
 ];
 
+const SEARCH_PROGRESS_STEPS = [
+  { message: 'جاري البحث في Reddit...', icon: '🔍', duration: 1500 },
+  { message: 'تحليل نية كاتب المنشور...', icon: '🧠', duration: 2000 },
+  { message: 'تقييم مدى احتياج العميل...', icon: '📊', duration: 1800 },
+  { message: 'ترتيب أفضل الفرص لك...', icon: '🎯', duration: 1200 },
+];
+
 const MOCK_POSTS: RedditPost[] = [
   {
     id: '1',
@@ -93,6 +100,7 @@ export const Comments: React.FC = () => {
   const [reloadCooldown, setReloadCooldown] = useState(0);
 
   const [progressStep, setProgressStep] = useState(0);
+  const [searchProgressStep, setSearchProgressStep] = useState(0);
 
   // Wizard & Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -280,6 +288,21 @@ export const Comments: React.FC = () => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // Cycle progress steps while fetching/analyzing
+  useEffect(() => {
+    if (!isFetching) { setSearchProgressStep(0); return; }
+    let current = 0;
+    const cycle = () => {
+      if (!isFetching) return;
+      if (current < SEARCH_PROGRESS_STEPS.length - 1) {
+        current++;
+        setSearchProgressStep(current);
+        setTimeout(cycle, SEARCH_PROGRESS_STEPS[current].duration);
+      }
+    };
+    setTimeout(cycle, SEARCH_PROGRESS_STEPS[0].duration);
+  }, [isFetching]);
 
   // Cycle progress steps while generating
   useEffect(() => {
@@ -539,6 +562,7 @@ export const Comments: React.FC = () => {
       const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
 
       if (response.status === 402) {
+        setIsFetching(false);
         setShowNoCreditsModal(true);
         return;
       }
@@ -551,6 +575,7 @@ export const Comments: React.FC = () => {
       }
       if (response.status === 429) {
         const errData = await response.json();
+        setIsFetching(false);
         if (errData.error === 'DAILY_LIMIT_REACHED') { setShowDailyLimitModal(true); return; }
         showToast('Too many requests. Please wait before refreshing again.', 'error');
         return;
@@ -734,6 +759,30 @@ export const Comments: React.FC = () => {
               >
                 Maybe Later
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fetching & Analysis Overlay */}
+      {isFetching && (
+        <div className="fixed inset-0 z-[1100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] p-8 md:p-14 max-w-md w-full shadow-2xl text-center space-y-8 animate-in zoom-in-95 duration-300">
+            <div className="relative w-24 h-24 mx-auto">
+              <div className="absolute inset-0 rounded-full bg-blue-100 animate-ping opacity-60" />
+              <div className="relative w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center text-4xl shadow-2xl shadow-blue-300">
+                {SEARCH_PROGRESS_STEPS[searchProgressStep]?.icon}
+              </div>
+            </div>
+            <div className="space-y-3 font-['Outfit']">
+              <p className="text-2xl font-extrabold text-slate-900">{SEARCH_PROGRESS_STEPS[searchProgressStep]?.message}</p>
+              <p className="text-slate-400 font-medium text-sm">تقوم Redigo الآن بتحليل عميق للفرص</p>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-blue-600 rounded-full transition-all duration-1000"
+                style={{ width: `${((searchProgressStep + 1) / SEARCH_PROGRESS_STEPS.length) * 100}%` }}
+              />
             </div>
           </div>
         </div>
