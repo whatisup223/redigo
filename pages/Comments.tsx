@@ -634,7 +634,7 @@ export const Comments: React.FC = () => {
 
       {/* Discard Draft Confirmation Modal */}
       {showDiscardConfirm && (
-        <div className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-300">
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
               <Trash2 size={32} />
@@ -665,7 +665,7 @@ export const Comments: React.FC = () => {
 
       {/* Re-generate/Refine Confirmation Modal */}
       {showRegenConfirm && (
-        <div className="fixed inset-0 z-[1000] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 font-['Outfit']">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 font-['Outfit']">
           <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-md w-full shadow-2xl space-y-8 animate-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between border-b border-slate-50 pb-4">
               <div className="flex items-center gap-3">
@@ -766,7 +766,7 @@ export const Comments: React.FC = () => {
 
       {/* Fetching & Analysis Overlay */}
       {isFetching && (
-        <div className="fixed inset-0 z-[1100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] p-8 md:p-14 max-w-md w-full shadow-2xl text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="relative w-24 h-24 mx-auto">
               <div className="absolute inset-0 rounded-full bg-blue-100 animate-ping opacity-60" />
@@ -790,7 +790,7 @@ export const Comments: React.FC = () => {
 
       {/* Generating Overlay */}
       {isGenerating && (
-        <div className="fixed inset-0 z-[1100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] p-8 md:p-14 max-w-md w-full shadow-2xl text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="relative w-24 h-24 mx-auto">
               <div className="absolute inset-0 rounded-full bg-orange-100 animate-ping opacity-60" />
@@ -1573,7 +1573,7 @@ export const Comments: React.FC = () => {
 
       {/* Extension Missing Modal */}
       {showExtensionWarning && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl space-y-6 text-center animate-in zoom-in-95 duration-300 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-orange-50 to-white -z-10" />
 
