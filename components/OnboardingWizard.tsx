@@ -245,6 +245,16 @@ export const OnboardingWizard: React.FC = () => {
                                     <p className="text-slate-500 text-sm md:text-base font-medium leading-relaxed max-w-md mx-auto md:mx-0">
                                         We're excited to help you automate your Reddit marketing. Let's get the basics sorted in under 2 minutes.
                                     </p>
+                                    <div className="flex items-center gap-2 pt-1 justify-center md:justify-start">
+                                        <div className="flex -space-x-2">
+                                            {[1, 2, 3, 4].map(i => (
+                                                <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 overflow-hidden">
+                                                    <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] font-bold text-slate-400">Join 5,000+ brands growing organically on Reddit.</p>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
                                     <div className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-5 group hover:border-orange-200 transition-all">
@@ -566,7 +576,7 @@ export const OnboardingWizard: React.FC = () => {
                                                 <Zap size={24} fill="#fbbf24" className="text-yellow-300 animate-pulse" />
                                             </div>
                                             <div className="text-left">
-                                                <p className="font-black text-2xl leading-none tracking-tight">100 Credits</p>
+                                                <p className="font-black text-2xl leading-none tracking-tight">{user?.credits || 100} Credits</p>
                                                 <p className="text-orange-100 text-[10px] font-black uppercase tracking-widest mt-1.5 opacity-90">Setup Bonus Unlocked</p>
                                             </div>
                                         </div>

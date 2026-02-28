@@ -1281,7 +1281,7 @@ app.post('/api/auth/signup', async (req, res) => {
       plan: 'Starter',
       billingCycle: 'monthly',
       status: 'Active',
-      credits: 100, // Grant initial credits upon signup
+      credits: 0, // No credits initially, awarded after onboarding
       subscriptionStart: new Date().toISOString(),
       subscriptionEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
       hasCompletedOnboarding: false,
@@ -1574,16 +1574,48 @@ app.post('/api/user/complete-onboarding', async (req, res) => {
     const user = await User.findOne({ id: userId.toString() });
 
     if (user) {
+      const wasOnboardingCompleted = user.hasCompletedOnboarding;
       user.hasCompletedOnboarding = true;
+
+      // Handle Reddit Username
       if (redditUsername) {
         user.redditUsername = redditUsername.replace('/u/', '').replace('u/', '').trim();
       }
+
+      // 🎁 Dynamic Bonus Awarding
+      if (!wasOnboardingCompleted) {
+        // Fetch Starter plan to get dynamic credit amount
+        const starterPlan = await Plan.findOne({ $or: [{ id: 'starter' }, { name: 'Starter' }] });
+        const bonusCredits = starterPlan ? (starterPlan.credits || 100) : 100;
+
+        // Add credits
+        user.credits = (user.credits || 0) + bonusCredits;
+
+        // Log transaction
+        if (!user.transactions) user.transactions = [];
+        user.transactions.push({
+          id: `onboarding_bonus_${Date.now()}`,
+          date: new Date().toISOString(),
+          amount: 0,
+          type: 'bonus',
+          description: 'Onboarding Completion Bonus',
+          subDescription: `Unlocked ${bonusCredits} credits for setting up your profile.`,
+          creditsAdded: bonusCredits,
+          finalBalance: user.credits,
+          planName: 'Starter'
+        });
+
+        addSystemLog('SUCCESS', `User awarded ${bonusCredits} credits for completing onboarding: ${user.email}`);
+      }
+
       await user.save();
       addSystemLog('INFO', `User completed onboarding: ${user.email}`, { redditUsername: user.redditUsername });
+
       res.json({
         success: true,
         hasCompletedOnboarding: true,
-        credits: user.credits
+        credits: user.credits,
+        redditUsername: user.redditUsername
       });
     } else {
       res.status(404).json({ error: 'User not found' });
