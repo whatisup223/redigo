@@ -25,7 +25,9 @@ import {
     X,
     AlertCircle,
     Clock,
-    Crown
+    Crown,
+    AlertTriangle,
+    Download
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -124,6 +126,8 @@ export const ContentArchitect: React.FC = () => {
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
     const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
+    const [showExtensionWarning, setShowExtensionWarning] = useState(false);
+    const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
     const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
     const canGenerateImages = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowImages));
@@ -304,7 +308,23 @@ export const ContentArchitect: React.FC = () => {
         setTimeout(cycle, PROGRESS_STEPS[0].duration);
     }, [isGenerating]);
 
+    const isExtensionActive = () => {
+        if (user?.role === 'admin') return true; // Admin skip
+        if (!user?.lastExtensionPing) return false;
+        const lastPing = new Date(user.lastExtensionPing).getTime();
+        const now = new Date().getTime();
+        return (now - lastPing) < 15 * 60 * 1000; // 15 mins active window
+    };
+
     const triggerImageGeneration = async (prompt: string) => {
+        // --- Extension Check ---
+        const needsCheck = !isExtensionActive();
+        if (needsCheck && !pendingAction) {
+            setPendingAction(() => () => triggerImageGeneration(prompt));
+            setShowExtensionWarning(true);
+            return;
+        }
+        setPendingAction(null); // Clear after check passes or forced continue
         // Proactive Daily Limit Pre-check (for individual image trigger)
         if (user && user.role !== 'admin') {
             const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
@@ -359,6 +379,15 @@ export const ContentArchitect: React.FC = () => {
 
     const handleGenerateContent = async (mode: 'text' | 'image' | 'both' = 'both') => {
         if (!postData.subreddit) return;
+
+        // --- Extension Check ---
+        const needsCheck = !isExtensionActive();
+        if (needsCheck && !pendingAction) {
+            setPendingAction(() => () => handleGenerateContent(mode));
+            setShowExtensionWarning(true);
+            return;
+        }
+        setPendingAction(null); // Clear after check passes or forced continue
 
         const postCost = Number(costs.post) ?? 2;
         const imageCost = Number(costs.image) ?? 5;
@@ -1586,6 +1615,56 @@ export const ContentArchitect: React.FC = () => {
                                 className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
                             >
                                 Got it
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Extension Missing Modal */}
+            {showExtensionWarning && (
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl space-y-6 text-center animate-in zoom-in-95 duration-300 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-orange-50 to-white -z-10" />
+
+                        <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-orange-200">
+                            <AlertTriangle size={40} />
+                        </div>
+
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black text-slate-900 leading-tight">Extension Inactive! ⚠️</h3>
+                            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                                We couldn't detect the <span className="text-orange-600 font-bold">Redigo Extension</span>. Without it, you will have to manually copy and paste posts on Reddit.
+                            </p>
+                            <p className="text-xs text-slate-400 italic">
+                                Proceeding will still consume <span className="font-bold text-slate-600">Points</span>.
+                            </p>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <a
+                                href="/api/download-extension"
+                                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl shadow-slate-100 hover:bg-orange-600 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                            >
+                                Download Extension <Download size={16} />
+                            </a>
+                            <button
+                                onClick={() => {
+                                    setShowExtensionWarning(false);
+                                    if (pendingAction) pendingAction();
+                                }}
+                                className="w-full py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-50 hover:border-slate-200 transition-all text-xs uppercase tracking-widest"
+                            >
+                                Continue anyway (Spend Points)
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowExtensionWarning(false);
+                                    setPendingAction(null);
+                                }}
+                                className="w-full py-2 text-slate-400 font-bold hover:text-red-500 transition-colors text-[10px] uppercase tracking-widest"
+                            >
+                                Cancel Action
                             </button>
                         </div>
                     </div>

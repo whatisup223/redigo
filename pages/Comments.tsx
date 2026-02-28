@@ -13,6 +13,7 @@ import {
   ThumbsUp,
   Crown,
   Type,
+  AlertTriangle,
   Smile,
   ShieldCheck,
   Copy,
@@ -33,7 +34,8 @@ import {
   Link as LinkIcon,
   Filter,
   MessageSquare,
-  ArrowUpCircle
+  ArrowUpCircle,
+  Download
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { RedditPost, GeneratedReply } from '../types';
@@ -108,6 +110,8 @@ export const Comments: React.FC = () => {
   const [targetCooldown, setTargetCooldown] = useState(30);
   const [sortBy, setSortBy] = useState('new');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [showExtensionWarning, setShowExtensionWarning] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
   const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
@@ -290,7 +294,26 @@ export const Comments: React.FC = () => {
     setTimeout(cycle, PROGRESS_STEPS[0].duration);
   }, [isGenerating]);
 
+  const isExtensionActive = () => {
+    if (user?.role === 'admin') return true; // Admin skip
+    if (!user?.lastExtensionPing) return false;
+    const lastPing = new Date(user.lastExtensionPing).getTime();
+    const now = new Date().getTime();
+    return (now - lastPing) < 15 * 60 * 1000; // 15 mins active window
+  };
+
   const handleGenerate = async (post: any, customSettings?: any) => {
+    if (!user?.id) return;
+
+    // --- Extension Check ---
+    const needsCheck = !isExtensionActive();
+    if (needsCheck && !pendingAction) {
+      setPendingAction(() => () => handleGenerate(post, customSettings));
+      setShowExtensionWarning(true);
+      return;
+    }
+    setPendingAction(null); // Clear after check passes or forced continue
+
     const cost = costs.comment;
 
     // Proactive Daily Limit Pre-check
@@ -466,6 +489,15 @@ export const Comments: React.FC = () => {
     }
 
     if (reloadCooldown > 0) return;
+
+    // --- Extension Check ---
+    const needsCheck = !isExtensionActive();
+    if (needsCheck && !pendingAction) {
+      setPendingAction(() => () => fetchPosts());
+      setShowExtensionWarning(true);
+      return;
+    }
+    setPendingAction(null); // Clear after check passes or forced continue
 
     // ── Credit Pre-check ────────────────────────────────────────────────
     const cost = costs.fetch || 1;
@@ -872,36 +904,42 @@ export const Comments: React.FC = () => {
 
             {/* AI Intent Filters */}
             {posts.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 flex-shrink-0">
-                  <Filter size={12} className="inline mr-1" />
-                  AI Intents
-                </span>
-                {['All', 'Problem Solving', 'Seeking Alternative', 'Request Advice', 'Product Launch', 'General'].map(intent => {
-                  const count = intent === 'All' ? posts.length : posts.filter(p => p.intent === intent).length;
-                  if (intent !== 'All' && count === 0) return null; // Hide empty intents
-                  return (
-                    <button
-                      key={intent}
-                      onClick={() => setActiveIntentFilter(intent)}
-                      className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${activeIntentFilter === intent ? 'bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/20' : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:text-orange-600'}`}
-                    >
-                      {intent} <span className="opacity-70 text-[10px] ml-1">({count})</span>
-                    </button>
-                  )
-                })}
-                <div className="flex-1"></div>
-                <button
-                  onClick={() => {
-                    setPosts([]);
-                    setSelectedPost(null);
-                  }}
-                  className="flex-shrink-0 flex items-center gap-2 px-3 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest"
-                  title="Clear all results"
-                >
-                  <Trash2 size={14} />
-                  <span>Clear</span>
-                </button>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 flex-shrink-0">
+                      <Filter size={12} className="inline mr-1" />
+                      AI Intents
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setPosts([]);
+                      setSelectedPost(null);
+                    }}
+                    className="flex-shrink-0 flex items-center gap-2 px-4 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest border border-transparent hover:border-red-100"
+                    title="Clear all results"
+                  >
+                    <Trash2 size={14} />
+                    <span>Clear Results</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {['All', 'Problem Solving', 'Seeking Alternative', 'Request Advice', 'Product Launch', 'General'].map(intent => {
+                    const count = intent === 'All' ? posts.length : posts.filter(p => p.intent === intent).length;
+                    if (intent !== 'All' && count === 0) return null; // Hide empty intents
+                    return (
+                      <button
+                        key={intent}
+                        onClick={() => setActiveIntentFilter(intent)}
+                        className={`flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${activeIntentFilter === intent ? 'bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-600/20' : 'bg-white text-slate-600 border-slate-200 hover:border-orange-300 hover:text-orange-600'}`}
+                      >
+                        {intent} <span className="opacity-70 text-[10px] ml-1">({count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             )}
 
@@ -930,40 +968,43 @@ export const Comments: React.FC = () => {
                 onClick={() => setSelectedPost(post)}
                 className={`p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
               >
-                {/* AI Intel Badge (Absolute positioned in corner) */}
-                {(post.opportunityScore > 0 || post.intent) && (
-                  <div className="absolute top-5 right-5 flex flex-col items-end gap-1.5 opacity-90">
-                    {post.opportunityScore > 50 && (
-                      <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
-                        <Flame size={12} className="fill-current" /> Hot Lead
-                      </div>
+                <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-widest">r/{post.subreddit}</span>
+                    <span className="text-[10px] font-bold text-slate-400">u/{post.author}</span>
+                    {['1', '2', '3', '4'].includes(post.id) && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                        <ShieldCheck size={10} /> Demo Post
+                      </span>
                     )}
-                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm">
-                      <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">AI Score</div>
-                      <div className={`text-sm font-black ${post.opportunityScore > 70 ? 'text-emerald-600' : post.opportunityScore > 40 ? 'text-orange-500' : 'text-slate-500'}`}>
-                        {post.opportunityScore}
-                      </div>
-                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                      <div className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-100">
-                        {post.intent || 'General'}
-                      </div>
-                    </div>
                   </div>
-                )}
 
-                <div className="flex flex-col md:flex-row items-start justify-between gap-6 mt-6 md:mt-2">
-                  <div className="flex-1 space-y-4 max-w-[85%]">
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-widest">r/{post.subreddit}</span>
-                      <span className="text-[10px] font-bold text-slate-400">u/{post.author}</span>
-                      {['1', '2', '3', '4'].includes(post.id) && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded-md text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
-                          <ShieldCheck size={10} /> Demo Post
-                        </span>
+                  {/* AI Intel Badge (Now relative to avoid overlap) */}
+                  {(post.opportunityScore > 0 || post.intent) && (
+                    <div className="flex flex-row items-center gap-2 overflow-x-auto">
+                      {post.opportunityScore > 50 && (
+                        <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-widest flex-shrink-0">
+                          <Flame size={12} className="fill-current" /> Hot Lead
+                        </div>
                       )}
+                      <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm flex-shrink-0">
+                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Score</div>
+                        <div className={`text-sm font-black ${post.opportunityScore > 70 ? 'text-emerald-600' : post.opportunityScore > 40 ? 'text-orange-500' : 'text-slate-500'}`}>
+                          {post.opportunityScore}
+                        </div>
+                        <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                        <div className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-100">
+                          {post.intent || 'General'}
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="text-lg md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors pr-4 md:pr-20 truncate md:whitespace-normal">{post.title}</h3>
-                    <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed font-medium overflow-hidden">{post.selftext}</p>
+                  )}
+                </div>
+
+                <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+                  <div className="flex-1 space-y-4">
+                    <h3 className="text-base md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors md:pr-10">{post.title}</h3>
+                    <p className="text-slate-500 text-sm line-clamp-4 md:line-clamp-3 leading-relaxed font-sm overflow-hidden whitespace-pre-wrap">{post.selftext}</p>
                     <div className="flex items-center gap-5 pt-2">
                       {/* Footer Meta Data */}
                       <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><ThumbsUp size={14} /> {post.ups}</div>
@@ -1464,6 +1505,56 @@ export const Comments: React.FC = () => {
                 className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs uppercase tracking-widest"
               >
                 Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extension Missing Modal */}
+      {showExtensionWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl space-y-6 text-center animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-orange-50 to-white -z-10" />
+
+            <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border border-orange-200">
+              <AlertTriangle size={40} />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-black text-slate-900 leading-tight">Extension Inactive! ⚠️</h3>
+              <p className="text-slate-500 text-sm font-medium leading-relaxed">
+                We couldn't detect the <span className="text-orange-600 font-bold">Redigo Extension</span>. Without it, you will have to manually copy and paste replies on Reddit.
+              </p>
+              <p className="text-xs text-slate-400 italic">
+                Proceeding will still consume <span className="font-bold text-slate-600">Points</span>.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <a
+                href="/api/download-extension"
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl shadow-slate-100 hover:bg-orange-600 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+              >
+                Download Extension <Download size={16} />
+              </a>
+              <button
+                onClick={() => {
+                  setShowExtensionWarning(false);
+                  if (pendingAction) pendingAction();
+                }}
+                className="w-full py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-50 hover:border-slate-200 transition-all text-xs uppercase tracking-widest"
+              >
+                Continue anyway (Spend Points)
+              </button>
+              <button
+                onClick={() => {
+                  setShowExtensionWarning(false);
+                  setPendingAction(null);
+                }}
+                className="w-full py-2 text-slate-400 font-bold hover:text-red-500 transition-colors text-[10px] uppercase tracking-widest"
+              >
+                Cancel Action
               </button>
             </div>
           </div>

@@ -27,6 +27,7 @@ export interface User {
     transactions?: any[];
     connectedAccounts?: any[];
     extensionInstalled?: boolean;
+    lastExtensionPing?: string | Date;
     usageStats?: {
         posts: number;
         comments: number;
