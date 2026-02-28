@@ -985,6 +985,23 @@ Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "inte
         }
     };
 
+    const handleExportLogs = () => {
+        if (systemLogs.length === 0) return alert('No logs to export');
+        const logText = systemLogs.map(log =>
+            `[${new Date(log.timestamp).toLocaleString()}] ${log.level}: ${log.message} ${log.metadata ? JSON.stringify(log.metadata) : ''}`
+        ).join('\n');
+
+        const blob = new Blob([logText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `redigo_system_logs_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     const fetchAnnStats = async (id: string) => {
         const token = localStorage.getItem('token');
         setIsAnnStatsLoading(true);
@@ -3377,16 +3394,25 @@ Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "inte
                                             if (log.level === 'ERROR') colorClass = 'text-red-400 font-bold';
                                             if (log.level === 'SUCCESS') colorClass = 'text-emerald-400 font-bold';
 
+                                            // Feature-specific highlighting
+                                            const isExtension = log.message?.includes('Ext-Reddit') || log.message?.includes('Extension');
+                                            const isServer = log.message?.includes('via SERVER') || log.message?.includes('Mobile Server');
+
+                                            if (isExtension) colorClass = 'text-emerald-400 font-bold';
+                                            if (isServer) colorClass = 'text-red-400 font-bold';
+
                                             return (
-                                                <div key={log.id} className="mb-1 hover:bg-slate-800/50 p-1 rounded -mx-1 px-2 transition-colors break-words">
-                                                    <span className="text-slate-500 mr-2">[{new Date(log.timestamp).toLocaleString()}]</span>
-                                                    <span className={`uppercase w-16 inline-block font-bold text-[10px] tracking-wider ${colorClass}`}>{log.level}</span>
-                                                    <span className={colorClass}>{log.message}</span>
-                                                    {log.metadata && Object.keys(log.metadata).length > 0 && (
-                                                        <span className="text-slate-600 ml-2 text-xs">
-                                                            {JSON.stringify(log.metadata)}
-                                                        </span>
-                                                    )}
+                                                <div key={log.id} className="mb-1 hover:bg-slate-800/50 p-1 rounded -mx-1 px-2 transition-colors break-words flex items-start gap-2">
+                                                    <span className="text-slate-500 flex-shrink-0 whitespace-nowrap">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                                    <span className={`uppercase w-16 inline-block font-bold text-[10px] tracking-wider flex-shrink-0 ${colorClass}`}>{log.level}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className={colorClass}>{log.message}</span>
+                                                        {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                                            <span className="text-slate-600 text-[10px] font-medium opacity-80 mt-0.5">
+                                                                {JSON.stringify(log.metadata)}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             );
                                         })
@@ -3399,8 +3425,16 @@ Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "inte
                                         <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Auto-refreshing (3s)</span>
 
                                         <button
+                                            onClick={handleExportLogs}
+                                            className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white border border-blue-500/20 rounded-xl transition-all duration-300 group"
+                                        >
+                                            <Download size={14} className="group-hover:scale-110 transition-transform" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Export Logs</span>
+                                        </button>
+
+                                        <button
                                             onClick={handleClearLogs}
-                                            className="ml-auto flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl transition-all duration-300 group"
+                                            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl transition-all duration-300 group"
                                         >
                                             <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
                                             <span className="text-[10px] font-black uppercase tracking-widest">Clear All Logs</span>
