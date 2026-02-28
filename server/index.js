@@ -2248,42 +2248,22 @@ const adminAuth = (req, res, next) => {
 // ─── Extension Download Tracking ──────────────────────────────────────
 app.get('/api/download-extension', async (req, res) => {
   try {
-    // 1. Background tracking (won't block download)
-    Setting.findOneAndUpdate(
+    // Increment download counter in settings
+    await Setting.findOneAndUpdate(
       { key: 'extensionDownloadCount' },
       { $inc: { 'value': 1 } },
-      { upsert: true }
-    ).catch(e => console.error('[DOWNLOAD] Counter error:', e));
+      { upsert: true, new: true }
+    );
 
+    // Track in logs
     addSystemLog('INFO', 'Browser extension download initiated');
 
-    // 2. Resolve Paths (Try multiple to be safe on production/Linux/Windows)
-    const possiblePaths = [
-      path.resolve(__dirname, '../public/redigo-extension.zip'),
-      path.resolve(process.cwd(), 'public/redigo-extension.zip'),
-      path.join(process.cwd(), 'public/redigo-extension.zip')
-    ];
-
-    let foundPath = null;
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        foundPath = p;
-        break;
-      }
-    }
-
-    if (foundPath) {
-      console.log(`[DOWNLOAD] Sending file: ${foundPath}`);
-      return res.download(foundPath, 'redigo-extension.zip');
-    }
-
-    // Fallback if absolutely not found
-    console.error('[DOWNLOAD] File not found in any location:', possiblePaths);
-    res.status(404).send('Extension file not found on server. Please ensure public/redigo-extension.zip exists and pull latest changes.');
-
+    // Send the file
+    const filePath = path.join(__dirname, '../public/redigo-extension.zip');
+    res.download(filePath, 'redigo-extension.zip');
   } catch (err) {
-    console.error('[DOWNLOAD] Fatal error:', err);
-    res.status(500).send('Internal server error during download process.');
+    console.error('Download tracking error:', err);
+    res.status(500).json({ error: 'Failed to process download' });
   }
 });
 
