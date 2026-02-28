@@ -1647,7 +1647,7 @@ export const ContentArchitect: React.FC = () => {
                         <div className="space-y-3 pt-2">
                             <a
                                 href="/api/download-extension"
-                                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl shadow-slate-100 hover:bg-orange-600 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
+                                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-xl shadow-slate-100 hover:bg-emerald-600 hover:scale-[1.02] transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs"
                             >
                                 Download Extension <Download size={16} />
                             </a>
