@@ -211,14 +211,7 @@ export const OnboardingWizard: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="hidden md:flex relative z-10 items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
-                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
-                            <Star size={18} />
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-medium">
-                            Join 5,000+ brands growing organically on Reddit.
-                        </p>
-                    </div>
+
                 </div>
 
                 {/* Content Section */}
