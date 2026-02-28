@@ -142,6 +142,9 @@ interface RedditSettings {
     minDelay?: number;
     maxDelay?: number;
     antiSpam?: boolean;
+    useExtensionFetching?: boolean;
+    useServerFallback?: boolean;
+    mobileServerFetching?: boolean;
 }
 
 interface SMTPSettings {
@@ -243,7 +246,10 @@ Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "inte
         userAgent: 'RedigoApp/1.0',
         minDelay: 5,
         maxDelay: 15,
-        antiSpam: true
+        antiSpam: true,
+        useExtensionFetching: true,
+        useServerFallback: true,
+        mobileServerFetching: true
     });
     const [smtpSettings, setSmtpSettings] = useState<SMTPSettings>({
         host: '',
@@ -2882,6 +2888,56 @@ Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "inte
                                                         >
                                                             <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.antiSpam ? 'translate-x-6' : 'translate-x-0'}`} />
                                                         </button>
+                                                    </div>
+                                                    <div className="pt-6 mt-6 border-t border-slate-100 space-y-4">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Globe size={18} className="text-blue-600" />
+                                                            <h3 className="text-sm font-bold text-slate-900">Hybrid Fetching Strategy</h3>
+                                                        </div>
+
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-slate-900">Priority: Extension Fetching</p>
+                                                                    <p className="text-[10px] text-slate-500">Fetch via Chrome Extension on Desktop to save Server IP</p>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setRedditSettings({ ...redditSettings, useExtensionFetching: !redditSettings.useExtensionFetching })}
+                                                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.useExtensionFetching ? 'bg-blue-600' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.useExtensionFetching ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-slate-900">Server Fallback (Desktop)</p>
+                                                                    <p className="text-[10px] text-slate-500">Use server IF extension is missing or fails</p>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setRedditSettings({ ...redditSettings, useServerFallback: !redditSettings.useServerFallback })}
+                                                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.useServerFallback ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.useServerFallback ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-slate-900">Mobile Server Fetching</p>
+                                                                    <p className="text-[10px] text-slate-500">Allow server fetching for mobile devices (no extension fallback)</p>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setRedditSettings({ ...redditSettings, mobileServerFetching: !redditSettings.mobileServerFetching })}
+                                                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${redditSettings.mobileServerFetching ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                                                >
+                                                                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${redditSettings.mobileServerFetching ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <button

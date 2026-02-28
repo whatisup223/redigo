@@ -1725,7 +1725,10 @@ let redditSettings = savedData.reddit || {
   userAgent: 'web:redditgo.online:2.0 (by /u/Fun-Club-8513)',
   minDelay: 5,
   maxDelay: 15,
-  antiSpam: true
+  antiSpam: true,
+  useExtensionFetching: true,
+  useServerFallback: true,
+  mobileServerFetching: true
 };
 
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
@@ -1734,9 +1737,18 @@ const REDDIT_USER_AGENT = 'web:redditgo.online:2.0 (by /u/Fun-Club-8513)';
 
 const getDynamicUserAgent = (userId) => {
   // Always enforce the correct Reddit-compliant User-Agent format
-  const base = (redditSettings.userAgent && redditSettings.userAgent.includes('by /u/'))
+  let base = (redditSettings.userAgent && redditSettings.userAgent.includes('by /u/'))
     ? redditSettings.userAgent
     : REDDIT_USER_AGENT;
+
+  // Inject userId to distinguish traffic per user while keeping the same app identity
+  if (userId) {
+    if (base.includes(')')) {
+      base = base.replace(' (by /u/', `:user:${userId} (by /u/`);
+    } else {
+      base = `${base}:user:${userId}`;
+    }
+  }
   return base;
 };
 
@@ -1954,6 +1966,11 @@ app.get('/api/config', (req, res) => {
   res.json({
     creditCosts: aiSettings.creditCosts,
     redditFetchCooldown: aiSettings.redditFetchCooldown || 30,
+    redditSettings: {
+      useExtensionFetching: redditSettings.useExtensionFetching ?? true,
+      useServerFallback: redditSettings.useServerFallback ?? true,
+      mobileServerFetching: redditSettings.mobileServerFetching ?? true
+    },
     gateways: {
       stripe: stripeSettings.enabled,
       paypal: paypalSettings.enabled
@@ -4467,12 +4484,144 @@ async function performSemanticAnalysis(posts) {
   }
 }
 
+// Analyze Reddit Data (triggered by extension-based fetching)
+app.post('/api/reddit/analyze', async (req, res) => {
+  try {
+    const { rawJson, keywords, userId } = req.body;
+    if (!userId || !rawJson || !rawJson.data || !rawJson.data.children) {
+      return res.status(400).json({ error: 'Invalid or missing Reddit data.' });
+    }
+
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // ── CREDIT CHECK & DEDUCTION ────────────────────────────────────────────
+    const cost = Number(aiSettings.creditCosts?.fetch) ?? 1;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Reset daily usage if new day
+    if (user.lastUsageDate !== today) {
+      await User.updateOne({ id: userId.toString() }, {
+        $set: { dailyUsage: 0, dailyUsagePoints: 0, lastUsageDate: today }
+      });
+      user.dailyUsage = 0;
+      user.dailyUsagePoints = 0;
+    }
+
+    if (user.role !== 'admin') {
+      const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
+        return res.status(429).json({ error: 'DAILY_LIMIT_REACHED', used: user.dailyUsagePoints, limit: dailyLimit });
+      }
+
+      if ((user.credits || 0) < cost) {
+        return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+      }
+    }
+
+    // Atomic credit deduction
+    const updatedUser = await User.findOneAndUpdate(
+      { id: userId.toString(), $or: [{ role: 'admin' }, { credits: { $gte: cost } }] },
+      {
+        $inc: {
+          credits: user.role === 'admin' ? 0 : -cost,
+          dailyUsage: 1,
+          dailyUsagePoints: cost,
+          'usageStats.totalSpent': cost
+        },
+        $set: { lastUsageDate: today },
+        $push: { 'usageStats.history': { date: new Date().toISOString(), type: 'fetch_extension', cost } }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+
+    addSystemLog('INFO', `Ext-Reddit Analysis by User ${userId}`, { cost, creditsRemaining: updatedUser.credits });
+
+    // ── PROCESS DATA ────────────────────────────────────────────────────────
+    const keywordList = (keywords || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+
+    let posts = rawJson.data.children.map(child => {
+      const post = child.data;
+      let score = 0;
+      const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+      keywordList.forEach(word => { if (content.includes(word)) score += 40; });
+
+      let intent = 'General';
+      if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
+      else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
+      else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
+      else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
+
+      if (intent !== 'General') score += 20;
+      score += Math.min((post.ups || 0) / 5, 20);
+      score += Math.min((post.num_comments || 0) * 2, 20);
+      const opportunityScore = Math.min(Math.round(score), 100);
+
+      return {
+        id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
+        ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
+        url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
+        opportunityScore, intent, isHot: (post.ups || 0) > 100 || (post.num_comments || 0) > 50,
+        competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
+      };
+    }).filter(post => {
+      if (keywordList.length === 0) return true;
+      const searchContent = (post.title + ' ' + (post.selftext || '')).toLowerCase();
+      return keywordList.some(kw => searchContent.includes(kw));
+    });
+
+    // ── SEMANTIC ANALYSIS ENHANCEMENT ────────────────────────────────────────
+    const postsForAnalysis = posts.slice(0, 15);
+    const remainingPosts = posts.slice(15);
+    const analyzedPosts = await performSemanticAnalysis(postsForAnalysis);
+
+    posts = [...analyzedPosts, ...remainingPosts].sort((a, b) => {
+      const aHasReason = !!a.analysisReason;
+      const bHasReason = !!b.analysisReason;
+      if (aHasReason && !bHasReason) return -1;
+      if (!aHasReason && bHasReason) return 1;
+      return b.opportunityScore - a.opportunityScore;
+    });
+
+    res.json({
+      posts: posts.slice(0, 50),
+      credits: updatedUser.credits,
+      dailyUsagePoints: updatedUser.dailyUsagePoints,
+      cost
+    });
+
+  } catch (error) {
+    console.error('Reddit Analysis Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   try {
     const { subreddit, keywords, userId, redditUsername } = req.query;
     console.log(`[Reddit] Fetching for User ${userId} from r/${subreddit}`);
 
     if (!userId) return res.status(401).json({ error: 'User ID required' });
+
+    // ── FALLBACK & POLICY CHECK ─────────────────────────────────────────────
+    const userAgent = req.headers['user-agent'] || '';
+    const isMobile = /Mobile|Android|iPhone/i.test(userAgent);
+
+    if (isMobile) {
+      if (!redditSettings.mobileServerFetching) {
+        return res.status(403).json({ error: 'SERVER_FETCH_DISABLED_MOBILE', message: 'Server-side fetching is disabled for mobile. Please use a desktop browser with the extension.' });
+      }
+    } else {
+      // Desktop
+      if (!redditSettings.useServerFallback) {
+        return res.status(403).json({ error: 'SERVER_FETCH_DISABLED_DESKTOP', message: 'Server-side fetching is disabled. Please use the Chrome Extension.' });
+      }
+    }
 
     // Safety check for empty inputs to save credits
     if (!subreddit || !subreddit.trim() || !keywords || !keywords.trim()) {

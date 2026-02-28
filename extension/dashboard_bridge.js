@@ -71,4 +71,19 @@ window.addEventListener('message', (event) => {
             }
         );
     }
+    // ── Handle Search (Fetching posts via Extension) ────────────────────────
+    if (event.data.type === 'REDDIT_SEARCH') {
+        const { subreddit, keywords, sortBy } = event.data;
+        chrome.runtime.sendMessage(
+            {
+                type: 'REDDIT_SEARCH',
+                subreddit,
+                keywords,
+                sortBy
+            },
+            (response) => {
+                window.postMessage({ source: 'REDIGO_EXT', type: 'SEARCH_RESPONSE', payload: response }, '*');
+            }
+        );
+    }
 });

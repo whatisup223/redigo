@@ -34,5 +34,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ status: 'DEPLOYING', message: 'Opening Reddit tab' });
     }
 
+    if (request.type === 'REDDIT_SEARCH') {
+        const { subreddit, keywords, sortBy } = request;
+        const searchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(keywords)}&restrict_sr=on&sort=${sortBy || 'new'}&t=all&limit=100`;
+
+        fetch(searchUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`Reddit error: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                sendResponse({ success: true, data });
+            })
+            .catch(error => {
+                console.error('Extension Search Error:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+        return true;
+    }
+
     return true; // Keep message channel open for async response
 });

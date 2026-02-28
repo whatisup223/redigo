@@ -141,6 +141,11 @@ export const Comments: React.FC = () => {
   const [includeBrandName, setIncludeBrandName] = useState(true);
   const [includeLink, setIncludeLink] = useState(true);
   const [useTracking, setUseTracking] = useState(false);
+  const [redditSettings, setRedditSettings] = useState<any>({
+    useExtensionFetching: true,
+    useServerFallback: true,
+    mobileServerFetching: true
+  });
 
   useEffect(() => {
     syncUser(); // Refresh user data (credits, daily limits) on mount
@@ -150,6 +155,7 @@ export const Comments: React.FC = () => {
       .then(data => {
         if (data.redditFetchCooldown) setTargetCooldown(data.redditFetchCooldown);
         if (data.creditCosts) setCosts(prev => ({ ...prev, ...data.creditCosts, fetch: Number(data.creditCosts.fetch) ?? 1 }));
+        if (data.redditSettings) setRedditSettings(data.redditSettings);
       })
       .catch(console.error);
 
@@ -504,6 +510,34 @@ export const Comments: React.FC = () => {
     }
   };
 
+  const fetchWithExtension = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const handleResponse = (event: MessageEvent) => {
+        if (event.data.source === 'REDIGO_EXT' && event.data.type === 'SEARCH_RESPONSE') {
+          window.removeEventListener('message', handleResponse);
+          if (event.data.payload && event.data.payload.success) {
+            resolve(event.data.payload.data);
+          } else {
+            reject(new Error(event.data.payload?.error || 'Extension fetch failed'));
+          }
+        }
+      };
+      window.addEventListener('message', handleResponse);
+      window.postMessage({
+        source: 'REDIGO_WEB_APP',
+        type: 'REDDIT_SEARCH',
+        subreddit: targetSubreddit,
+        keywords: searchKeywords,
+        sortBy: sortBy
+      }, '*');
+
+      setTimeout(() => {
+        window.removeEventListener('message', handleResponse);
+        reject(new Error('Extension timeout'));
+      }, 30000);
+    });
+  };
+
   const fetchPosts = async () => {
     if (!user?.id) return;
 
@@ -559,31 +593,69 @@ export const Comments: React.FC = () => {
     }, 1000);
 
     try {
-      const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
+      let data: any;
+      const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
+      const canUseExtension = redditSettings.useExtensionFetching && isExtensionActive() && !isMobile;
 
-      if (response.status === 402) {
-        setIsFetching(false);
-        setShowNoCreditsModal(true);
-        return;
-      }
-      if (response.status === 400) {
-        const errData = await response.json();
-        showToast(errData.error || 'Subreddit and keywords required.', 'error');
-        setIsFetching(false);
-        setReloadCooldown(0); // Allow retry since it failed due to input
-        return;
-      }
-      if (response.status === 429) {
-        const errData = await response.json();
-        setIsFetching(false);
-        if (errData.error === 'DAILY_LIMIT_REACHED') { setShowDailyLimitModal(true); return; }
-        showToast('Too many requests. Please wait before refreshing again.', 'error');
-        return;
-      }
-      if (!response.ok) throw new Error('Fetch failed');
+      if (canUseExtension) {
+        console.log('[Hybrid] Using Extension Fetching');
+        try {
+          const rawJson = await fetchWithExtension();
+          const response = await fetch('/api/reddit/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rawJson, keywords: searchKeywords, userId: user.id })
+          });
+          if (response.status === 402) {
+            setIsFetching(false);
+            setShowNoCreditsModal(true);
+            return;
+          }
+          if (response.status === 429) {
+            setShowDailyLimitModal(true);
+            setIsFetching(false);
+            return;
+          }
+          if (!response.ok) throw new Error('Analysis failed');
+          data = await response.json();
+        } catch (extErr: any) {
+          console.warn('[Hybrid] Extension fetch failed, checking fallback...', extErr);
+          if (redditSettings.useServerFallback) {
+            console.log('[Hybrid] Falling back to Server Fetching');
+            const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
+            if (!response.ok) throw new Error('Server fallback failed');
+            data = await response.json();
+          } else {
+            throw extErr;
+          }
+        }
+      } else {
+        console.log('[Hybrid] Using Server Fetching (Fallback, Mobile, or Extension Disabled)');
+        const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
 
-      const data = await response.json();
-      // New API returns { posts: [...], credits, dailyUsagePoints, dailyUsage, cost }
+        if (response.status === 402) {
+          setIsFetching(false);
+          setShowNoCreditsModal(true);
+          return;
+        }
+        if (response.status === 403) {
+          const errData = await response.json();
+          showToast(errData.message || 'Server-side fetching is disabled.', 'error');
+          setIsFetching(false);
+          setReloadCooldown(0);
+          return;
+        }
+        if (response.status === 429) {
+          const errData = await response.json();
+          setIsFetching(false);
+          if (errData.error === 'DAILY_LIMIT_REACHED') { setShowDailyLimitModal(true); return; }
+          showToast('Too many requests. Please wait.', 'error');
+          return;
+        }
+        if (!response.ok) throw new Error('Fetch failed');
+        data = await response.json();
+      }
+
       const postsArray = Array.isArray(data) ? data : (data.posts || []);
 
       // Immediately sync credits if returned
@@ -599,11 +671,11 @@ export const Comments: React.FC = () => {
 
       const hasDraft = localStorage.getItem('redditgo_comment_draft');
       if (postsArray.length > 0 && !hasDraft) {
-        // Auto-select the top result for convenience, since we just cleared the selection at the start of fetch
         setSelectedPost(postsArray[0]);
       }
     } catch (err: any) {
-      showToast('Failed to load posts. Please try again.', 'error');
+      console.error('[Hybrid Search Error]:', err);
+      showToast(err.message || 'Failed to load posts. Please try again.', 'error');
     } finally {
       setIsFetching(false);
     }
