@@ -129,6 +129,8 @@ export const ContentArchitect: React.FC = () => {
     const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
     const [showExtensionWarning, setShowExtensionWarning] = useState(false);
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+    const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
+    const pingTimeoutRef = useRef<any>(null);
 
     const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
     const canGenerateImages = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowImages));
@@ -205,6 +207,37 @@ export const ContentArchitect: React.FC = () => {
         }
         setIsInitialCheckDone(true);
     }, []);
+
+    // ── Extension Real-time Detection ─────────────────────────────────────
+    useEffect(() => {
+        const handleExtMessage = (event: MessageEvent) => {
+            if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
+                if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+                setExtensionDetected(true);
+            }
+        };
+
+        window.addEventListener('message', handleExtMessage);
+
+        setExtensionDetected(null);
+        if (document.documentElement.getAttribute('data-redigo-extension') === 'installed') {
+            setExtensionDetected(true);
+        } else {
+            window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
+            pingTimeoutRef.current = setTimeout(() => {
+                if (!document.documentElement.getAttribute('data-redigo-extension')) {
+                    setExtensionDetected(false);
+                } else {
+                    setExtensionDetected(true);
+                }
+            }, 2500);
+        }
+
+        return () => {
+            window.removeEventListener('message', handleExtMessage);
+            if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+        };
+    }, [user?.id]);
 
     // Auto-save effect
     useEffect(() => {
@@ -312,15 +345,14 @@ export const ContentArchitect: React.FC = () => {
     const isExtensionActive = () => {
         if (user?.role === 'admin') return true; // Admin skip
 
-        // 1. Primary Check: Instant DOM detection (Most reliable)
+        // 1. Live detected state (Most reliable)
+        if (extensionDetected === true) return true;
+
+        // 2. Instant DOM detection (Fallback)
         const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
         if (isInstalledInDOM) return true;
 
-        // 2. Secondary Check: Database-backed ping window (Fallback)
-        if (!user?.lastExtensionPing) return false;
-        const lastPing = new Date(user.lastExtensionPing).getTime();
-        const now = new Date().getTime();
-        return (now - lastPing) < 15 * 60 * 1000; // 15 mins active window
+        return false;
     };
 
     const triggerImageGeneration = async (prompt: string, skipExtensionCheck = false) => {
@@ -1455,15 +1487,15 @@ export const ContentArchitect: React.FC = () => {
                                     <div className="p-5 bg-slate-50 rounded-2xl space-y-3">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Publishing Identity</p>
                                         <div className="flex items-center gap-3 bg-white p-4 rounded-xl border border-slate-100">
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black ${user?.extensionInstalled ? 'bg-emerald-600' : 'bg-slate-300'}`}>
-                                                {user?.extensionInstalled ? <Check size={20} /> : <AlertCircle size={20} />}
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-black transition-all ${extensionDetected === true ? 'bg-emerald-600 shadow-lg shadow-emerald-100' : 'bg-slate-300'}`}>
+                                                {extensionDetected === true ? <Check size={20} /> : extensionDetected === null ? <RefreshCw size={18} className="animate-spin" /> : <AlertCircle size={20} />}
                                             </div>
                                             <div className="flex-1">
                                                 <p className="text-sm font-bold text-slate-900">
-                                                    {user?.extensionInstalled ? 'Extension Verified' : 'Extension Required'}
+                                                    {extensionDetected === null ? 'Verifying Engine...' : extensionDetected === true ? 'Extension Verified' : 'Desktop Required'}
                                                 </p>
                                                 <p className="text-[10px] text-slate-500 font-medium">
-                                                    {user?.extensionInstalled ? 'Using active browser identity' : 'Install extension to publish'}
+                                                    {extensionDetected === true ? 'Using active browser identity' : 'Install extension on desktop browser'}
                                                 </p>
                                             </div>
                                         </div>

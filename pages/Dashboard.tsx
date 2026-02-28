@@ -158,6 +158,8 @@ export const Dashboard: React.FC = () => {
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
   const [announcement, setAnnouncement] = useState<any>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
+  const pingTimeoutRef = React.useRef<any>(null);
   const { token, updateUser } = useAuth();
 
   useEffect(() => {
@@ -252,6 +254,50 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchData(true);
   }, [fetchData]);
+
+  // ── Extension Real-time Detection ─────────────────────────────────────
+  const verifyExtension = useCallback(async () => {
+    const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+    if (isInstalledInDOM) {
+      setExtensionDetected(true);
+      if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+      return true;
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    // Listen for PONG from the extension bridge
+    const handleExtMessage = (event: MessageEvent) => {
+      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
+        if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+        setExtensionDetected(true);
+      }
+    };
+
+    window.addEventListener('message', handleExtMessage);
+
+    // Initial check
+    setExtensionDetected(null);
+    if (document.documentElement.getAttribute('data-redigo-extension') === 'installed') {
+      setExtensionDetected(true);
+    } else {
+      // Send PING and wait
+      window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
+      pingTimeoutRef.current = setTimeout(() => {
+        if (!document.documentElement.getAttribute('data-redigo-extension')) {
+          setExtensionDetected(false);
+        } else {
+          setExtensionDetected(true);
+        }
+      }, 2500);
+    }
+
+    return () => {
+      window.removeEventListener('message', handleExtMessage);
+      if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+    };
+  }, [user?.id]);
 
 
   // ── derived stats ────────────────────────────────────────────────────────
@@ -442,9 +488,19 @@ export const Dashboard: React.FC = () => {
           </button>
 
           {/* Reddit connection badge */}
-          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold ${user?.extensionInstalled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-            <span className={`w-2 h-2 rounded-full ${user?.extensionInstalled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-            {user?.extensionInstalled ? 'Extension Verified' : 'Extension Required'}
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold transition-all ${extensionDetected === true ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+            <span className={`w-2 h-2 rounded-full ${extensionDetected === true ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+            {extensionDetected === null ? (
+              <span className="flex items-center gap-1.5">
+                <RefreshCw size={10} className="animate-spin" /> Verifying...
+              </span>
+            ) : extensionDetected === true ? (
+              'Extension Verified'
+            ) : (
+              <span title="Desktop browser with extension required" className="cursor-help">
+                Desktop Required
+              </span>
+            )}
           </div>
 
           {user?.plan === 'Starter' && (

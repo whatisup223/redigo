@@ -121,6 +121,8 @@ export const Comments: React.FC = () => {
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [showExtensionWarning, setShowExtensionWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
+  const pingTimeoutRef = useRef<any>(null);
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
   const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
@@ -241,6 +243,37 @@ export const Comments: React.FC = () => {
     }
   }, [selectedPost, generatedReply, editedComment, wizardData, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
 
+  // ── Extension Real-time Detection ─────────────────────────────────────
+  useEffect(() => {
+    const handleExtMessage = (event: MessageEvent) => {
+      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
+        if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+        setExtensionDetected(true);
+      }
+    };
+
+    window.addEventListener('message', handleExtMessage);
+
+    setExtensionDetected(null);
+    if (document.documentElement.getAttribute('data-redigo-extension') === 'installed') {
+      setExtensionDetected(true);
+    } else {
+      window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
+      pingTimeoutRef.current = setTimeout(() => {
+        if (!document.documentElement.getAttribute('data-redigo-extension')) {
+          setExtensionDetected(false);
+        } else {
+          setExtensionDetected(true);
+        }
+      }, 2500);
+    }
+
+    return () => {
+      window.removeEventListener('message', handleExtMessage);
+      if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+    };
+  }, [user?.id]);
+
   const handleResumeDraft = () => {
     setShowDraftBanner(false);
     const savedDraft = localStorage.getItem('redditgo_comment_draft');
@@ -327,15 +360,14 @@ export const Comments: React.FC = () => {
   const isExtensionActive = () => {
     if (user?.role === 'admin') return true; // Admin skip
 
-    // 1. Primary Check: Instant DOM detection (Most reliable)
+    // 1. Live detected state (Most reliable)
+    if (extensionDetected === true) return true;
+
+    // 2. Instant DOM detection (Fallback)
     const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
     if (isInstalledInDOM) return true;
 
-    // 2. Secondary Check: Database-backed ping window (Fallback)
-    if (!user?.lastExtensionPing) return false;
-    const lastPing = new Date(user.lastExtensionPing).getTime();
-    const now = new Date().getTime();
-    return (now - lastPing) < 15 * 60 * 1000; // 15 mins active window
+    return false;
   };
 
   const handleGenerate = async (post: any, customSettings?: any) => {
@@ -447,6 +479,16 @@ export const Comments: React.FC = () => {
       setShowNoCreditsModal(true);
       return;
     }
+
+    // --- Extension Check ---
+    const needsCheck = !isExtensionActive();
+    if (needsCheck && !isForcedRef.current) {
+      setPendingAction(() => () => handleRefine(instruction));
+      setShowExtensionWarning(true);
+      return;
+    }
+    isForcedRef.current = false; // Reset for next time
+    setPendingAction(null); // Clear after check passes or forced continue
 
     setIsGenerating(true);
     try {

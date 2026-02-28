@@ -959,7 +959,7 @@ export const Settings: React.FC = () => {
                                                     'bg-slate-100 text-slate-500'
                                                 }`}>
                                                 {extensionDetected === null ? 'Checking...' :
-                                                    extensionDetected ? 'Active & Verified' : 'Not Detected'}
+                                                    extensionDetected ? 'Active & Verified' : 'Desktop Required'}
                                             </span>
                                         </div>
                                         <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed hidden md:block">
