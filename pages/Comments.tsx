@@ -674,9 +674,11 @@ export const Comments: React.FC = () => {
               data: {
                 children: rawJson.data.children.map((child: any) => ({
                   data: {
+                    id: child.data?.id,
                     name: child.data?.name,
                     title: child.data?.title,
                     selftext: child.data?.selftext,
+                    subreddit: child.data?.subreddit,
                     ups: child.data?.ups,
                     num_comments: child.data?.num_comments,
                     url: child.data?.url,

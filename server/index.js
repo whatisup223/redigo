@@ -745,9 +745,14 @@ app.use((req, res, next) => {
 });
 
 // --- 4. Rate Limiting ---
+const rateLimitKeyGen = (req) => {
+  return (req.headers && req.headers['x-forwarded-for']) || req.socket.remoteAddress || '127.0.0.1';
+};
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,
+  keyGenerator: rateLimitKeyGen,
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -756,6 +761,7 @@ const apiLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  keyGenerator: rateLimitKeyGen,
   message: { error: 'Too many auth attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
