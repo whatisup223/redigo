@@ -4541,7 +4541,8 @@ app.post('/api/reddit/analyze', async (req, res) => {
 
     if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
 
-    addSystemLog('INFO', `Ext-Reddit Analysis by User ${userId}`, { cost, creditsRemaining: updatedUser.credits });
+    const userIp = req.headers['x-forwarded-for'] || req.ip || '0.0.0.0';
+    addSystemLog('INFO', `Ext-Reddit Analysis (User IP: ${userIp})`, { userId, cost, creditsRemaining: updatedUser.credits });
 
     // ── PROCESS DATA ────────────────────────────────────────────────────────
     let posts = [];
@@ -4699,7 +4700,8 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
 
       if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
 
-      addSystemLog('INFO', `Reddit Fetch by User ${userId}`, { subreddit, cost, creditsRemaining: updatedUser.credits });
+      const userIp = req.headers['x-forwarded-for'] || req.ip || '0.0.0.0';
+      addSystemLog('INFO', `Reddit Fetch via SERVER (User IP: ${userIp})`, { subreddit, cost, creditsRemaining: updatedUser.credits });
 
       const sortBy = req.query.sort || 'new';
 
