@@ -31,10 +31,10 @@ function sendHeartbeat(userId) {
 
 // Listen for messages from the React app
 window.addEventListener('message', (event) => {
-    // Security check: Ignore messages from untrusted sources
-    if (event.source !== window || !event.data || event.data.source !== 'REDIGO_WEB_APP') {
-        return;
-    }
+    // Basic filter for Redigo messages
+    if (!event.data || event.data.source !== 'REDIGO_WEB_APP') return;
+
+    console.log('📬 Bridge Received Message:', event.data.type);
 
     // ── Handle Presence Detection Request ───────────────────────────────────
     if (event.data.type === 'EXTENSION_PING') {

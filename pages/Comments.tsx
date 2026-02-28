@@ -512,8 +512,10 @@ export const Comments: React.FC = () => {
 
   const fetchWithExtension = (): Promise<any> => {
     return new Promise((resolve, reject) => {
+      console.log('[Extension Bridge] Setting up listener for SEARCH_RESPONSE');
       const handleResponse = (event: MessageEvent) => {
         if (event.data.source === 'REDIGO_EXT' && event.data.type === 'SEARCH_RESPONSE') {
+          console.log('[Extension Bridge] Received Response:', event.data.payload);
           window.removeEventListener('message', handleResponse);
           if (event.data.payload && event.data.payload.success) {
             resolve(event.data.payload.data);
@@ -523,6 +525,8 @@ export const Comments: React.FC = () => {
         }
       };
       window.addEventListener('message', handleResponse);
+
+      console.log('[Extension Bridge] Sending REDDIT_SEARCH to window');
       window.postMessage({
         source: 'REDIGO_WEB_APP',
         type: 'REDDIT_SEARCH',
@@ -533,8 +537,9 @@ export const Comments: React.FC = () => {
 
       setTimeout(() => {
         window.removeEventListener('message', handleResponse);
+        console.warn('[Extension Bridge] Timeout reaching extension');
         reject(new Error('Extension timeout'));
-      }, 30000);
+      }, 15000); // Reduced to 15s for faster debugging
     });
   };
 
@@ -595,10 +600,20 @@ export const Comments: React.FC = () => {
     try {
       let data: any;
       const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
-      const canUseExtension = redditSettings.useExtensionFetching && isExtensionActive() && !isMobile;
+      const isExtActive = isExtensionActive();
+
+      console.log('[Hybrid Debug]', {
+        useExtensionFetching: redditSettings.useExtensionFetching,
+        isExtensionActive: isExtActive,
+        isMobile,
+        userRole: user?.role,
+        useServerFallback: redditSettings.useServerFallback
+      });
+
+      const canUseExtension = redditSettings.useExtensionFetching && isExtActive && !isMobile;
 
       if (canUseExtension) {
-        console.log('[Hybrid] Using Extension Fetching');
+        console.log('[Hybrid] Attempting Extension Fetch...');
         try {
           const rawJson = await fetchWithExtension();
           const response = await fetch('/api/reddit/analyze', {

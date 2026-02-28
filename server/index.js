@@ -4543,53 +4543,69 @@ app.post('/api/reddit/analyze', async (req, res) => {
     addSystemLog('INFO', `Ext-Reddit Analysis by User ${userId}`, { cost, creditsRemaining: updatedUser.credits });
 
     // ── PROCESS DATA ────────────────────────────────────────────────────────
-    const keywordList = (keywords || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+    let posts = [];
+    try {
+      const keywordList = (keywords || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+      posts = rawJson.data.children.map(child => {
+        const post = child.data;
+        if (!post) return null;
+        let score = 0;
+        const content = ((post.title || '') + ' ' + (post.selftext || '')).toLowerCase();
+        keywordList.forEach(word => { if (content.includes(word)) score += 40; });
 
-    let posts = rawJson.data.children.map(child => {
-      const post = child.data;
-      let score = 0;
-      const content = (post.title + ' ' + (post.selftext || '')).toLowerCase();
-      keywordList.forEach(word => { if (content.includes(word)) score += 40; });
+        let intent = 'General';
+        if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
+        else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
+        else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
+        else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
 
-      let intent = 'General';
-      if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
-      else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
-      else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
-      else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
+        if (intent !== 'General') score += 20;
+        score += Math.min((post.ups || 0) / 5, 20);
+        score += Math.min((post.num_comments || 0) * 2, 20);
+        const opportunityScore = Math.min(Math.round(score), 100);
 
-      if (intent !== 'General') score += 20;
-      score += Math.min((post.ups || 0) / 5, 20);
-      score += Math.min((post.num_comments || 0) * 2, 20);
-      const opportunityScore = Math.min(Math.round(score), 100);
+        return {
+          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
+          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
+          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
+          opportunityScore, intent, isHot: (post.ups || 0) > 100 || (post.num_comments || 0) > 50,
+          competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
+        };
+      }).filter(p => p !== null && p.id);
 
-      return {
-        id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
-        ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
-        url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
-        opportunityScore, intent, isHot: (post.ups || 0) > 100 || (post.num_comments || 0) > 50,
-        competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
-      };
-    }).filter(post => {
-      if (keywordList.length === 0) return true;
-      const searchContent = (post.title + ' ' + (post.selftext || '')).toLowerCase();
-      return keywordList.some(kw => searchContent.includes(kw));
-    });
+      // Filtering by keywords
+      if (keywordList.length > 0) {
+        posts = posts.filter(post => {
+          const searchContent = ((post.title || '') + ' ' + (post.selftext || '')).toLowerCase();
+          return keywordList.some(kw => searchContent.includes(kw));
+        });
+      }
+    } catch (processErr) {
+      console.error('[Analyze] Process Error:', processErr);
+      throw new Error('Failed to process data: ' + processErr.message);
+    }
 
     // ── SEMANTIC ANALYSIS ENHANCEMENT ────────────────────────────────────────
-    const postsForAnalysis = posts.slice(0, 15);
-    const remainingPosts = posts.slice(15);
-    const analyzedPosts = await performSemanticAnalysis(postsForAnalysis);
+    let finalPosts = [];
+    try {
+      const postsForAI = posts.slice(0, 15);
+      const remainingPosts = posts.slice(15);
+      const analyzed = await performSemanticAnalysis(postsForAI);
 
-    posts = [...analyzedPosts, ...remainingPosts].sort((a, b) => {
-      const aHasReason = !!a.analysisReason;
-      const bHasReason = !!b.analysisReason;
-      if (aHasReason && !bHasReason) return -1;
-      if (!aHasReason && bHasReason) return 1;
-      return b.opportunityScore - a.opportunityScore;
-    });
+      finalPosts = [...analyzed, ...remainingPosts].sort((a, b) => {
+        const aHasReason = !!a.analysisReason;
+        const bHasReason = !!b.analysisReason;
+        if (aHasReason && !bHasReason) return -1;
+        if (!aHasReason && bHasReason) return 1;
+        return (b.opportunityScore || 0) - (a.opportunityScore || 0);
+      });
+    } catch (aiErr) {
+      console.error('[Analyze] AI Error:', aiErr);
+      finalPosts = posts; // Fallback to raw processed posts
+    }
 
     res.json({
-      posts: posts.slice(0, 50),
+      posts: finalPosts.slice(0, 50),
       credits: updatedUser.credits,
       dailyUsagePoints: updatedUser.dailyUsagePoints,
       cost
@@ -4597,6 +4613,7 @@ app.post('/api/reddit/analyze', async (req, res) => {
 
   } catch (error) {
     console.error('Reddit Analysis Error:', error);
+    addSystemLog('ERROR', `Reddit Analysis Failed: ${error.message}`, { userId: req.body.userId });
     res.status(500).json({ error: error.message });
   }
 });
