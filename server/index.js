@@ -4741,6 +4741,30 @@ app.post('/api/reddit/analyze', async (req, res) => {
   }
 });
 
+// Fetch Subreddit About (used for pre-flight checks like image support)
+app.get('/api/subreddit/about', async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) return res.status(400).json({ error: 'Subreddit name required' });
+
+    const response = await fetch(`https://www.reddit.com/r/${name}/about.json`, {
+      headers: {
+        'User-Agent': getDynamicUserAgent('system', 'guest')
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch subreddit data' });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('[Subreddit About Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   try {
     const { subreddit, keywords, userId, redditUsername } = req.query;
