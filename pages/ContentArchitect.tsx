@@ -311,6 +311,12 @@ export const ContentArchitect: React.FC = () => {
 
     const isExtensionActive = () => {
         if (user?.role === 'admin') return true; // Admin skip
+
+        // 1. Primary Check: Instant DOM detection (Most reliable)
+        const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+        if (isInstalledInDOM) return true;
+
+        // 2. Secondary Check: Database-backed ping window (Fallback)
         if (!user?.lastExtensionPing) return false;
         const lastPing = new Date(user.lastExtensionPing).getTime();
         const now = new Date().getTime();

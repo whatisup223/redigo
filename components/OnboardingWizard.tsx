@@ -35,13 +35,30 @@ export const OnboardingWizard: React.FC = () => {
 
     // Periodically check for extension 
     React.useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
+                setIsExtensionInstalled(true);
+            }
+        };
+        window.addEventListener('message', handleMessage);
+
         const checkExtension = () => {
             const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-            setIsExtensionInstalled(isInstalled);
+            if (isInstalled) {
+                setIsExtensionInstalled(true);
+            } else {
+                // Also proactively ping the extension
+                window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING' }, '*');
+            }
         };
+
         checkExtension();
-        const interval = setInterval(checkExtension, 1500);
-        return () => clearInterval(interval);
+        const interval = setInterval(checkExtension, 2000);
+
+        return () => {
+            window.removeEventListener('message', handleMessage);
+            clearInterval(interval);
+        };
     }, []);
 
     // Brand Settings Data
