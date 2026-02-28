@@ -91,6 +91,10 @@ interface AISettings {
     baseUrl?: string;
     redditFetchCooldown?: number;
     redditPostCooldown?: number;
+    analyzerProvider?: 'google' | 'openai' | 'openrouter';
+    analyzerModel?: string;
+    analyzerSystemPrompt?: string;
+    analyzerApiKey?: string;
     creditCosts?: {
         comment: number;
         post: number;
@@ -169,6 +173,7 @@ export const Admin: React.FC = () => {
     const activeTab = getActiveTab();
     const [analyticsTab, setAnalyticsTab] = useState<'overview' | 'churn'>('overview');
     const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email'>('ai');
+    const [aiSubTab, setAiSubTab] = useState<'creative' | 'analyzer'>('creative');
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -203,6 +208,16 @@ export const Admin: React.FC = () => {
         redditFetchCooldown: 30,
         redditPostCooldown: 300,
         baseUrl: 'https://openrouter.ai/api/v1',
+        analyzerProvider: 'google',
+        analyzerModel: 'gemini-1.5-flash',
+        analyzerSystemPrompt: `You are an expert sales analyst. Your task is to evaluate Reddit posts for lead quality and intent. 
+Evaluate based on:
+1. Purchase Intent: How likely is this user to buy a solution? 
+2. Problem Severity: How much pain is the user in?
+3. Lead Quality: Overall score from 0-100.
+
+Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "intent": "String", "reason": "Short explanation" }`,
+        analyzerApiKey: '',
         creditCosts: {
             comment: 1,
             post: 2,
@@ -2180,229 +2195,347 @@ export const Admin: React.FC = () => {
                                 {/* Content Area */}
                                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm min-h-[500px]">
                                     {settingsTab === 'ai' && (
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                            <div className="space-y-6">
-                                                <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
-                                                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-                                                        <Cpu size={24} />
-                                                    </div>
-                                                    <div>
-                                                        <h2 className="text-xl font-bold text-slate-900">Generative AI Configuration</h2>
-                                                        <p className="text-slate-400 text-sm">Manage LLM parameters and API keys.</p>
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">AI Provider</span>
-                                                        <select
-                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700 appearance-none"
-                                                            value={aiSettings.provider}
-                                                            onChange={(e) => {
-                                                                const provider = e.target.value as any;
-                                                                let defaultModel = 'gemini-1.5-flash';
-                                                                if (provider === 'openai') defaultModel = 'gpt-4o';
-                                                                if (provider === 'openrouter') defaultModel = 'anthropic/claude-3-sonnet';
-                                                                setAiSettings({ ...aiSettings, provider, model: defaultModel });
-                                                            }}
-                                                        >
-                                                            <option value="google">Google Gemini</option>
-                                                            <option value="openai">OpenAI</option>
-                                                            <option value="openrouter">OpenRouter</option>
-                                                        </select>
-                                                    </label>
-
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Model Selection</span>
-                                                        <div className="relative">
-                                                            {aiSettings.provider === 'openrouter' ? (
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
-                                                                    value={aiSettings.model}
-                                                                    onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
-                                                                    placeholder="e.g. anthropic/claude-3-sonnet"
-                                                                />
-                                                            ) : (
-                                                                <select
-                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700 appearance-none"
-                                                                    value={aiSettings.model}
-                                                                    onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
-                                                                >
-                                                                    {aiSettings.provider === 'google' && (
-                                                                        <>
-                                                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                                                        </>
-                                                                    )}
-                                                                    {aiSettings.provider === 'openai' && (
-                                                                        <>
-                                                                            <option value="gpt-4o">GPT-4o</option>
-                                                                            <option value="gpt-4o-mini">GPT-4o Mini</option>
-                                                                        </>
-                                                                    )}
-                                                                </select>
-                                                            )}
-                                                        </div>
-                                                    </label>
-
-                                                    {aiSettings.provider === 'openrouter' && (
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Base URL</span>
-                                                            <input
-                                                                type="text"
-                                                                value={aiSettings.baseUrl}
-                                                                onChange={(e) => setAiSettings({ ...aiSettings, baseUrl: e.target.value })}
-                                                                placeholder="https://openrouter.ai/api/v1"
-                                                            />
-                                                        </label>
-                                                    )}
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Temperature</span>
-                                                            <input
-                                                                type="number"
-                                                                step="0.1"
-                                                                min="0"
-                                                                max="1"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
-                                                                value={aiSettings.temperature}
-                                                                onChange={(e) => setAiSettings({ ...aiSettings, temperature: parseFloat(e.target.value) })}
-                                                            />
-                                                        </label>
-                                                        <label className="block">
-                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Max Tokens</span>
-                                                            <input
-                                                                type="number"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
-                                                                value={aiSettings.maxOutputTokens}
-                                                                onChange={(e) => setAiSettings({ ...aiSettings, maxOutputTokens: parseInt(e.target.value) })}
-                                                            />
-                                                        </label>
-                                                    </div>
-
-
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">API Key</span>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="password"
-                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
-                                                                value={aiSettings.apiKey}
-                                                                onChange={(e) => setAiSettings({ ...aiSettings, apiKey: e.target.value })}
-                                                                placeholder="sk-..."
-                                                            />
-                                                        </div>
-                                                    </label>
-
-                                                    <div className="pt-4 border-t border-slate-100">
-                                                        <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                                                            <CreditCard size={16} className="text-indigo-600" />
-                                                            Dynamic Credit Costs
-                                                        </h3>
-                                                        <div className="grid grid-cols-3 gap-4">
-                                                            <label className="block">
-                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Comment</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
-                                                                    value={aiSettings.creditCosts?.comment ?? 1}
-                                                                    onChange={(e) => {
-                                                                        const val = parseInt(e.target.value) || 0;
-                                                                        setAiSettings({
-                                                                            ...aiSettings,
-                                                                            creditCosts: {
-                                                                                post: 2, image: 5,
-                                                                                ...aiSettings.creditCosts,
-                                                                                comment: val
-                                                                            }
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            </label>
-                                                            <label className="block">
-                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Post</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
-                                                                    value={aiSettings.creditCosts?.post ?? 2}
-                                                                    onChange={(e) => {
-                                                                        const val = parseInt(e.target.value) || 0;
-                                                                        setAiSettings({
-                                                                            ...aiSettings,
-                                                                            creditCosts: {
-                                                                                comment: 1, image: 5,
-                                                                                ...aiSettings.creditCosts,
-                                                                                post: val
-                                                                            }
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            </label>
-                                                            <label className="block">
-                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Image</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
-                                                                    value={aiSettings.creditCosts?.image ?? 5}
-                                                                    onChange={(e) => {
-                                                                        const val = parseInt(e.target.value) || 0;
-                                                                        setAiSettings({
-                                                                            ...aiSettings,
-                                                                            creditCosts: {
-                                                                                comment: 1, post: 2,
-                                                                                ...aiSettings.creditCosts,
-                                                                                image: val
-                                                                            }
-                                                                        });
-                                                                    }}
-                                                                />
-                                                            </label>
-                                                            <label className="block">
-                                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Fetch Posts 🔄</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
-                                                                    value={aiSettings.creditCosts?.fetch ?? 1}
-                                                                    onChange={(e) => {
-                                                                        const val = parseInt(e.target.value) || 0;
-                                                                        setAiSettings({
-                                                                            ...aiSettings,
-                                                                            creditCosts: {
-                                                                                comment: 1, post: 2, image: 5,
-                                                                                ...aiSettings.creditCosts,
-                                                                                fetch: val
-                                                                            }
-                                                                        });
-                                                                    }}
-                                                                />
-                                                                <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make fetching free</p>
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        <div className="space-y-8 animate-in fade-in duration-500">
+                                            {/* AI Sub-Navigation */}
+                                            <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl w-fit border border-slate-100">
                                                 <button
-                                                    onClick={handleSaveSettings} // Changed from handleSaveAiSettings to handleSaveSettings as per original
-                                                    className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-indigo-600 hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                    onClick={() => setAiSubTab('creative')}
+                                                    className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${aiSubTab === 'creative' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
                                                 >
-                                                    <Save size={20} />
-                                                    Save AI Configuration
+                                                    1. Creative Content
+                                                </button>
+                                                <button
+                                                    onClick={() => setAiSubTab('analyzer')}
+                                                    className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${aiSubTab === 'analyzer' ? 'bg-orange-600 text-white shadow-lg shadow-orange-100' : 'text-slate-400 hover:text-slate-600'}`}
+                                                >
+                                                    2. Semantic Analyzer
                                                 </button>
                                             </div>
-                                            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
-                                                <label className="block h-full flex flex-col">
-                                                    <span className="text-sm font-bold text-slate-700 mb-4 block">System Prompt</span>
-                                                    <textarea
-                                                        className="w-full flex-1 p-6 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-medium text-slate-600 leading-relaxed resize-none shadow-sm"
-                                                        value={aiSettings.systemPrompt}
-                                                        onChange={(e) => setAiSettings({ ...aiSettings, systemPrompt: e.target.value })}
-                                                        placeholder="Define the AI persona and constraints..."
-                                                    />
-                                                </label>
-                                            </div>
+
+                                            {aiSubTab === 'creative' ? (
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                    <div className="space-y-6">
+                                                        <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+                                                            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                                                                <Cpu size={24} />
+                                                            </div>
+                                                            <div>
+                                                                <h2 className="text-xl font-bold text-slate-900">Generative AI Configuration</h2>
+                                                                <p className="text-slate-400 text-sm">Manage LLM parameters and API keys.</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-4">
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">AI Provider</span>
+                                                                <select
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700 appearance-none"
+                                                                    value={aiSettings.provider}
+                                                                    onChange={(e) => {
+                                                                        const provider = e.target.value as any;
+                                                                        let defaultModel = 'gemini-1.5-flash';
+                                                                        if (provider === 'openai') defaultModel = 'gpt-4o';
+                                                                        if (provider === 'openrouter') defaultModel = 'anthropic/claude-3-sonnet';
+                                                                        setAiSettings({ ...aiSettings, provider, model: defaultModel });
+                                                                    }}
+                                                                >
+                                                                    <option value="google">Google Gemini</option>
+                                                                    <option value="openai">OpenAI</option>
+                                                                    <option value="openrouter">OpenRouter</option>
+                                                                </select>
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Model Selection</span>
+                                                                <div className="relative">
+                                                                    {aiSettings.provider === 'openrouter' ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                                                                            value={aiSettings.model}
+                                                                            onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
+                                                                            placeholder="e.g. anthropic/claude-3-sonnet"
+                                                                        />
+                                                                    ) : (
+                                                                        <select
+                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700 appearance-none"
+                                                                            value={aiSettings.model}
+                                                                            onChange={(e) => setAiSettings({ ...aiSettings, model: e.target.value })}
+                                                                        >
+                                                                            {aiSettings.provider === 'google' && (
+                                                                                <>
+                                                                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                                                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                                                                </>
+                                                                            )}
+                                                                            {aiSettings.provider === 'openai' && (
+                                                                                <>
+                                                                                    <option value="gpt-4o">GPT-4o</option>
+                                                                                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                                                                </>
+                                                                            )}
+                                                                        </select>
+                                                                    )}
+                                                                </div>
+                                                            </label>
+
+                                                            {aiSettings.provider === 'openrouter' && (
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Base URL</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                                                                        value={aiSettings.baseUrl}
+                                                                        onChange={(e) => setAiSettings({ ...aiSettings, baseUrl: e.target.value })}
+                                                                        placeholder="https://openrouter.ai/api/v1"
+                                                                    />
+                                                                </label>
+                                                            )}
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Temperature</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.1"
+                                                                        min="0"
+                                                                        max="1"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                                                                        value={aiSettings.temperature}
+                                                                        onChange={(e) => setAiSettings({ ...aiSettings, temperature: parseFloat(e.target.value) })}
+                                                                    />
+                                                                </label>
+                                                                <label className="block">
+                                                                    <span className="text-sm font-bold text-slate-700 mb-2 block">Max Tokens</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
+                                                                        value={aiSettings.maxOutputTokens}
+                                                                        onChange={(e) => setAiSettings({ ...aiSettings, maxOutputTokens: parseInt(e.target.value) })}
+                                                                    />
+                                                                </label>
+                                                            </div>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">API Key</span>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="password"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={aiSettings.apiKey}
+                                                                        onChange={(e) => setAiSettings({ ...aiSettings, apiKey: e.target.value })}
+                                                                        placeholder="sk-..."
+                                                                    />
+                                                                </div>
+                                                            </label>
+
+                                                            <div className="pt-4 border-t border-slate-100">
+                                                                <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                                                                    <CreditCard size={16} className="text-indigo-600" />
+                                                                    Dynamic Credit Costs
+                                                                </h3>
+                                                                <div className="grid grid-cols-3 gap-4">
+                                                                    <label className="block">
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Comment</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                            value={aiSettings.creditCosts?.comment ?? 1}
+                                                                            onChange={(e) => {
+                                                                                const val = parseInt(e.target.value) || 0;
+                                                                                setAiSettings({
+                                                                                    ...aiSettings,
+                                                                                    creditCosts: {
+                                                                                        post: 2, image: 5,
+                                                                                        ...aiSettings.creditCosts,
+                                                                                        comment: val
+                                                                                    }
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                    </label>
+                                                                    <label className="block">
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Post</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                            value={aiSettings.creditCosts?.post ?? 2}
+                                                                            onChange={(e) => {
+                                                                                const val = parseInt(e.target.value) || 0;
+                                                                                setAiSettings({
+                                                                                    ...aiSettings,
+                                                                                    creditCosts: {
+                                                                                        comment: 1, image: 5,
+                                                                                        ...aiSettings.creditCosts,
+                                                                                        post: val
+                                                                                    }
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                    </label>
+                                                                    <label className="block">
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Image</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                            value={aiSettings.creditCosts?.image ?? 5}
+                                                                            onChange={(e) => {
+                                                                                const val = parseInt(e.target.value) || 0;
+                                                                                setAiSettings({
+                                                                                    ...aiSettings,
+                                                                                    creditCosts: {
+                                                                                        comment: 1, post: 2,
+                                                                                        ...aiSettings.creditCosts,
+                                                                                        image: val
+                                                                                    }
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                    </label>
+                                                                    <label className="block">
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Fetch Posts 🔄</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                            value={aiSettings.creditCosts?.fetch ?? 1}
+                                                                            onChange={(e) => {
+                                                                                const val = parseInt(e.target.value) || 0;
+                                                                                setAiSettings({
+                                                                                    ...aiSettings,
+                                                                                    creditCosts: {
+                                                                                        comment: 1, post: 2, image: 5,
+                                                                                        ...aiSettings.creditCosts,
+                                                                                        fetch: val
+                                                                                    }
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                        <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make fetching free</p>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={handleSaveSettings}
+                                                            className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-indigo-600 hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                        >
+                                                            <Save size={20} />
+                                                            Save Creative Config
+                                                        </button>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 h-full flex flex-col">
+                                                        <label className="block h-full flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-700 mb-4 block">Creative System Prompt (Persona)</span>
+                                                            <textarea
+                                                                className="w-full flex-1 p-6 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-medium text-slate-600 leading-relaxed resize-none shadow-sm min-h-[300px]"
+                                                                value={aiSettings.systemPrompt}
+                                                                onChange={(e) => setAiSettings({ ...aiSettings, systemPrompt: e.target.value })}
+                                                                placeholder="Define the AI persona for replies and posts..."
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                                                    <div className="space-y-6">
+                                                        <div className="flex items-center gap-4 border-b border-slate-100 pb-6">
+                                                            <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-orange-100">
+                                                                <Search size={24} />
+                                                            </div>
+                                                            <div>
+                                                                <h2 className="text-xl font-bold text-slate-900">Lead Analyzer AI</h2>
+                                                                <p className="text-slate-400 text-sm">Economic & Fast models for scoring leads.</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-4">
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Analyzer Provider</span>
+                                                                <select
+                                                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-bold text-slate-700 appearance-none"
+                                                                    value={aiSettings.analyzerProvider || 'google'}
+                                                                    onChange={(e) => {
+                                                                        const provider = e.target.value as any;
+                                                                        let defaultModel = 'gemini-1.5-flash';
+                                                                        if (provider === 'openai') defaultModel = 'gpt-4o-mini';
+                                                                        if (provider === 'openrouter') defaultModel = 'google/gemini-flash-1.5';
+                                                                        setAiSettings({ ...aiSettings, analyzerProvider: provider, analyzerModel: defaultModel });
+                                                                    }}
+                                                                >
+                                                                    <option value="google">Google Gemini (Recommended)</option>
+                                                                    <option value="openai">OpenAI</option>
+                                                                    <option value="openrouter">OpenRouter</option>
+                                                                </select>
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Analyzer Model Selection</span>
+                                                                <div className="relative">
+                                                                    {aiSettings.analyzerProvider === 'openrouter' ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-bold text-slate-700"
+                                                                            value={aiSettings.analyzerModel}
+                                                                            onChange={(e) => setAiSettings({ ...aiSettings, analyzerModel: e.target.value })}
+                                                                            placeholder="e.g. google/gemini-flash-1.5"
+                                                                        />
+                                                                    ) : (
+                                                                        <select
+                                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-bold text-slate-700 appearance-none"
+                                                                            value={aiSettings.analyzerModel}
+                                                                            onChange={(e) => setAiSettings({ ...aiSettings, analyzerModel: e.target.value })}
+                                                                        >
+                                                                            {aiSettings.analyzerProvider === 'google' && (
+                                                                                <>
+                                                                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fastest)</option>
+                                                                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                                                                </>
+                                                                            )}
+                                                                            {aiSettings.analyzerProvider === 'openai' && (
+                                                                                <>
+                                                                                    <option value="gpt-4o-mini">GPT-4o Mini (Cheapest)</option>
+                                                                                    <option value="gpt-4o">GPT-4o</option>
+                                                                                </>
+                                                                            )}
+                                                                        </select>
+                                                                    )}
+                                                                </div>
+                                                            </label>
+
+                                                            <label className="block">
+                                                                <span className="text-sm font-bold text-slate-700 mb-2 block">Analyzer API Key</span>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="password"
+                                                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-mono text-sm"
+                                                                        value={aiSettings.analyzerApiKey}
+                                                                        onChange={(e) => setAiSettings({ ...aiSettings, analyzerApiKey: e.target.value })}
+                                                                        placeholder="Specific key for lead analysis..."
+                                                                    />
+                                                                </div>
+                                                            </label>
+                                                        </div>
+                                                        <button
+                                                            onClick={handleSaveSettings}
+                                                            className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-orange-600 hover:shadow-orange-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                        >
+                                                            <Save size={20} />
+                                                            Save Analyzer Config
+                                                        </button>
+                                                    </div>
+                                                    <div className="bg-orange-50/50 p-6 rounded-[2rem] border border-orange-100 h-full flex flex-col">
+                                                        <label className="block h-full flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-700 mb-4 block">Analyzer System Prompt (Scoring Logic)</span>
+                                                            <textarea
+                                                                className="w-full flex-1 p-6 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-medium text-slate-600 leading-relaxed resize-none shadow-sm min-h-[300px]"
+                                                                value={aiSettings.analyzerSystemPrompt}
+                                                                onChange={(e) => setAiSettings({ ...aiSettings, analyzerSystemPrompt: e.target.value })}
+                                                                placeholder="Define how the AI should score leads..."
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    )
-                                    }
+                                    )}
 
                                     {
                                         settingsTab === 'payments' && (

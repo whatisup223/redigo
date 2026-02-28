@@ -983,22 +983,29 @@ export const Comments: React.FC = () => {
 
                   {/* AI Intel Badge (Now relative and better positioned) */}
                   {(post.opportunityScore > 0 || post.intent) && (
-                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end">
-                      {post.opportunityScore > 50 && (
-                        <div className="flex items-center gap-1 px-3 py-1.5 bg-red-50 border border-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex-shrink-0 shadow-sm shadow-red-50">
-                          <Flame size={12} className="fill-current" /> Hot Lead
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1.5 bg-white border border-slate-100 px-3 py-1.5 rounded-xl shadow-sm flex-shrink-0">
-                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">AI Score</div>
-                        <div className={`text-sm font-black ${post.opportunityScore > 70 ? 'text-emerald-600' : post.opportunityScore > 40 ? 'text-orange-500' : 'text-slate-500'}`}>
-                          {post.opportunityScore}
-                        </div>
-                        <div className="w-px h-4 bg-slate-100 mx-1"></div>
-                        <div className="text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
-                          {post.intent || 'General'}
+                    <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+                      <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
+                        {post.opportunityScore > 50 && (
+                          <div className="flex items-center gap-1 px-3 py-1.5 bg-red-50 border border-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex-shrink-0 shadow-sm shadow-red-50">
+                            <Flame size={12} className="fill-current" /> Hot Lead
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5 bg-white border border-slate-100 px-3 py-1.5 rounded-xl shadow-sm flex-shrink-0">
+                          <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">AI Score</div>
+                          <div className={`text-sm font-black ${post.opportunityScore > 70 ? 'text-emerald-600' : post.opportunityScore > 40 ? 'text-orange-500' : 'text-slate-500'}`}>
+                            {post.opportunityScore}
+                          </div>
+                          <div className="w-px h-4 bg-slate-100 mx-1"></div>
+                          <div className="text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                            {post.intent || 'General'}
+                          </div>
                         </div>
                       </div>
+                      {post.analysisReason && (
+                        <p className="text-[10px] text-slate-400 font-medium italic text-right max-w-[200px]">
+                          "{post.analysisReason}"
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

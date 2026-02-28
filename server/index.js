@@ -1663,6 +1663,16 @@ STRUCTURE:
 - Closing: A low-friction question or a "tldr" statement.`,
   apiKey: process.env.GEMINI_API_KEY || '',
   baseUrl: 'https://openrouter.ai/api/v1',
+  analyzerProvider: 'google',
+  analyzerModel: 'gemini-1.5-flash',
+  analyzerSystemPrompt: `You are an expert sales analyst. Your task is to evaluate Reddit posts for lead quality and intent. 
+Evaluate based on:
+1. Purchase Intent: How likely is this user to buy a solution? 
+2. Problem Severity: How much pain is the user in?
+3. Lead Quality: Overall score from 0-100.
+
+Return ONLY a valid JSON array of objects with exactly this structure: { "id": "post_id_string", "score": 0-100, "intent": "String", "reason": "Short explanation" }`,
+  analyzerApiKey: '',
   creditCosts: {
     comment: 1,
     post: 2,
@@ -3365,6 +3375,9 @@ app.get('/api/admin/ai-settings', adminAuth, (req, res) => {
   if (safeSettings.apiKey) {
     safeSettings.apiKey = safeSettings.apiKey.substring(0, 4) + '****************' + safeSettings.apiKey.substring(safeSettings.apiKey.length - 4);
   }
+  if (safeSettings.analyzerApiKey) {
+    safeSettings.analyzerApiKey = safeSettings.analyzerApiKey.substring(0, 4) + '****************' + safeSettings.analyzerApiKey.substring(safeSettings.analyzerApiKey.length - 4);
+  }
   res.json(safeSettings);
 });
 
@@ -3374,6 +3387,16 @@ app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
   if (newSettings.apiKey && newSettings.apiKey.includes('****')) {
     delete newSettings.apiKey;
   }
+  // If Analyzer API key is masked (contains asterisks), don't update it
+  if (newSettings.analyzerApiKey && newSettings.analyzerApiKey.includes('****')) {
+    delete newSettings.analyzerApiKey;
+  }
+
+  // Analyzer Settings
+  if (newSettings.analyzerProvider) aiSettings.analyzerProvider = newSettings.analyzerProvider;
+  if (newSettings.analyzerModel) aiSettings.analyzerModel = newSettings.analyzerModel;
+  if (newSettings.analyzerSystemPrompt) aiSettings.analyzerSystemPrompt = newSettings.analyzerSystemPrompt;
+
   // Deep merge creditCosts if present — MUST include ALL cost keys to prevent data loss
   if (newSettings.creditCosts) {
     newSettings.creditCosts = {
@@ -4325,6 +4348,101 @@ app.get('/api/user/reddit/profile', async (req, res) => {
   }
 });
 
+// Helper for Semantic Analysis (Sales Intent & Scoring)
+async function performSemanticAnalysis(posts) {
+  if (!posts || posts.length === 0) return posts;
+
+  // Use specific analyzerApiKey if available, otherwise fallback to general apiKey or env
+  const keyToUse = aiSettings.analyzerApiKey || aiSettings.apiKey || process.env.GEMINI_API_KEY;
+  if (!keyToUse) {
+    console.warn('[Semantic Analysis] Skipped: No API Key found for Lead Analyzer.');
+    return posts;
+  }
+
+  try {
+    const provider = aiSettings.analyzerProvider || 'google';
+    const modelName = aiSettings.analyzerModel || 'gemini-1.5-flash';
+    const systemPrompt = aiSettings.analyzerSystemPrompt || "Analyze these Reddit posts for sales intent. Return JSON array.";
+
+    // Simplify posts to save tokens
+    const simplifiedPosts = posts.map(p => ({
+      id: p.id,
+      title: p.title,
+      text: (p.selftext || '').substring(0, 500) // Truncate long texts
+    }));
+
+    let analysisResults = [];
+
+    if (provider === 'google') {
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
+      const genAI = new GoogleGenerativeAI(keyToUse);
+      const model = genAI.getGenerativeModel({ model: modelName });
+
+      const result = await model.generateContent([
+        systemPrompt,
+        `Posts to Analyze: ${JSON.stringify(simplifiedPosts)}`
+      ]);
+      const response = await result.response;
+      const text = response.text().trim();
+
+      // Cleanup JSON (LLMs sometimes wrap in ```json ... ```)
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        analysisResults = JSON.parse(jsonMatch[0]);
+      }
+    } else {
+      const url = provider === 'openai'
+        ? 'https://api.openai.com/v1/chat/completions'
+        : `${aiSettings.baseUrl}/chat/completions`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${keyToUse}`
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Posts to Analyze: ${JSON.stringify(simplifiedPosts)}` }
+          ],
+          response_format: { type: "json_object" } // Useful for OpenAI
+        })
+      });
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        analysisResults = JSON.parse(jsonMatch[0]);
+      } else if (content.includes('{') && content.includes('}')) {
+        // If it returned an object with an array inside
+        const parsed = JSON.parse(content);
+        analysisResults = parsed.results || parsed.posts || Object.values(parsed).find(v => Array.isArray(v)) || [];
+      }
+    }
+
+    // Map results back to posts
+    return posts.map(post => {
+      const analysis = analysisResults.find(a => a.id === post.id);
+      if (analysis) {
+        return {
+          ...post,
+          opportunityScore: analysis.score || post.opportunityScore,
+          intent: analysis.intent || post.intent,
+          analysisReason: analysis.reason || ''
+        };
+      }
+      return post;
+    });
+
+  } catch (err) {
+    console.error('[Semantic Analysis Error]', err);
+    return posts; // Fallback to original posts if AI fails
+  }
+}
+
 app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   try {
     const { subreddit, keywords, userId, redditUsername } = req.query;
@@ -4336,10 +4454,6 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
     if (!subreddit || !subreddit.trim() || !keywords || !keywords.trim()) {
       return res.status(400).json({ error: 'Subreddit and keywords are required for search.' });
     }
-
-    // FROZEN: Migrating to Extension Model (Bypassing OAuth Ban)
-    // const token = await getValidToken(userId);
-    // if (!token) return res.status(401).json({ error: 'Reddit account not linked. Please go to Settings to link your account.' });
 
     // ── CREDIT CHECK & DEDUCTION ────────────────────────────────────────────
     const cost = Number(aiSettings.creditCosts?.fetch) ?? 1;
@@ -4406,13 +4520,10 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
         }
       }
 
-      // Determine if we use search (good for large subreddits with keywords) 
-      // or listing (good for Rising/Controversial which Search API doesn't support well)
       let fetchUrl = '';
       if (sortBy === 'rising' || sortBy === 'controversial') {
         fetchUrl = `https://www.reddit.com/r/${subreddit}/${sortBy}.json?limit=100`;
       } else {
-        // hot, new, top, relevance
         fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=${sortBy}&restrict_sr=1&limit=100`;
       }
 
@@ -4423,16 +4534,13 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       const response = await fetch(fetchUrl, { headers: fetchHeaders });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Reddit Public Fetch Error] Status: ${response.status} - ${errorText.substring(0, 100)}`);
-        // We will throw a generic error, but it won't be about linking accounts anymore
         throw new Error(`Reddit API Blocked (Status ${response.status}). Rate limit exceeded or Reddit is blocking our server IPs.`);
       }
 
       const data = await response.json();
       const keywordList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
 
-      const posts = data.data.children.map(child => {
+      let posts = data.data.children.map(child => {
         const post = child.data;
         let score = 0;
         const content = (post.title + ' ' + post.selftext).toLowerCase();
@@ -4446,23 +4554,27 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
         score += Math.min(post.ups / 5, 20);
         score += Math.min(post.num_comments * 2, 20);
         const opportunityScore = Math.min(Math.round(score), 100);
-        const competitors = ['hubspot', 'salesforce', 'buffer', 'hootsuite'];
         return {
           id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
           ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
           url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
           opportunityScore, intent, isHot: post.ups > 100 || post.num_comments > 50,
-          competitors: competitors.filter(c => content.includes(c))
+          competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
         };
       }).filter(post => {
-        // If keywords are provided, ensure at least one keyword is present in the title or text
         if (!keywords) return true;
         const searchContent = (post.title + ' ' + post.selftext).toLowerCase();
-        const kwList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
-        return kwList.some(kw => searchContent.includes(kw));
-      }).sort((a, b) => b.opportunityScore - a.opportunityScore); // Sort by highest score first
+        return keywordList.some(kw => searchContent.includes(kw));
+      });
 
-      // Return posts + updated credits for immediate frontend sync
+      // ── SEMANTIC ANALYSIS ENHANCEMENT ────────────────────────────────────────
+      // Limit to top 15 posts to stay fast and cheap
+      const postsForAnalysis = posts.slice(0, 15);
+      const remainingPosts = posts.slice(15);
+
+      const analyzedPosts = await performSemanticAnalysis(postsForAnalysis);
+      posts = [...analyzedPosts, ...remainingPosts].sort((a, b) => b.opportunityScore - a.opportunityScore);
+
       return res.json({
         posts: posts.slice(0, 50),
         credits: updatedUser.credits,
