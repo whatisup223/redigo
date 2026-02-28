@@ -9,6 +9,7 @@ import mongoSanitize from 'express-mongo-sanitize';
 
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2248,24 +2249,41 @@ const adminAuth = (req, res, next) => {
 // ─── Extension Download Tracking ──────────────────────────────────────
 app.get('/api/download-extension', async (req, res) => {
   try {
-    // Background tracking to avoid blocking response
+    // 1. Background tracking (fire and forget)
     Setting.findOneAndUpdate(
       { key: 'extensionDownloadCount' },
       { $inc: { 'value': 1 } },
       { upsert: true }
-    ).catch(e => console.error('Download tracking error:', e));
+    ).catch(() => { });
 
-    // Optional: Log it via system logs (silently in background)
-    // Avoid await here so IDM multiple requests don't lag
     try { addSystemLog('INFO', 'Browser extension download initiated'); } catch (e) { }
 
-    // Simply redirect to the static file URL
-    // In Dev: Vite serves this from /public
-    // In Prod: Express serves this from /dist
-    res.redirect('/redigo-extension.zip');
+    // 2. Resolve Path (Robust check for Prod 'dist' vs Dev 'public')
+    const possiblePaths = [
+      path.join(__dirname, '../dist/redigo-extension.zip'),    // Production
+      path.join(__dirname, '../public/redigo-extension.zip'),  // Development
+      path.join(process.cwd(), 'dist/redigo-extension.zip'),
+      path.join(process.cwd(), 'public/redigo-extension.zip')
+    ];
+
+    let foundPath = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        foundPath = p;
+        break;
+      }
+    }
+
+    if (foundPath) {
+      return res.download(foundPath, 'redigo-extension.zip');
+    }
+
+    res.status(404).send('Extension file not found. Make sure it is present in /public or /dist.');
   } catch (err) {
     console.error('Download error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error processing download' });
+    }
   }
 });
 
