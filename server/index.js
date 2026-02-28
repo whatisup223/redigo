@@ -540,7 +540,9 @@ const redditPostLimiter = (req, res, next) => {
 const generateLimiter = rateLimit({
   windowMs: 60 * 1000,       // 1 minute
   max: 20,                   // 20 AI generation requests per user per minute
-  keyGenerator: (req) => (req.body && req.body.userId) || req.ip || '127.0.0.1',
+  keyGenerator: (req) => {
+    return (req.body && req.body.userId) ? String(req.body.userId) : (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1');
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many generation requests. Please slow down.' }
@@ -729,7 +731,18 @@ app.post('/api/paypal/webhook', express.json(), async (req, res) => {
 // --- 3. Body Parsing & Sanitization (AFTER Webhook) ---
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(mongoSanitize());
+
+// Custom Mongo Sanitize to avoid Express 5 'req.query' setter error
+app.use((req, res, next) => {
+  ['body', 'params', 'headers', 'query'].forEach((key) => {
+    if (req[key]) {
+      // sanitize mutates the object in-place. We do not reassign req[key] to avoid 
+      // TypeError: Cannot set property query of #<IncomingMessage> which has only a getter.
+      mongoSanitize.sanitize(req[key]);
+    }
+  });
+  next();
+});
 
 // --- 4. Rate Limiting ---
 const apiLimiter = rateLimit({
