@@ -1643,7 +1643,7 @@ app.post('/api/user/brand-profile', async (req, res) => {
   }
 });
 
-let aiSettings = savedData.ai || {
+const defaultAiSettings = {
   provider: 'google',
   model: 'gemini-1.5-flash',
   temperature: 0.75,
@@ -1677,21 +1677,26 @@ Return ONLY a valid JSON array of objects with exactly this structure: { "id": "
     comment: 1,
     post: 2,
     image: 5,
-    fetch: 1  // Cost per Reddit post search/fetch
+    fetch: 1
   },
-  redditFetchCooldown: 30, // seconds
-  redditPostCooldown: 300  // seconds (5 minutes)
+  redditFetchCooldown: 30,
+  redditPostCooldown: 300
 };
 
-// Ensure creditCosts always exists and is fully populated with defaults
+// Merge saved data with defaults to ensure new fields are populated but old ones are preserved
+let aiSettings = {
+  ...defaultAiSettings,
+  ...(savedData.ai || {})
+};
+
+// Deep merge creditCosts to be extra safe
 aiSettings.creditCosts = {
-  comment: Number(aiSettings.creditCosts?.comment) || 1,
-  post: Number(aiSettings.creditCosts?.post) || 2,
-  image: Number(aiSettings.creditCosts?.image) || 5,
-  // For fetch: use explicit check so 0 (free) is preserved, and NaN/undefined falls back to 1
+  comment: Number(aiSettings.creditCosts?.comment) || defaultAiSettings.creditCosts.comment,
+  post: Number(aiSettings.creditCosts?.post) || defaultAiSettings.creditCosts.post,
+  image: Number(aiSettings.creditCosts?.image) || defaultAiSettings.creditCosts.image,
   fetch: (aiSettings.creditCosts?.fetch !== undefined && aiSettings.creditCosts?.fetch !== null && !isNaN(Number(aiSettings.creditCosts?.fetch)))
     ? Number(aiSettings.creditCosts.fetch)
-    : 1,
+    : defaultAiSettings.creditCosts.fetch,
 };
 
 // Stripe Settings (In-memory storage for demo)
@@ -3383,33 +3388,28 @@ app.get('/api/admin/ai-settings', adminAuth, (req, res) => {
 
 app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
   const newSettings = { ...req.body };
-  // If API key is masked (contains asterisks), don't update it
-  if (newSettings.apiKey && newSettings.apiKey.includes('****')) {
-    delete newSettings.apiKey;
+  // Update main API Key only if it's not the masked placeholder
+  if (newSettings.apiKey && !newSettings.apiKey.includes('****')) {
+    aiSettings.apiKey = newSettings.apiKey;
   }
-  // If Analyzer API key is masked (contains asterisks), don't update it
-  if (newSettings.analyzerApiKey && newSettings.analyzerApiKey.includes('****')) {
-    delete newSettings.analyzerApiKey;
+  // Update Analyzer API Key only if it's not the masked placeholder
+  if (newSettings.analyzerApiKey && !newSettings.analyzerApiKey.includes('****')) {
+    aiSettings.analyzerApiKey = newSettings.analyzerApiKey;
   }
-
-  // Analyzer Settings
-  if (newSettings.analyzerProvider) aiSettings.analyzerProvider = newSettings.analyzerProvider;
-  if (newSettings.analyzerModel) aiSettings.analyzerModel = newSettings.analyzerModel;
-  if (newSettings.analyzerSystemPrompt) aiSettings.analyzerSystemPrompt = newSettings.analyzerSystemPrompt;
 
   // Deep merge creditCosts if present — MUST include ALL cost keys to prevent data loss
   if (newSettings.creditCosts) {
-    newSettings.creditCosts = {
+    aiSettings.creditCosts = {
       comment: Number(newSettings.creditCosts.comment) || (aiSettings.creditCosts?.comment || 1),
       post: Number(newSettings.creditCosts.post) || (aiSettings.creditCosts?.post || 2),
       image: Number(newSettings.creditCosts.image) || (aiSettings.creditCosts?.image || 5),
-      // fetch uses ?? not || so that 0 (free) is preserved and not replaced by default
       fetch: (newSettings.creditCosts.fetch !== undefined && newSettings.creditCosts.fetch !== null)
         ? Number(newSettings.creditCosts.fetch)
         : (aiSettings.creditCosts?.fetch ?? 1)
     };
   }
 
+  // Final merge of all other fields (provider, model, prompts, etc.)
   aiSettings = { ...aiSettings, ...newSettings };
   saveSettings({ ai: aiSettings });
   res.json({ message: 'Settings updated', settings: aiSettings });
