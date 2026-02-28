@@ -707,7 +707,8 @@ app.post('/api/paypal/webhook', express.json(), async (req, res) => {
 });
 
 // --- 3. Body Parsing & Sanitization (AFTER Webhook) ---
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(mongoSanitize());
 
 // --- 4. Rate Limiting ---
@@ -4613,7 +4614,8 @@ app.post('/api/reddit/analyze', async (req, res) => {
 
   } catch (error) {
     console.error('Reddit Analysis Error:', error);
-    addSystemLog('ERROR', `Reddit Analysis Failed: ${error.message}`, { userId: req.body.userId });
+    const safeUserId = (req.body && req.body.userId) ? req.body.userId : 'unknown';
+    addSystemLog('ERROR', `Reddit Analysis Failed: ${error.message}`, { userId: safeUserId });
     res.status(500).json({ error: error.message });
   }
 });
