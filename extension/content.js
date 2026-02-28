@@ -1,12 +1,23 @@
 // content.js - Injected ONLY into reddit.com pages
 console.log('🛡️ Redigo Security Engine connected to Reddit tab.');
 
-function injectFloatingAssistant(title, text, imageUrl) {
-    // Prevent duplicate injections
-    if (document.getElementById('redigo-assistant-root')) return;
+chrome.storage.local.get(['redigo_assistant_draft'], (res) => {
+  if (res.redigo_assistant_draft) {
+    const { title, text, imageUrl } = res.redigo_assistant_draft;
+    injectFloatingAssistant(title, text, imageUrl, true);
+  }
+});
 
-    const style = document.createElement('style');
-    style.textContent = `
+function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
+  // Prevent duplicate injections
+  if (document.getElementById('redigo-assistant-root')) return;
+
+  if (!fromStorage) {
+    chrome.storage.local.set({ redigo_assistant_draft: { title, text, imageUrl } });
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
     #redigo-assistant-root {
       position: fixed; bottom: 20px; right: 20px; z-index: 999999;
       background: white; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.15);
@@ -36,12 +47,12 @@ function injectFloatingAssistant(title, text, imageUrl) {
     }
     .redigo-toast.show { opacity: 1; }
   `;
-    document.head.appendChild(style);
+  document.head.appendChild(style);
 
-    const container = document.createElement('div');
-    container.id = 'redigo-assistant-root';
+  const container = document.createElement('div');
+  container.id = 'redigo-assistant-root';
 
-    container.innerHTML = `
+  container.innerHTML = `
     <div class="redigo-toast" id="redigo-toast">Copied!</div>
     <div class="redigo-header">
       <div style="display:flex; align-items:center; gap:8px;">
@@ -68,9 +79,10 @@ function injectFloatingAssistant(title, text, imageUrl) {
 
       ${imageUrl ? `
         <span class="redigo-label">Image</span>
-        <button class="redigo-btn" id="redigo-copy-img">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-          Copy Image URL
+        <img src="${imageUrl}" style="width:100%; border-radius:8px; margin-bottom:-4px; border:1px solid #e2e8f0; object-fit: cover; max-height: 180px;" />
+        <button class="redigo-btn" id="redigo-download-img">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Download Image
         </button>
       ` : ''}
       
@@ -81,46 +93,57 @@ function injectFloatingAssistant(title, text, imageUrl) {
     </div>
   `;
 
-    document.body.appendChild(container);
+  document.body.appendChild(container);
 
-    const showToast = () => {
-        const t = document.getElementById('redigo-toast');
-        t.classList.add('show');
-        setTimeout(() => t.classList.remove('show'), 2000);
-    };
+  const showToast = (msg = 'Copied!') => {
+    const t = document.getElementById('redigo-toast');
+    t.innerText = typeof msg === 'string' ? msg : 'Copied!';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  };
 
-    const copyToClipboard = (content) => {
-        navigator.clipboard.writeText(content).then(() => {
-            showToast();
-        }).catch(err => {
-            console.error('Failed to copy', err);
-            prompt("Oops! Your browser blocked auto-copy. Copy from here:", content);
-        });
-    };
-
-    if (title) {
-        document.getElementById('redigo-copy-title').addEventListener('click', () => copyToClipboard(title));
-    }
-    if (text) {
-        document.getElementById('redigo-copy-text').addEventListener('click', () => copyToClipboard(text));
-    }
-    if (imageUrl) {
-        document.getElementById('redigo-copy-img').addEventListener('click', () => copyToClipboard(imageUrl));
-    }
-
-    document.getElementById('redigo-close').addEventListener('click', () => {
-        document.getElementById('redigo-assistant-root').remove();
+  const copyToClipboard = (content) => {
+    navigator.clipboard.writeText(content).then(() => {
+      showToast();
+    }).catch(err => {
+      console.error('Failed to copy', err);
+      prompt("Oops! Your browser blocked auto-copy. Copy from here:", content);
     });
+  };
+
+  if (title) {
+    document.getElementById('redigo-copy-title').addEventListener('click', () => copyToClipboard(title));
+  }
+  if (text) {
+    document.getElementById('redigo-copy-text').addEventListener('click', () => copyToClipboard(text));
+  }
+  if (imageUrl) {
+    document.getElementById('redigo-download-img').addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'DOWNLOAD_IMAGE', url: imageUrl }, (response) => {
+        if (response && response.success) {
+          showToast("Downloading...");
+        } else {
+          showToast("Download Failed!");
+          console.error("Download Error", response?.error);
+        }
+      });
+    });
+  }
+
+  document.getElementById('redigo-close').addEventListener('click', () => {
+    document.getElementById('redigo-assistant-root').remove();
+    chrome.storage.local.remove('redigo_assistant_draft');
+  });
 }
 
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'PASTE_REPLY') {
-        const textToPaste = request.text;
-        const titleToPaste = request.title;
-        const imageUrl = request.imageUrl;
+  if (request.type === 'PASTE_REPLY') {
+    const textToPaste = request.text;
+    const titleToPaste = request.title;
+    const imageUrl = request.imageUrl;
 
-        // Inject the beautiful helper UI
-        injectFloatingAssistant(titleToPaste, textToPaste, imageUrl);
-    }
+    // Inject the beautiful helper UI
+    injectFloatingAssistant(titleToPaste, textToPaste, imageUrl);
+  }
 });

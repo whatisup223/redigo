@@ -53,5 +53,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.type === 'DOWNLOAD_IMAGE') {
+        chrome.downloads.download({
+            url: request.url,
+            filename: `redigo-image-${Date.now()}.png`
+        }, (downloadId) => {
+            if (chrome.runtime.lastError) {
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+                sendResponse({ success: true, downloadId });
+            }
+        });
+        return true;
+    }
+
     return true; // Keep message channel open for async response
 });

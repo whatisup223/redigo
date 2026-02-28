@@ -368,6 +368,26 @@ export const ContentArchitect: React.FC = () => {
             isForcedRef.current = false; // Reset for next time
         }
         setPendingAction(null); // Clear after check passes or forced continue
+
+        // --- Subreddit Image Pre-flight Check ---
+        if (postData.subreddit) {
+            try {
+                const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
+                if (subRes.ok) {
+                    const subData = await subRes.json();
+                    if (subData.data && typeof subData.data.allow_images !== 'undefined') {
+                        if (!subData.data.allow_images) {
+                            showToast(`r/${postData.subreddit} does not allow images. Generation skipped.`, 'error');
+                            setIncludeImage(false);
+                            return; // Cannot generate image for this subreddit
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Subreddit image support check failed (ignoring)', err);
+            }
+        }
+
         // Proactive Daily Limit Pre-check (for individual image trigger)
         if (user && user.role !== 'admin') {
             const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
@@ -449,6 +469,27 @@ export const ContentArchitect: React.FC = () => {
                 // Full Refresh from modal: user explicitly chose image+text
                 isImageRequested = true;
                 setIncludeImage(true);
+            }
+        }
+
+        // --- Subreddit Image Pre-flight Check ---
+        if (isImageRequested) {
+            try {
+                const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
+                if (subRes.ok) {
+                    const subData = await subRes.json();
+                    if (subData.data && typeof subData.data.allow_images !== 'undefined') {
+                        if (!subData.data.allow_images) {
+                            showToast(`r/${postData.subreddit} does not allow images. Skipped to save credits!`, 'error');
+                            isImageRequested = false;
+                            setIncludeImage(false);
+                            if (mode === 'image') return; // Stop entirely if user wanted ONLY an image
+                            mode = 'text'; // Fallback to text so we don't charge for an image
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Subreddit image support check failed (ignoring)', err);
             }
         }
 

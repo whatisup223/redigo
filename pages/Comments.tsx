@@ -664,7 +664,31 @@ export const Comments: React.FC = () => {
       if (canUseExtension) {
         console.log('[Hybrid] Attempting Extension Fetch...');
         try {
-          const rawJson = await fetchWithExtension();
+          let rawJson = await fetchWithExtension();
+
+          // --- PAYLOAD SIZE REDUCTION ---
+          // Reddit API returns a massive amount of unnecessary data (flair, HTML, etc)
+          // We only need specific fields. Trimming this prevents "Payload Too Large" (413) Node.js errors.
+          if (rawJson && rawJson.data && Array.isArray(rawJson.data.children)) {
+            rawJson = {
+              data: {
+                children: rawJson.data.children.map((child: any) => ({
+                  data: {
+                    name: child.data?.name,
+                    title: child.data?.title,
+                    selftext: child.data?.selftext,
+                    ups: child.data?.ups,
+                    num_comments: child.data?.num_comments,
+                    url: child.data?.url,
+                    permalink: child.data?.permalink,
+                    author: child.data?.author,
+                    created_utc: child.data?.created_utc
+                  }
+                }))
+              }
+            };
+          }
+
           const response = await fetch('/api/reddit/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

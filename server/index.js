@@ -471,6 +471,26 @@ app.use(helmet({
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
+// --- Subreddit Info Proxy ---
+app.get('/api/subreddit/about', async (req, res) => {
+  try {
+    let sub = req.query.name || '';
+    sub = sub.replace(/^r\//, '').replace(/\/$/, '').trim();
+    if (!sub) return res.status(400).json({ error: 'Subreddit name required' });
+
+    const response = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RedigoServerProxy/1.0' }
+    });
+    if (!response.ok) throw new Error('Reddit API error');
+
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Subreddit fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch subreddit info' });
+  }
+});
+
 // --- Reddit API Rate Limiters (Compliance) ---
 // Per Reddit's Responsible Builder Policy, clients must respect rate limits.
 
@@ -707,8 +727,8 @@ app.post('/api/paypal/webhook', express.json(), async (req, res) => {
 });
 
 // --- 3. Body Parsing & Sanitization (AFTER Webhook) ---
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(mongoSanitize());
 
 // --- 4. Rate Limiting ---
@@ -786,11 +806,19 @@ app.use((req, res, next) => {
 
 // JSON Error Handler
 app.use((err, req, res, next) => {
-  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    addSystemLog('ERROR', 'Invalid JSON payload received', { ip: req.ip });
-    return res.status(400).json({ error: 'Invalid JSON payload' });
+  if (err && 'body' in err) {
+    if (err.type === 'entity.too.large') {
+      addSystemLog('ERROR', 'Payload too large', { ip: req.ip });
+      return res.status(413).json({ error: 'Payload too large. The request body exceeded the limit.' });
+    }
+    if (err instanceof SyntaxError && err.status === 400) {
+      addSystemLog('ERROR', 'Invalid JSON payload received', { ip: req.ip });
+      return res.status(400).json({ error: 'Invalid JSON payload' });
+    }
+    // For other body parsing errors, abort instead of swallowing to prevent undefined req.body
+    return res.status(400).json({ error: err.message || 'Invalid request body' });
   }
-  next();
+  next(err);
 });
 
 // Data Models are now managed by MongoDB schemas in models.js
