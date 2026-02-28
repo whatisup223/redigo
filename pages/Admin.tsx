@@ -2280,16 +2280,7 @@ export const Admin: React.FC = () => {
                                                         </label>
                                                     </div>
 
-                                                    <label className="block">
-                                                        <span className="text-sm font-bold text-slate-700 mb-2 block">Reddit Search Cooldown (Seconds)</span>
-                                                        <input
-                                                            type="number"
-                                                            className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold text-slate-700"
-                                                            value={aiSettings.redditFetchCooldown}
-                                                            onChange={(e) => setAiSettings({ ...aiSettings, redditFetchCooldown: parseInt(e.target.value) })}
-                                                        />
-                                                        <p className="text-[10px] text-slate-400 mt-1 italic">Controls the timer on the "Search Posts" button for users.</p>
-                                                    </label>
+
                                                     <label className="block">
                                                         <span className="text-sm font-bold text-slate-700 mb-2 block">API Key</span>
                                                         <div className="relative">
