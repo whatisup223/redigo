@@ -1938,6 +1938,7 @@ let smtpSettings = savedData.smtp || {
 app.get('/api/config', (req, res) => {
   res.json({
     creditCosts: aiSettings.creditCosts,
+    redditFetchCooldown: aiSettings.redditFetchCooldown || 30,
     gateways: {
       stripe: stripeSettings.enabled,
       paypal: paypalSettings.enabled

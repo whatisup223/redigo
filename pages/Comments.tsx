@@ -104,6 +104,7 @@ export const Comments: React.FC = () => {
   const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
   const [activeIntentFilter, setActiveIntentFilter] = useState<string>('All');
+  const [targetCooldown, setTargetCooldown] = useState(30);
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
   const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
@@ -131,6 +132,7 @@ export const Comments: React.FC = () => {
     fetch('/api/config')
       .then(res => res.json())
       .then(data => {
+        if (data.redditFetchCooldown) setTargetCooldown(data.redditFetchCooldown);
         if (data.creditCosts) setCosts(prev => ({ ...prev, ...data.creditCosts, fetch: Number(data.creditCosts.fetch) ?? 1 }));
       })
       .catch(console.error);
@@ -486,8 +488,8 @@ export const Comments: React.FC = () => {
     setSelectedPost(null); // Clear selected post to avoid old post mixing
     setActiveIntentFilter('All'); // Reset AI filter to default
 
-    // Start 30s cooldown to prevent rapid re-fetching
-    setReloadCooldown(30);
+    // Start dynamic cooldown to prevent rapid re-fetching
+    setReloadCooldown(targetCooldown);
     const cooldownTimer = setInterval(() => {
       setReloadCooldown(prev => {
         if (prev <= 1) { clearInterval(cooldownTimer); return 0; }
