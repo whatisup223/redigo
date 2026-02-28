@@ -3409,8 +3409,14 @@ app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
     };
   }
 
+  // Remove sensitive keys before final spread to prevent masked inputs from overwriting real keys in memory
+  delete newSettings.apiKey;
+  delete newSettings.analyzerApiKey;
+  delete newSettings.creditCosts; // Already handled separately
+
   // Final merge of all other fields (provider, model, prompts, etc.)
   aiSettings = { ...aiSettings, ...newSettings };
+
   saveSettings({ ai: aiSettings });
   res.json({ message: 'Settings updated', settings: aiSettings });
 });
