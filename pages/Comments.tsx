@@ -790,7 +790,7 @@ export const Comments: React.FC = () => {
                       className="fixed inset-0 z-40"
                       onClick={() => setIsSortMenuOpen(false)}
                     />
-                    <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                    <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200 origin-top-left sm:origin-top-right">
                       <p className="text-[10px] font-black text-slate-400 px-3 py-2 uppercase tracking-widest">Sort by</p>
                       {[
                         { id: 'new', icon: Clock, label: 'Newest' },
