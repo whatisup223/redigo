@@ -1635,7 +1635,7 @@ export const Settings: React.FC = () => {
                                             icon = <Globe size={18} />;
                                             colorClass = 'bg-orange-100 text-orange-600';
                                             label = 'Reddit Smart Search (Extension)';
-                                        } else if (item.type === 'fetch_posts') {
+                                        } else if (item.type === 'fetch_posts' || item.type === 'fetch') {
                                             icon = <Globe size={18} />;
                                             colorClass = 'bg-slate-100 text-slate-600';
                                             label = 'Reddit Search (Server)';
