@@ -3640,6 +3640,9 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     const { prompt, context, userId, type } = req.body; // type can be 'comment' or 'post'
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
+    // 🔍 Debug: log which provider/model is being used (key prefix only for security)
+    console.log(`[/api/generate] provider=${aiSettings.provider}, model=${aiSettings.model}, keyPrefix=${keyToUse ? keyToUse.substring(0, 8) + '...' : 'MISSING'}, type=${type}`);
+
     if (!keyToUse) {
       return res.status(500).json({ error: 'AI provider is not configured. Please contact the administrator.' });
     }
@@ -3694,23 +3697,30 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     let text = '';
 
     if (aiSettings.provider === 'google') {
-      const { GoogleGenerativeAI } = await import('@google/generative-ai');
-      const genAI = new GoogleGenerativeAI(keyToUse);
-      const model = genAI.getGenerativeModel({
-        model: aiSettings.model,
-        generationConfig: {
-          temperature: aiSettings.temperature,
-          maxOutputTokens: aiSettings.maxOutputTokens,
-        }
-      });
+      try {
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(keyToUse);
+        const model = genAI.getGenerativeModel({
+          model: aiSettings.model || 'gemini-1.5-flash',
+          generationConfig: {
+            temperature: aiSettings.temperature,
+            maxOutputTokens: aiSettings.maxOutputTokens,
+          }
+        });
 
-      const result = await model.generateContent([
-        aiSettings.systemPrompt,
-        `Context: ${JSON.stringify(context)}`,
-        `User Prompt: ${prompt}`
-      ]);
-      const response = await result.response;
-      text = response.text();
+        const result = await model.generateContent([
+          aiSettings.systemPrompt,
+          `Context: ${JSON.stringify(context)}`,
+          `User Prompt: ${prompt}`
+        ]);
+        const response = await result.response;
+        text = response.text();
+      } catch (googleErr) {
+        console.error('[/api/generate] Google AI Error:', googleErr?.message, googleErr?.stack);
+        // Try to extract a meaningful message from the Google SDK error
+        const errMsg = googleErr?.message || 'Google AI API Error';
+        throw new Error(errMsg);
+      }
     } else {
       // OpenAI or OpenRouter (OpenAI compatible API)
       const url = aiSettings.provider === 'openai'
@@ -3722,7 +3732,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${keyToUse}`,
-          'HTTP-Referer': `https://redditgo.online`, // Specific for this app production or dynamic
+          'HTTP-Referer': `https://redditgo.online`,
           'X-Title': 'RedditGo Content Architect'
         },
         body: JSON.stringify({
@@ -3737,12 +3747,15 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       });
 
       const data = await response.json();
+      console.log(`[/api/generate] OpenAI/OpenRouter response status: ${response.status}`);
       if (!response.ok) {
-        throw new Error(data.error?.message || 'AI API Error');
+        console.error('[/api/generate] OpenAI/OpenRouter API error body:', JSON.stringify(data));
+        throw new Error(data.error?.message || `AI API responded with ${response.status}`);
       }
       if (data.choices && data.choices[0] && data.choices[0].message) {
         text = data.choices[0].message.content;
       } else {
+        console.error('[/api/generate] Unexpected response shape:', JSON.stringify(data));
         throw new Error('AI returned an empty or malformed response');
       }
     }
@@ -3789,7 +3802,8 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
       dailyUsagePoints: updatedUser.dailyUsagePoints
     });
   } catch (error) {
-    console.error('AI Generation Error:', error);
+    console.error('[/api/generate] ❌ AI Generation Error:', error?.message);
+    console.error('[/api/generate] Stack:', error?.stack);
     res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 });
