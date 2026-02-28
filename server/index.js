@@ -806,8 +806,17 @@ app.use((req, res, next) => {
     if (res.statusCode >= 400) logLevel = 'WARN';
     if (res.statusCode >= 500) logLevel = 'ERROR';
 
-    // Don't flood logs with health checks or static assets if any
-    if (path === '/api/health') return;
+    // Don't flood logs with internal administrative requests or health checks
+    const noisyPaths = [
+      '/api/health',
+      '/api/admin/logs',
+      '/api/admin/stats',
+      '/api/admin/users',
+      '/api/plans'
+    ];
+    if (noisyPaths.includes(path) || path.includes('/wp-admin') || path.includes('setup-config.php') || path.endsWith('.ico') || path.endsWith('.js') || path.endsWith('.css')) {
+      return;
+    }
 
     addSystemLog(logLevel, `${req.method} ${path}`, {
       statusCode: res.statusCode,
