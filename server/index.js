@@ -4094,7 +4094,12 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
     });
 
     await entry.save();
-    addSystemLog('SUCCESS', `Reddit Reply sent by User ${userId}`, { subreddit, postTitle });
+    addSystemLog('SUCCESS', `Reddit Reply sent by User ${userId}`, {
+      subreddit,
+      postTitle,
+      redditUsername: redditUsername || 'unknown',
+      userAgent: getDynamicUserAgent(userId, redditUsername)
+    });
 
     res.json({ success: true, entry });
   } catch (error) {
@@ -4198,7 +4203,11 @@ app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
     });
 
     await entry.save();
-    addSystemLog('SUCCESS', `Reddit Post submitted: ${title}`, { subreddit });
+    addSystemLog('SUCCESS', `Reddit Post submitted: ${title}`, {
+      subreddit,
+      redditUsername: redditUsername || 'unknown',
+      userAgent: getDynamicUserAgent(userId, redditUsername)
+    });
 
     res.json({ success: true, redditResponse });
   } catch (error) {
@@ -4756,7 +4765,13 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
 
       const userIp = req.headers['x-forwarded-for'] || req.ip || '0.0.0.0';
-      addSystemLog('INFO', `Reddit Fetch via SERVER (User IP: ${userIp})`, { subreddit, cost, creditsRemaining: updatedUser.credits });
+      addSystemLog('INFO', `Reddit Fetch via SERVER (User IP: ${userIp})`, {
+        subreddit,
+        cost,
+        creditsRemaining: updatedUser.credits,
+        redditUsername: updatedUser.redditUsername || 'unknown',
+        userAgent: getDynamicUserAgent(userId, updatedUser.redditUsername)
+      });
 
       const sortBy = req.query.sort || 'new';
 
