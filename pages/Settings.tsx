@@ -278,6 +278,7 @@ export const Settings: React.FC = () => {
     // Profile State
     const [profileName, setProfileName] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
+    const [redditUsername, setRedditUsername] = useState('');
     const [isProfileSaving, setIsProfileSaving] = useState(false);
     const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -473,6 +474,7 @@ export const Settings: React.FC = () => {
         if (user) {
             setProfileName(user.name || '');
             setAvatarUrl(user.avatar || '');
+            setRedditUsername(user.redditUsername || '');
             if (user.brandProfile && Object.keys(user.brandProfile).length > 0) {
                 setBrandProfile(prev => ({ ...prev, ...user.brandProfile }));
             }
@@ -569,7 +571,8 @@ export const Settings: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: profileName,
-                    avatar: avatarUrl
+                    avatar: avatarUrl,
+                    redditUsername: redditUsername
                 })
             });
 
@@ -577,7 +580,7 @@ export const Settings: React.FC = () => {
 
             const updatedUser = await response.json();
             // Update local auth context
-            updateUser({ name: profileName, avatar: avatarUrl });
+            updateUser({ name: profileName, avatar: avatarUrl, redditUsername: redditUsername });
 
             setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
             setTimeout(() => setProfileMessage(null), 3000);
@@ -851,6 +854,20 @@ export const Settings: React.FC = () => {
                                         onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
                                     />
+                                </label>
+                                <label className="space-y-2">
+                                    <span className="text-sm font-bold text-slate-700">Reddit Username (Optional)</span>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">/u/</span>
+                                        <input
+                                            type="text"
+                                            placeholder="Username"
+                                            value={redditUsername}
+                                            onChange={(e) => setRedditUsername(e.target.value.replace('/u/', '').replace('u/', '').trim())}
+                                            className="w-full p-4 pl-10 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium">Used for identifying your requests to Reddit API for compliance.</p>
                                 </label>
                             </div>
 

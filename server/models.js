@@ -45,7 +45,8 @@ const UserSchema = new mongoose.Schema({
     cancellationReason: mongoose.Schema.Types.Mixed,
     isSuspended: { type: Boolean, default: false },
     extensionInstalled: { type: Boolean, default: false },
-    lastExtensionPing: Date
+    lastExtensionPing: Date,
+    redditUsername: String
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const AnnouncementSchema = new mongoose.Schema({

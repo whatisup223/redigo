@@ -17,6 +17,7 @@ export interface User {
     customDailyLimit?: number;
     lastUsageDate?: string;
     avatar?: string;
+    redditUsername?: string;
     brandProfile?: any;
     twoFactorEnabled?: boolean;
     subscriptionStart?: string;

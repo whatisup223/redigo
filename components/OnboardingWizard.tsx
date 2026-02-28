@@ -58,7 +58,9 @@ export const OnboardingWizard: React.FC = () => {
         customTone: ''
     });
 
-    const totalSteps = 6;
+    const [redditUsername, setRedditUsername] = useState('');
+
+    const totalSteps = 7;
 
     const handleNext = () => {
         if (step < totalSteps) updateStep(step + 1);
@@ -103,7 +105,7 @@ export const OnboardingWizard: React.FC = () => {
             const res = await fetch('/api/user/complete-onboarding', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user?.id })
+                body: JSON.stringify({ userId: user?.id, redditUsername: redditUsername })
             });
 
             if (res.ok) {
@@ -182,8 +184,9 @@ export const OnboardingWizard: React.FC = () => {
                                     { s: 2, label: 'Identity' },
                                     { s: 3, label: 'Strategy' },
                                     { s: 4, label: 'Personality' },
-                                    { s: 5, label: 'Connectivity' },
-                                    { s: 6, label: 'Launch' }
+                                    { s: 5, label: 'Reddit Profile' },
+                                    { s: 6, label: 'Security' },
+                                    { s: 7, label: 'Launch' }
                                 ].map((item) => (
                                     <button
                                         key={item.s}
@@ -432,10 +435,47 @@ export const OnboardingWizard: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Step 5: Install Extension */}
+                        {/* Step 5: Reddit Profile */}
                         {step === 5 && (
+                            <div className="space-y-6 animate-in slide-in-from-right-8 duration-700">
+                                <div className="space-y-2 text-center md:text-left">
+                                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Reddit Identity</h2>
+                                    <p className="text-slate-500 text-sm font-medium">To stay compliant with Reddit's API, we need your public Reddit username.</p>
+                                </div>
+
+                                <div className="space-y-5">
+                                    <div className="p-6 bg-orange-50 rounded-[2rem] border border-orange-100 flex items-start gap-4">
+                                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-600 shadow-sm shrink-0">
+                                            <Globe size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-900 text-sm">Transparency builds trust.</p>
+                                            <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5">Providing your username allows us to self-identify your requests to Reddit. This is a "Responsible Builder" best practice.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 pt-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Reddit Username (Optional)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">/u/</span>
+                                            <input
+                                                type="text"
+                                                className="w-full p-4 pl-10 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-bold text-sm"
+                                                placeholder="username"
+                                                value={redditUsername}
+                                                onChange={(e) => setRedditUsername(e.target.value.replace('/u/', '').replace('u/', '').trim())}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 font-medium ml-1">Don't worry, we never ask for your Reddit password.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 6: Install Extension */}
+                        {step === 6 && (
                             <div className="space-y-8 animate-in slide-in-from-right-8 duration-700 flex flex-col items-center text-center">
-                                <div className="w-20 h-20 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-blue-200 rotate-12 ring-4 ring-blue-50">
+                                <div className="w-20 h-20 bg-orange-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-orange-200 rotate-12 ring-4 ring-orange-50">
                                     <Shield size={36} fill="currentColor" />
                                 </div>
                                 <div className="space-y-3">
@@ -453,7 +493,7 @@ export const OnboardingWizard: React.FC = () => {
                                 ) : (
                                     <button
                                         onClick={handleInstallExtension}
-                                        className="w-full max-w-sm py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-[0_16px_32px_-8px_rgba(37,99,235,0.3)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group text-sm"
+                                        className="w-full max-w-sm py-4 bg-orange-600 text-white rounded-[1.5rem] font-black shadow-[0_16px_32px_-8px_rgba(234,88,12,0.3)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group text-sm"
                                     >
                                         <Globe size={20} className="group-hover:translate-x-1 transition-transform" />
                                         Install Chrome Extension
@@ -467,8 +507,8 @@ export const OnboardingWizard: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Step 6: Success */}
-                        {step === 6 && (
+                        {/* Step 7: Success */}
+                        {step === 7 && (
                             <div className="space-y-8 animate-in zoom-in-95 duration-700 flex flex-col items-center text-center">
                                 <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-white ring-4 ring-green-50 mb-4 shadow-xl shadow-green-100">
                                     <Check size={40} strokeWidth={4} />
@@ -500,7 +540,7 @@ export const OnboardingWizard: React.FC = () => {
                                             <Check className="text-green-500" size={18} strokeWidth={3} />
                                         ) : (
                                             <button
-                                                onClick={() => updateStep(5)}
+                                                onClick={() => updateStep(6)}
                                                 className="text-[10px] font-black text-red-600 uppercase underline tracking-widest hover:text-red-700"
                                             >
                                                 Install Missing

@@ -1570,13 +1570,16 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 app.post('/api/user/complete-onboarding', async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, redditUsername } = req.body;
     const user = await User.findOne({ id: userId.toString() });
 
     if (user) {
       user.hasCompletedOnboarding = true;
+      if (redditUsername) {
+        user.redditUsername = redditUsername.replace('/u/', '').replace('u/', '').trim();
+      }
       await user.save();
-      addSystemLog('INFO', `User completed onboarding: ${user.email}`);
+      addSystemLog('INFO', `User completed onboarding: ${user.email}`, { redditUsername: user.redditUsername });
       res.json({
         success: true,
         hasCompletedOnboarding: true,
@@ -1736,21 +1739,25 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 const REDDIT_USER_AGENT = 'web:redditgo.online:2.0 (by /u/Fun-Club-8513)';
 
-const getDynamicUserAgent = (userId) => {
+const getDynamicUserAgent = (userId, redditUsername) => {
   // Always enforce the correct Reddit-compliant User-Agent format
   let base = (redditSettings.userAgent && redditSettings.userAgent.includes('by /u/'))
     ? redditSettings.userAgent
     : REDDIT_USER_AGENT;
 
-  // Inject userId to distinguish traffic per user while keeping the same app identity
-  if (userId) {
-    if (base.includes(')')) {
-      base = base.replace(' (by /u/', `:user:${userId} (by /u/`);
-    } else {
-      base = `${base}:user:${userId}`;
-    }
+  // Use the verified Reddit username if provided, otherwise fallback to userId
+  const identity = redditUsername ? `/u/${redditUsername}` : `user:${userId}`;
+
+  // Inject identity while keeping the app branding
+  if (base.includes(' (by /u/')) {
+    // Replace the part inside the parenthesis with our specific identity
+    return base.replace(/\(by \/u\/[^\)]+\)/, `(by ${identity})`);
+  } else if (base.includes(')')) {
+    // If it has a different parenthesis format, try to inject before it
+    return base.replace(' (', `:${identity} (`);
+  } else {
+    return `${base} (by ${identity})`;
   }
-  return base;
 };
 
 const getPaypalAccessToken = async () => {
@@ -3010,9 +3017,10 @@ app.put('/api/users/:id', async (req, res) => {
     const user = await User.findOne({ id: id.toString() });
 
     if (user) {
-      const { name, avatar } = req.body;
+      const { name, avatar, redditUsername } = req.body;
       if (name) user.name = name;
       if (avatar !== undefined) user.avatar = avatar;
+      if (redditUsername !== undefined) user.redditUsername = redditUsername;
 
       await user.save();
       const safeUser = user.toObject();
@@ -3972,7 +3980,7 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
 
     console.log(`[Reddit] Posting reply for user ${userId} (account: ${redditUsername || 'default'}) on post ${postId}`);
 
-    const token = await getValidToken(userId, redditUsername);
+    const token = req.headers['x-redigo-token'];
     let redditCommentId = null;
 
     // Only call Reddit API if postId looks like a real Reddit ID (alphanumeric, 4-10 chars)
@@ -3997,7 +4005,7 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': getDynamicUserAgent(userId)
+          'User-Agent': getDynamicUserAgent(userId, redditUsername)
         },
         body: new URLSearchParams({
           api_type: 'json',
@@ -4083,8 +4091,8 @@ app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
     const { userId, subreddit, title, text, kind, redditUsername } = req.body;
     if (!userId || !subreddit || !title) return res.status(400).json({ error: 'Missing required fields' });
 
-    const token = await getValidToken(userId, redditUsername);
-    if (!token) return res.status(401).json({ error: 'Reddit account not linked' });
+    const token = req.headers['x-redigo-token'];
+    if (!token) return res.status(401).json({ error: 'Reddit account not linked or extension inactive' });
 
     // SAFETY: Anti-Spam / Double-Post Check
     if (redditSettings.antiSpam) {
@@ -4119,7 +4127,7 @@ app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': getDynamicUserAgent(userId)
+        'User-Agent': getDynamicUserAgent(userId, redditUsername)
       },
       body: bodyParams
     });
@@ -4186,10 +4194,13 @@ app.get('/api/user/posts/sync', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
     const userPosts = await RedditPost.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
 
     if (userPosts.length > 0) {
-      const token = await getValidToken(userId);
+      const token = req.headers['x-redigo-token'];
       if (token) {
         // Collect all valid IDs, ensuring t3_ prefix for posts
         const ids = userPosts
@@ -4201,7 +4212,7 @@ app.get('/api/user/posts/sync', async (req, res) => {
           const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
             headers: {
               'Authorization': `Bearer ${token}`,
-              'User-Agent': getDynamicUserAgent(userId)
+              'User-Agent': getDynamicUserAgent(userId, user.redditUsername)
             }
           });
 
@@ -4250,10 +4261,13 @@ app.get('/api/user/replies/sync', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
     const userReplies = await RedditReply.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
 
     if (userReplies.length > 0) {
-      const token = await getValidToken(userId);
+      const token = req.headers['x-redigo-token'];
       if (token) {
         const ids = userReplies
           .filter(r => r.redditCommentId)
@@ -4264,7 +4278,7 @@ app.get('/api/user/replies/sync', async (req, res) => {
           const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
             headers: {
               'Authorization': `Bearer ${token}`,
-              'User-Agent': getDynamicUserAgent(userId)
+              'User-Agent': getDynamicUserAgent(userId, user.redditUsername)
             }
           });
 
@@ -4311,6 +4325,9 @@ app.post('/api/reddit/delete', async (req, res) => {
     const { userId, type, id, redditId } = req.body; // type: 'post' | 'reply'
     if (!userId || !type || !id) return res.status(400).json({ error: 'Missing required parameters' });
 
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
     // Mark as deleted in our DB first so it instantly disappears from UI
     if (type === 'post') {
       await RedditPost.updateOne({ id, userId: userId.toString() }, { $set: { isDeleted: true } });
@@ -4322,7 +4339,7 @@ app.post('/api/reddit/delete', async (req, res) => {
 
     // Attempt to delete from Reddit if we have a valid redditId
     if (redditId && !redditId.includes('deleted') && !redditId.includes('removed')) {
-      const token = await getValidToken(userId);
+      const token = req.headers['x-redigo-token'];
       if (token) {
         const formData = new URLSearchParams();
         formData.append('id', redditId); // Expected format: t1_xxx for comment, t3_xxx for post
@@ -4331,7 +4348,7 @@ app.post('/api/reddit/delete', async (req, res) => {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
-            'User-Agent': getDynamicUserAgent(userId),
+            'User-Agent': getDynamicUserAgent(userId, user.redditUsername),
             'Content-Type': 'application/x-www-form-urlencoded'
           },
           body: formData.toString()
@@ -4359,13 +4376,13 @@ app.get('/api/user/reddit/profile', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'User ID required' });
 
   try {
-    const token = await getValidToken(userId, username);
-    if (!token) return res.status(401).json({ error: 'Reddit account not linked' });
+    const token = req.headers['x-redigo-token'];
+    if (!token) return res.status(401).json({ error: 'Reddit account not linked or extension inactive' });
 
     const response = await fetch('https://oauth.reddit.com/api/v1/me', {
       headers: {
         'Authorization': `Bearer ${token}`,
-        'User-Agent': getDynamicUserAgent(userId) // Always use compliant User-Agent
+        'User-Agent': getDynamicUserAgent(userId, username) // Always use compliant User-Agent
       }
     });
 
@@ -4542,7 +4559,13 @@ app.post('/api/reddit/analyze', async (req, res) => {
     if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
 
     const userIp = req.headers['x-forwarded-for'] || req.ip || '0.0.0.0';
-    addSystemLog('INFO', `Ext-Reddit Analysis (User IP: ${userIp})`, { userId, cost, creditsRemaining: updatedUser.credits });
+    addSystemLog('INFO', `Ext-Reddit Analysis (User: ${updatedUser.redditUsername || userId})`, {
+      userId,
+      redditUsername: updatedUser.redditUsername,
+      userIp,
+      cost,
+      creditsRemaining: updatedUser.credits
+    });
 
     // ── PROCESS DATA ────────────────────────────────────────────────────────
     let posts = [];
@@ -4722,7 +4745,7 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       }
 
       const fetchHeaders = {
-        'User-Agent': getDynamicUserAgent(userId)
+        'User-Agent': getDynamicUserAgent(userId, updatedUser.redditUsername)
       };
 
       const response = await fetch(fetchUrl, { headers: fetchHeaders });
