@@ -740,24 +740,33 @@ export const Comments: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex items-center bg-white border border-slate-200 rounded-2xl shadow-sm px-3 flex-1 sm:flex-none">
+            <div className="flex items-center bg-white border border-slate-200 rounded-2xl shadow-sm px-3 flex-1 sm:flex-none focus-within:ring-2 focus-within:ring-orange-100 transition-all">
               <Target size={14} className="text-slate-400" />
               <input
                 type="text"
                 value={targetSubreddit}
                 onChange={(e) => setTargetSubreddit(e.target.value)}
                 placeholder="subreddit"
-                className="p-2.5 bg-transparent focus:outline-none font-bold text-xs w-24"
+                className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-20 md:w-24"
               />
-              <div className="w-[1px] h-4 bg-slate-200 mx-2" />
+              <div className="w-[1px] h-4 bg-slate-200 mx-1" />
               <Hash size={14} className="text-slate-400" />
               <input
                 type="text"
                 value={searchKeywords}
                 onChange={(e) => setSearchKeywords(e.target.value)}
                 placeholder="keywords"
-                className="p-2.5 bg-transparent focus:outline-none font-bold text-xs w-32"
+                className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-28 md:w-32"
               />
+              {posts.length > 0 && (
+                <button
+                  onClick={() => setPosts([])}
+                  className="p-1.5 text-slate-300 hover:text-red-500 transition-colors ml-1"
+                  title="Clear results"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {/* Sort Dropdown */}
@@ -814,26 +823,16 @@ export const Comments: React.FC = () => {
               <button
                 onClick={fetchPosts}
                 disabled={isFetching || reloadCooldown > 0 || !targetSubreddit.trim() || !searchKeywords.trim()}
-                className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed group"
+                className="bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed group whitespace-nowrap"
               >
                 <div className="flex items-center gap-2">
                   <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-                  {reloadCooldown > 0 ? `Wait ${reloadCooldown}s` : 'Search Posts'}
+                  <span>{reloadCooldown > 0 ? `${reloadCooldown}s` : 'Search'}</span>
                 </div>
                 {reloadCooldown === 0 && !isFetching && (
-                  <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT REQUIRED</span>
+                  <span className="hidden sm:block text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT</span>
                 )}
               </button>
-
-              {posts.length > 0 && (
-                <button
-                  onClick={() => setPosts([])}
-                  className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all rounded-xl"
-                  title="Clear results"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -960,8 +959,8 @@ export const Comments: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors pr-20">{post.title}</h3>
-                    <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed font-medium">{post.selftext}</p>
+                    <h3 className="text-lg md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors pr-4 md:pr-20 truncate md:whitespace-normal">{post.title}</h3>
+                    <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed font-medium overflow-hidden">{post.selftext}</p>
                     <div className="flex items-center gap-5 pt-2">
                       {/* Footer Meta Data */}
                       <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><ThumbsUp size={14} /> {post.ups}</div>
@@ -972,16 +971,16 @@ export const Comments: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 w-full md:w-auto self-end">
+                  <div className="flex flex-col gap-2 w-full md:w-auto mt-4 md:mt-0 md:shrink-0">
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedPost(post); setIsWizardOpen(true); }}
-                      className="w-full md:w-auto bg-slate-900 text-white px-8 py-4 rounded-2xl text-sm font-black hover:bg-orange-600 transition-all flex flex-col items-center justify-center shadow-lg active:scale-95 group"
+                      className="w-full md:w-48 bg-slate-900 text-white px-6 py-4 rounded-2xl text-sm font-black hover:bg-orange-600 transition-all flex flex-col items-center justify-center shadow-lg active:scale-95 group shrink-0"
                     >
                       <div className="flex items-center gap-2">
                         <Wand2 size={18} />
                         <span>Wizard Reply</span>
                       </div>
-                      <span className="text-[9px] text-orange-400 font-black uppercase tracking-[0.2em] mt-0.5 group-hover:text-white transition-colors">{costs.comment} PTS REQUIRED</span>
+                      <span className="text-[9px] text-orange-400 font-black uppercase tracking-[0.2em] mt-0.5 group-hover:text-white transition-colors">{costs.comment} PTS</span>
                     </button>
                   </div>
                 </div>

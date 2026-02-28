@@ -4410,10 +4410,10 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       // or listing (good for Rising/Controversial which Search API doesn't support well)
       let fetchUrl = '';
       if (sortBy === 'rising' || sortBy === 'controversial') {
-        fetchUrl = `https://www.reddit.com/r/${subreddit}/${sortBy}.json?limit=100`;
+        fetchUrl = `https://www.reddit.com/r/${subreddit}/${sortBy}.json?limit=500`;
       } else {
         // hot, new, top, relevance
-        fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=${sortBy}&restrict_sr=1&limit=100`;
+        fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=${sortBy}&restrict_sr=1&limit=250`;
       }
 
       const fetchHeaders = {
