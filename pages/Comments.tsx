@@ -973,7 +973,7 @@ export const Comments: React.FC = () => {
               <div
                 key={post.id}
                 onClick={() => setSelectedPost(post)}
-                className={`p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                className={`p-5 md:p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
               >
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-50">
                   <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
@@ -983,7 +983,7 @@ export const Comments: React.FC = () => {
 
                   {/* AI Intel Badge (Now relative and better positioned) */}
                   {(post.opportunityScore > 0 || post.intent) && (
-                    <div className="flex flex-row items-center gap-2 w-full md:w-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end">
                       {post.opportunityScore > 50 && (
                         <div className="flex items-center gap-1 px-3 py-1.5 bg-red-50 border border-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex-shrink-0 shadow-sm shadow-red-50">
                           <Flame size={12} className="fill-current" /> Hot Lead
