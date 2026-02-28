@@ -128,6 +128,31 @@ export const Settings: React.FC = () => {
         };
     }, [user?.id, updateUser]);
 
+    // ── Manual Verification Logic ─────────────────────────────────────────
+    const triggerManualVerify = () => {
+        setExtensionDetected(null);
+        // Immediate check of attribute
+        const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+        if (isInstalled) {
+            setExtensionDetected(true);
+            updateUser({ extensionInstalled: true });
+            return;
+        }
+
+        // Send PING
+        window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
+
+        // Fallback timeout
+        setTimeout(() => {
+            const finalCheck = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+            if (finalCheck) {
+                setExtensionDetected(true);
+            } else {
+                setExtensionDetected(false);
+            }
+        }, 2000);
+    };
+
     // New state variables
     const [isUploading, setIsUploading] = useState(false);
     const [is2faLoading, setIs2faLoading] = useState(false);
@@ -923,16 +948,33 @@ export const Settings: React.FC = () => {
                                     </p>
                                 </div>
 
-                                <a
-                                    href="/redigo-extension.zip"
-                                    download="redigo-extension.zip"
-                                    className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${extensionDetected
-                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                        : 'bg-slate-900 text-white hover:bg-orange-600'
-                                        }`}
-                                >
-                                    {extensionDetected ? 'Installed ✓' : 'Download Extension'}
-                                </a>
+                                <div className="flex flex-col gap-2">
+                                    {!extensionDetected ? (
+                                        <a
+                                            href="/redigo-extension.zip"
+                                            download="redigo-extension.zip"
+                                            className="px-6 py-3 bg-slate-900 border border-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 hover:bg-orange-600 hover:border-orange-600 text-center"
+                                        >
+                                            Download Extension
+                                        </a>
+                                    ) : (
+                                        <div className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest cursor-default flex items-center gap-2 shadow-lg shadow-emerald-100">
+                                            <Check size={14} strokeWidth={4} />
+                                            Active & Verified
+                                        </div>
+                                    )}
+
+                                    {/* Manual Verify Fallback */}
+                                    {!extensionDetected && (
+                                        <button
+                                            onClick={triggerManualVerify}
+                                            disabled={extensionDetected === null}
+                                            className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+                                        >
+                                            {extensionDetected === null ? 'Checking...' : 'Verify Now'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex gap-3 items-start">
