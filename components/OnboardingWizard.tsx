@@ -30,8 +30,19 @@ export const OnboardingWizard: React.FC = () => {
     };
 
     // Wizard State
-    const [isRedditLinked, setIsRedditLinked] = useState(false);
+    const [isExtensionInstalled, setIsExtensionInstalled] = useState(false);
     const [showSkipWarning, setShowSkipWarning] = useState(false);
+
+    // Periodically check for extension 
+    React.useEffect(() => {
+        const checkExtension = () => {
+            const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+            setIsExtensionInstalled(isInstalled);
+        };
+        checkExtension();
+        const interval = setInterval(checkExtension, 1500);
+        return () => clearInterval(interval);
+    }, []);
 
     // Brand Settings Data
     const [brandData, setBrandData] = useState({
@@ -111,14 +122,16 @@ export const OnboardingWizard: React.FC = () => {
         }
     };
 
-    const handleConnectReddit = async () => {
-        try {
-            const res = await fetch('/api/auth/reddit/url');
-            const { url } = await res.json();
-            window.location.href = url;
-        } catch (e) {
-            alert("Failed to get Reddit auth URL");
-        }
+    const handleInstallExtension = () => {
+        const link = document.createElement('a');
+        link.href = '/redigo-extension.zip';
+        link.download = 'redigo-extension.zip';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Optional: show a mini-guide alert or modal
+        alert("Extension downloaded! Please unzip it and load it in your browser (chrome://extensions or about:debugging).");
     };
 
     if (user?.hasCompletedOnboarding) return null;
@@ -419,28 +432,37 @@ export const OnboardingWizard: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Step 5: Reddit Link */}
+                        {/* Step 5: Install Extension */}
                         {step === 5 && (
                             <div className="space-y-8 animate-in slide-in-from-right-8 duration-700 flex flex-col items-center text-center">
-                                <div className="w-20 h-20 bg-orange-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-orange-200 rotate-12 ring-4 ring-orange-50">
-                                    <Globe size={36} />
+                                <div className="w-20 h-20 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-blue-200 rotate-12 ring-4 ring-blue-50">
+                                    <Shield size={36} fill="currentColor" />
                                 </div>
                                 <div className="space-y-3">
-                                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Sync Reddit</h2>
+                                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Security Engine</h2>
                                     <p className="text-slate-500 text-sm font-medium max-w-md mx-auto leading-relaxed">
-                                        We need your permission to discover relevant threads and post your AI-generated replies.
+                                        To protect your accounts from API bans, Redigo uses a lightweight extension to post securely from your own IP.
                                     </p>
                                 </div>
-                                <button
-                                    onClick={handleConnectReddit}
-                                    className="w-full max-w-sm py-4 bg-[#FF4500] text-white rounded-[1.5rem] font-black shadow-[0_16px_32px_-8px_rgba(255,69,0,0.3)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group text-sm"
-                                >
-                                    <Globe size={20} className="group-hover:rotate-12 transition-transform" />
-                                    Link Reddit Account
-                                </button>
+
+                                {isExtensionInstalled ? (
+                                    <div className="w-full max-w-sm py-4 bg-green-50 border border-green-200 text-green-700 rounded-[1.5rem] font-black shadow-sm flex items-center justify-center gap-2 group text-sm">
+                                        <Check size={20} className="stroke-[4px]" />
+                                        Engine Installed & Active
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={handleInstallExtension}
+                                        className="w-full max-w-sm py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-[0_16px_32px_-8px_rgba(37,99,235,0.3)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 group text-sm"
+                                    >
+                                        <Globe size={20} className="group-hover:translate-x-1 transition-transform" />
+                                        Install Chrome Extension
+                                    </button>
+                                )}
+
                                 <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-widest">
                                     <Shield size={14} className="text-green-500" />
-                                    Secure & Privacy-Focused
+                                    100% Ban Protection
                                 </div>
                             </div>
                         )}
@@ -467,21 +489,21 @@ export const OnboardingWizard: React.FC = () => {
                                         </div>
                                         <Check className="text-green-500" size={18} strokeWidth={3} />
                                     </div>
-                                    <div className={`p-4 rounded-2xl flex items-center justify-between border transition-all ${isRedditLinked ? 'bg-slate-50 border-slate-100' : 'bg-orange-50 border-orange-100'}`}>
+                                    <div className={`p-4 rounded-2xl flex items-center justify-between border transition-all ${isExtensionInstalled ? 'bg-slate-50 border-slate-100' : 'bg-red-50 border-red-100'}`}>
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isRedditLinked ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
-                                                <Globe size={16} />
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isExtensionInstalled ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                                <Shield size={16} />
                                             </div>
-                                            <span className="font-bold text-slate-900 text-sm">Reddit Account</span>
+                                            <span className="font-bold text-slate-900 text-sm">Security Engine</span>
                                         </div>
-                                        {isRedditLinked ? (
+                                        {isExtensionInstalled ? (
                                             <Check className="text-green-500" size={18} strokeWidth={3} />
                                         ) : (
                                             <button
                                                 onClick={() => updateStep(5)}
-                                                className="text-[10px] font-black text-orange-600 uppercase underline tracking-widest hover:text-orange-700"
+                                                className="text-[10px] font-black text-red-600 uppercase underline tracking-widest hover:text-red-700"
                                             >
-                                                Link Now
+                                                Install Missing
                                             </button>
                                         )}
                                     </div>
@@ -516,7 +538,7 @@ export const OnboardingWizard: React.FC = () => {
                                     <div className="space-y-2">
                                         <h3 className="text-xl font-black text-slate-900">Are you sure?</h3>
                                         <p className="text-sm text-slate-500 font-medium">
-                                            Without linking Reddit, you won't be able to use the AI agents to post or reply.
+                                            Without installing the Extension, you won't be able to safely post automations to Reddit.
                                         </p>
                                     </div>
                                     <div className="flex flex-col gap-2">
@@ -524,7 +546,7 @@ export const OnboardingWizard: React.FC = () => {
                                             onClick={() => setShowSkipWarning(false)}
                                             className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all"
                                         >
-                                            Go Back & Link
+                                            Go Back & Install
                                         </button>
                                         <button
                                             onClick={() => {

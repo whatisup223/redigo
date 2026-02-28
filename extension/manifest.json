@@ -1,0 +1,54 @@
+{
+    "manifest_version": 3,
+    "name": "RedditGo Security Engine",
+    "version": "1.0.0",
+    "description": "The decentralized AI extension that connects your Redigo dashboard directly to your Reddit account safely.",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage",
+        "tabs"
+    ],
+    "host_permissions": [
+        "https://*.reddit.com/*",
+        "http://localhost:5173/*",
+        "https://redditgo.online/*"
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_title": "RedditGo Security Engine"
+    },
+    "background": {
+        "service_worker": "background.js",
+        "scripts": [
+            "background.js"
+        ]
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "extension@redigo.app",
+            "strict_min_version": "109.0"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://*.reddit.com/*"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "http://localhost:5173/*",
+                "https://redditgo.online/*"
+            ],
+            "js": [
+                "dashboard_bridge.js"
+            ],
+            "run_at": "document_end"
+        }
+    ]
+}

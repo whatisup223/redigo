@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { OnboardingWizard } from './OnboardingWizard';
+import { AlertCircle, Download } from 'lucide-react'; // Added icons for banner
 
 interface SidebarItemProps {
   icon: any;
@@ -55,6 +56,20 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const { user, logout } = useAuth();
   const sidebarRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const [isExtensionMissing, setIsExtensionMissing] = React.useState(false);
+
+  useEffect(() => {
+    const checkExtension = () => {
+      // Check if mobile (extensions don't work on mobile natively for Chrome, but we'll show it generally or hide on mobile if you prefer)
+      // Let's just check the attribute.
+      const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+      setIsExtensionMissing(!isInstalled);
+    };
+    checkExtension();
+    // Re-check periodically in case they install it while page is open.
+    const interval = setInterval(checkExtension, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -404,6 +419,30 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         </header>
 
         <main className="flex-1 overflow-y-auto custom-scrollbar pt-24 lg:pt-8 px-6 pb-6 lg:px-12 lg:pb-12">
+          {isExtensionMissing && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm animate-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 shrink-0 shadow-inner">
+                  <AlertCircle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 leading-tight">Security Engine Missing!</h3>
+                  <p className="text-sm font-medium text-slate-600">Please install the Redigo Chrome Extension to enable safe posting and avoid Reddit bans.</p>
+                </div>
+              </div>
+              <a
+                href="/redigo-extension.zip"
+                download="redigo-extension.zip"
+                onClick={() => {
+                  // Optional: alert to guide the user after they click download
+                  setTimeout(() => alert("Extension downloaded! Extract the ZIP and load it as an Unpacked Extension in Chrome or via about:debugging in Firefox."), 500);
+                }}
+                className="w-full md:w-auto px-8 py-4 bg-red-600 text-white rounded-2xl font-black text-sm hover:bg-red-700 transition-all shadow-lg flex items-center justify-center gap-2 uppercase tracking-widest shrink-0"
+              >
+                <Download size={18} /> Install Extension
+              </a>
+            </div>
+          )}
           {children}
         </main>
       </div>

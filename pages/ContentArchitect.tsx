@@ -174,6 +174,26 @@ export const ContentArchitect: React.FC = () => {
         }
     }, [user]);
 
+    // Extension bridge listener
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'DEPLOY_RESPONSE') {
+                const response = event.data.payload;
+                if (response?.status === 'DEPLOYING') {
+                    showToast('Opening secure thread in Reddit...', 'success');
+                    setIsPosting(false);
+                    setStep(1);
+                    setPostData(prev => ({ ...prev, title: '', content: '' }));
+                } else if (response?.error) {
+                    showToast(`Extension Error: ${response.error}`, 'error');
+                    setIsPosting(false);
+                }
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
     // Check for draft on mount
     useEffect(() => {
         const savedDraft = localStorage.getItem('redditgo_post_draft');
@@ -470,26 +490,36 @@ export const ContentArchitect: React.FC = () => {
 
     const handlePost = async () => {
         if (!user?.id) return;
+
+        // Fallback for missing extension
+        if (document.documentElement.getAttribute('data-redigo-extension') !== 'installed') {
+            // Optional: You could show a Modal instructing them to install
+            showToast('Extension not found! Please install the Redigo Security Engine to post safely.', 'error');
+            return;
+        }
+
         setIsPosting(true);
         try {
-            const response = await fetch('/api/reddit/post', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: user.id,
-                    subreddit: postData.subreddit,
-                    title: postData.title,
-                    text: postData.content,
-                    kind: 'self',
-                    redditUsername: selectedAccount
-                })
-            });
-            if (!response.ok) throw new Error('Failed to post to Reddit');
+            // targetUrl for a new post in a subreddit
+            const targetUrl = `https://www.reddit.com/r/${postData.subreddit}/submit`;
+
+            // Send the instruction to the content injected bridge
+            window.postMessage({
+                source: 'REDIGO_WEB_APP',
+                type: 'REDIGO_DEPLOY',
+                title: postData.title,
+                text: postData.content,
+                imageUrl: postData.imageUrl,
+                targetUrl: targetUrl,
+                isPost: true // Tell Extension Content Script this is a Submit Page
+            }, '*');
+
+            // Prevent draft from sticking around
             localStorage.removeItem('redditgo_post_draft');
-            showToast('Post successfully published to Reddit! 🎉', 'success');
+
+            // The loading state will be disabled by the useEffect listener when the extension replies!
         } catch (err: any) {
-            showToast(err.message, 'error');
-        } finally {
+            showToast(err.message || 'Failed to communicate with extension', 'error');
             setIsPosting(false);
         }
     };

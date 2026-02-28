@@ -4445,8 +4445,9 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
 
     if (!userId) return res.status(401).json({ error: 'User ID required' });
 
-    const token = await getValidToken(userId);
-    if (!token) return res.status(401).json({ error: 'Reddit account not linked. Please go to Settings to link your account.' });
+    // FROZEN: Migrating to Extension Model (Bypassing OAuth Ban)
+    // const token = await getValidToken(userId);
+    // if (!token) return res.status(401).json({ error: 'Reddit account not linked. Please go to Settings to link your account.' });
 
     // ── CREDIT CHECK & DEDUCTION ────────────────────────────────────────────
     const cost = Number(aiSettings.creditCosts?.fetch) ?? 1;
@@ -4502,17 +4503,31 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
 
       addSystemLog('INFO', `Reddit Fetch by User ${userId}`, { subreddit, cost, creditsRemaining: updatedUser.credits });
 
-      // ── PERFORM REDDIT API FETCH ────────────────────────────────────────
-      const searchQuery = keywords ? `${keywords} subreddit:${subreddit}` : `subreddit:${subreddit}`;
-      const fetchUrl = `https://oauth.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&limit=25`;
-      const fetchHeaders = { 'Authorization': `Bearer ${token}`, 'User-Agent': getDynamicUserAgent(userId) };
+      // ── PERFORM REDDIT API FETCH (PUBLIC JSON - EXTENSION PIVOT) ────────────────────────────────────────
+      let searchQuery = '';
+      if (keywords) {
+        // Advanced Boolean Search: Split by comma and join with OR to ensure Reddit brings exact matches
+        // E.g., "startup, business" -> "(startup OR business)"
+        const kwList = keywords.split(',').map(k => k.trim()).filter(k => k);
+        if (kwList.length > 0) {
+          searchQuery = `(${kwList.map(k => `"${k}"`).join(' OR ')})`;
+        }
+      }
+
+      // Use public www endpoint instead of oauth
+      const fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&restrict_sr=1&limit=25`;
+      const fetchHeaders = {
+        // No Authorization header needed!
+        'User-Agent': getDynamicUserAgent(userId)
+      };
 
       const response = await fetch(fetchUrl, { headers: fetchHeaders });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Reddit Error] Status: ${response.status} - ${errorText.substring(0, 100)}`);
-        throw new Error(`Reddit API Blocked (Status ${response.status}). Please link your Reddit account in Dashboard.`);
+        console.error(`[Reddit Public Fetch Error] Status: ${response.status} - ${errorText.substring(0, 100)}`);
+        // We will throw a generic error, but it won't be about linking accounts anymore
+        throw new Error(`Reddit API Blocked (Status ${response.status}). Rate limit exceeded or Reddit is blocking our server IPs.`);
       }
 
       const data = await response.json();

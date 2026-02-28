@@ -223,8 +223,8 @@ export const LandingPage: React.FC = () => {
               },
               {
                 icon: ShieldCheck,
-                title: 'Safe & Compliant',
-                desc: 'Strict anti-spam filters ensure your account remains in good standing.',
+                title: 'Decentralized Security',
+                desc: 'Post securely through our Chrome Extension from your Home IP, ensuring 100% protection against API bans.',
                 textColor: 'text-blue-600',
                 cornerBg: 'bg-blue-50',
                 borderColor: 'border-blue-50',
@@ -272,8 +272,8 @@ export const LandingPage: React.FC = () => {
               <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
               <div className="relative z-10">
                 <div className="w-16 h-16 bg-white border-2 border-orange-50 text-orange-600 rounded-2xl flex items-center justify-center text-2xl font-bold mb-8 shadow-sm group-hover:scale-110 transition-transform">01</div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-3">Connect & Train</h3>
-                <p className="text-slate-500 leading-relaxed font-medium">Link your Reddit account and define your brand voice. The AI learns your unique style in seconds.</p>
+                <h3 className="text-2xl font-bold text-slate-900 mb-3">Install & Train</h3>
+                <p className="text-slate-500 leading-relaxed font-medium">Install our secure Chrome Extension and define your brand profile. The AI learns your unique style in seconds.</p>
               </div>
             </div>
 
