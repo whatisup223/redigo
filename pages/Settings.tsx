@@ -916,37 +916,46 @@ export const Settings: React.FC = () => {
                         </h2>
 
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-200/60 shadow-sm space-y-6">
-                            <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-200/50">
-                                {/* Status Icon */}
-                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0 transition-all duration-500 ${extensionDetected === null ? 'bg-slate-300 shadow-slate-200 animate-pulse' :
-                                    extensionDetected ? 'bg-emerald-600 shadow-emerald-200' :
-                                        'bg-slate-300 shadow-slate-200'
-                                    }`}>
-                                    {extensionDetected === null
-                                        ? <RefreshCw size={28} className="animate-spin" />
-                                        : extensionDetected
-                                            ? <Check size={32} />
-                                            : <Globe size={32} />
-                                    }
+                            <div className="flex flex-col md:flex-row items-start gap-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-200/50">
+                                {/* Status Group: Icon + Info */}
+                                <div className="flex items-center gap-4 flex-1 w-full">
+                                    <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0 transition-all duration-500 ${extensionDetected === null ? 'bg-slate-300 shadow-slate-200 animate-pulse' :
+                                        extensionDetected ? 'bg-emerald-600 shadow-emerald-200' :
+                                            'bg-slate-300 shadow-slate-200'
+                                        }`}>
+                                        {extensionDetected === null
+                                            ? <RefreshCw className="animate-spin w-6 h-6 md:w-7 md:h-7" />
+                                            : extensionDetected
+                                                ? <Check className="w-7 h-7 md:w-8 md:h-8" />
+                                                : <Globe className="w-7 h-7 md:w-8 md:h-8" />
+                                        }
+                                    </div>
+
+                                    <div className="flex flex-col gap-1 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="font-extrabold text-slate-900 text-base md:text-lg">Chrome Extension</h3>
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all w-fit ${extensionDetected === null ? 'bg-slate-100 text-slate-400 animate-pulse' :
+                                                extensionDetected ? 'bg-emerald-100 text-emerald-700' :
+                                                    'bg-slate-100 text-slate-500'
+                                                }`}>
+                                                {extensionDetected === null ? 'Checking...' :
+                                                    extensionDetected ? 'Active & Verified' : 'Not Detected'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed hidden md:block">
+                                            {extensionDetected
+                                                ? 'Extension is active and connected. Your Reddit interactions are bridged securely through your browser.'
+                                                : 'Install the Redigo Chrome Extension to enable direct posting from the dashboard.'}
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <div className="flex-1 text-center md:text-left">
-                                    <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                                        <h3 className="font-extrabold text-slate-900 text-lg">Chrome Extension Status</h3>
-                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${extensionDetected === null ? 'bg-slate-100 text-slate-400 animate-pulse' :
-                                            extensionDetected ? 'bg-emerald-100 text-emerald-700' :
-                                                'bg-slate-100 text-slate-500'
-                                            }`}>
-                                            {extensionDetected === null ? 'Checking...' :
-                                                extensionDetected ? 'Active & Verified' : 'Not Detected'}
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                        {extensionDetected
-                                            ? 'Extension is active and connected. Your Reddit interactions are bridged securely through your browser.'
-                                            : 'Install the Redigo Chrome Extension to enable direct posting from the dashboard.'}
-                                    </p>
-                                </div>
+                                {/* Mobile Only Description - below icon group */}
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed md:hidden">
+                                    {extensionDetected
+                                        ? 'Extension is active and connected. Your Reddit interactions are bridged securely through your browser.'
+                                        : 'Install the Redigo Chrome Extension to enable direct posting from the dashboard.'}
+                                </p>
 
                                 <div className="flex flex-col gap-3 w-full md:w-64">
                                     {!extensionDetected ? (

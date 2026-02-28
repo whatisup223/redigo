@@ -30,7 +30,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 // Connect to MongoDB
 if (process.env.MONGO_URI) {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+      bufferCommands: false
+    });
     console.log('✅ Connected to MongoDB!');
   } catch (err) {
     console.error('❌ Failed to connect to MongoDB:', err);

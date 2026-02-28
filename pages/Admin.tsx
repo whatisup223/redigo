@@ -1012,8 +1012,8 @@ export const Admin: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
                                 {activeTab === 'overview' && 'System Overview'}
-                                {activeTab === 'analytics' && 'Platform Analytics'}
-                                {activeTab === 'churn' && 'Churn Analysis'}
+                                {activeTab === 'analytics' && analyticsTab === 'overview' && 'Platform Analytics'}
+                                {activeTab === 'analytics' && analyticsTab === 'churn' && 'Churn Analysis'}
                                 {activeTab === 'users' && 'User Management'}
                                 {activeTab === 'settings' && 'Platform Configuration'}
                                 {activeTab === 'logs' && 'System Logs'}
@@ -1021,8 +1021,8 @@ export const Admin: React.FC = () => {
                         </div>
                         <p className="text-slate-400 font-medium">
                             {activeTab === 'overview' && 'Real-time platform metrics.'}
-                            {activeTab === 'analytics' && 'Financial and usage insights.'}
-                            {activeTab === 'churn' && 'Retention and cancellation insights.'}
+                            {activeTab === 'analytics' && analyticsTab === 'overview' && 'Financial and usage insights.'}
+                            {activeTab === 'analytics' && analyticsTab === 'churn' && 'Retention and cancellation insights.'}
                             {activeTab === 'users' && 'Manage access and subscriptions.'}
                             {activeTab === 'settings' && 'Manage AI, Payments, and Integrations.'}
                             {activeTab === 'logs' && 'Server events and activity.'}
@@ -1148,7 +1148,7 @@ export const Admin: React.FC = () => {
                                                 </div>
                                             ) : analytics?.chartData ? (
                                                 <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={analytics.chartData}>
+                                                    <AreaChart data={analytics?.chartData || []}>
                                                         <defs>
                                                             <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
                                                                 <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
@@ -1323,7 +1323,7 @@ export const Admin: React.FC = () => {
                                                         </div>
                                                         <div>
                                                             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Today's Consumption</p>
-                                                            <p className="text-3xl font-black text-slate-900">{(analytics.chartData?.[analytics.chartData.length - 1]?.consumption || 0).toLocaleString()} <span className="text-sm font-bold text-slate-400">pts</span></p>
+                                                            <p className="text-3xl font-black text-slate-900">{(analytics.chartData?.length ? analytics.chartData[analytics.chartData.length - 1]?.consumption : 0).toLocaleString()} <span className="text-sm font-bold text-slate-400">pts</span></p>
                                                         </div>
                                                     </div>
                                                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-sm flex flex-col justify-between group hover:shadow-xl transition-all duration-500">
@@ -1385,7 +1385,7 @@ export const Admin: React.FC = () => {
                                                         </div>
                                                         <div className="h-80 w-full">
                                                             <ResponsiveContainer width="100%" height="100%">
-                                                                <AreaChart data={analytics.chartData}>
+                                                                <AreaChart data={analytics?.chartData || []}>
                                                                     <defs>
                                                                         <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
                                                                         <linearGradient id="usageGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.1} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient>
@@ -1408,7 +1408,7 @@ export const Admin: React.FC = () => {
                                                             <ResponsiveContainer width="100%" height="100%">
                                                                 <PieChart>
                                                                     <Pie
-                                                                        data={analytics.planDistribution}
+                                                                        data={analytics?.planDistribution || []}
                                                                         cx="50%"
                                                                         cy="50%"
                                                                         innerRadius={60}
@@ -1416,7 +1416,7 @@ export const Admin: React.FC = () => {
                                                                         paddingAngle={10}
                                                                         dataKey="value"
                                                                     >
-                                                                        {analytics.planDistribution.map((entry: any, index: number) => (
+                                                                        {analytics.planDistribution?.map((entry: any, index: number) => (
                                                                             <Cell key={`cell-${index}`} fill={['#f97316', '#3b82f6', '#10b981', '#6366f1'][index % 4]} strokeWidth={0} />
                                                                         ))}
                                                                     </Pie>
@@ -1429,7 +1429,7 @@ export const Admin: React.FC = () => {
                                                             </div>
                                                         </div>
                                                         <div className="mt-8 space-y-3">
-                                                            {analytics.planDistribution.map((item: any, i: number) => (
+                                                            {analytics.planDistribution?.map((item: any, i: number) => (
                                                                 <div key={item.name} className="flex items-center justify-between">
                                                                     <div className="flex items-center gap-2">
                                                                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#f97316', '#3b82f6', '#10b981', '#6366f1'][i % 4] }} />
@@ -1487,7 +1487,7 @@ export const Admin: React.FC = () => {
                                                                                     <div className="flex flex-col items-end">
                                                                                         <span className="font-black text-slate-900">{u.totalSpent?.toLocaleString()} <span className="text-slate-400 text-[10px]">pts</span></span>
                                                                                         <div className="w-24 h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
-                                                                                            <div className="h-full bg-orange-500" style={{ width: `${(u.totalSpent / (analytics.topConsumers[0]?.totalSpent || 1)) * 100}%` }} />
+                                                                                            <div className="h-full bg-orange-500" style={{ width: `${(u.totalSpent / (analytics.topConsumers?.[0]?.totalSpent || 1)) * 100}%` }} />
                                                                                         </div>
                                                                                     </div>
                                                                                 </td>
@@ -1522,7 +1522,7 @@ export const Admin: React.FC = () => {
                                                                             <div className="flex items-center justify-between mb-0.5">
                                                                                 <p className="text-sm font-black text-slate-900 truncate">{act.userName}</p>
                                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter whitespace-nowrap ml-2">
-                                                                                    {new Date(act.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                                                    {act.date ? new Date(act.date).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                                                                                 </span>
                                                                             </div>
                                                                             <p className="text-[11px] font-bold text-slate-500">
