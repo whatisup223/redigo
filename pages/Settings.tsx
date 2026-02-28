@@ -56,70 +56,77 @@ export const Settings: React.FC = () => {
     }, [activeTab, syncUser]);
 
     // ── Extension Real-time Detection ─────────────────────────────────────
-    useEffect(() => {
-        const checkExtensionAttribute = () => {
-            const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-            if (isInstalled) {
-                setExtensionDetected(true);
-                if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+    const verifyExtension = async (silent = false) => {
+        const isInstalledAttribute = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
 
-                // Trigger server persistence if needed
-                if (user?.id) {
-                    fetch('/api/user/extension-ping', {
+        if (isInstalledAttribute) {
+            setExtensionDetected(true);
+            if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+
+            // Persist to server and update local context
+            if (user?.id) {
+                try {
+                    await fetch('/api/user/extension-ping', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${localStorage.getItem('token')}`
                         },
                         body: JSON.stringify({ userId: user.id })
-                    }).catch(() => { });
+                    });
                     updateUser({ extensionInstalled: true });
+                } catch (e) {
+                    console.error('Extension verification sync failed:', e);
                 }
-                return true;
             }
-            return false;
-        };
+            return true;
+        }
+        return false;
+    };
 
+    useEffect(() => {
         // Listen for PONG from the extension bridge
         const handleExtMessage = (event: MessageEvent) => {
             if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
                 if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
                 setExtensionDetected(true);
-
-                if (user?.id) {
-                    fetch('/api/user/extension-ping', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify({ userId: user.id })
-                    }).catch(() => { });
-                    updateUser({ extensionInstalled: true });
-                }
+                verifyExtension(true); // Persist
             }
         };
 
         window.addEventListener('message', handleExtMessage);
 
         // Immediate check
+        setExtensionDetected(null);
         if (checkExtensionAttribute()) {
             return () => window.removeEventListener('message', handleExtMessage);
         }
 
         // Send PING and wait
-        setExtensionDetected(null);
         window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
 
         pingTimeoutRef.current = setTimeout(() => {
             // Final check of attribute before giving up
-            if (!checkExtensionAttribute()) {
+            if (!document.documentElement.getAttribute('data-redigo-extension')) {
                 setExtensionDetected(prev => prev === null ? false : prev);
+            } else {
+                verifyExtension();
             }
-        }, 2500); // Slightly longer to be safe
+        }, 2500);
 
-        // Periodic attribute check (in case it injects late)
-        const attrInterval = setInterval(checkExtensionAttribute, 1000);
+        const attrInterval = setInterval(() => {
+            if (document.documentElement.getAttribute('data-redigo-extension') === 'installed') {
+                verifyExtension();
+            }
+        }, 1500);
+
+        function checkExtensionAttribute() {
+            if (document.documentElement.getAttribute('data-redigo-extension') === 'installed') {
+                verifyExtension();
+                return true;
+            }
+            return false;
+        }
 
         return () => {
             window.removeEventListener('message', handleExtMessage);
@@ -129,28 +136,24 @@ export const Settings: React.FC = () => {
     }, [user?.id, updateUser]);
 
     // ── Manual Verification Logic ─────────────────────────────────────────
-    const triggerManualVerify = () => {
+    const triggerManualVerify = async () => {
         setExtensionDetected(null);
-        // Immediate check of attribute
-        const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-        if (isInstalled) {
-            setExtensionDetected(true);
-            updateUser({ extensionInstalled: true });
-            return;
-        }
 
-        // Send PING
+        // 1. Immediate attribute check
+        const found = await verifyExtension();
+        if (found) return;
+
+        // 2. Send PING to extension
         window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
 
-        // Fallback timeout
-        setTimeout(() => {
-            const finalCheck = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-            if (finalCheck) {
-                setExtensionDetected(true);
-            } else {
-                setExtensionDetected(false);
+        // 3. Wait and check again
+        setTimeout(async () => {
+            const finalFound = await verifyExtension();
+            if (!finalFound) {
+                // IMPORTANT: Check if it was ALREADY detected by the message listener before giving up
+                setExtensionDetected(prev => (prev === true ? true : false));
             }
-        }, 2000);
+        }, 3000); // 3 seconds is safer
     };
 
     // New state variables
