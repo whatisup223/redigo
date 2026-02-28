@@ -1548,7 +1548,7 @@ export const Comments: React.FC = () => {
                   isForcedRef.current = true;
                   if (pendingAction) pendingAction();
                 }}
-                className="w-full py-4 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-50 hover:border-slate-200 transition-all text-xs uppercase tracking-widest"
+                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black hover:bg-orange-700 transition-all text-xs uppercase tracking-widest shadow-lg shadow-orange-100"
               >
                 Continue anyway (Spend Points)
               </button>
