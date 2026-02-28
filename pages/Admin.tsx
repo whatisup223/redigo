@@ -2485,6 +2485,7 @@ Return ONLY a JSON array of objects with: { "id": post_id, "score": 0-100, "inte
                                                                         >
                                                                             {aiSettings.analyzerProvider === 'google' && (
                                                                                 <>
+                                                                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Latest & Best)</option>
                                                                                     <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fastest)</option>
                                                                                     <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                                                                                 </>

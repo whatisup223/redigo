@@ -4438,7 +4438,11 @@ async function performSemanticAnalysis(posts) {
     });
 
   } catch (err) {
-    console.error('[Semantic Analysis Error]', err);
+    console.error('[Semantic Analysis ERROR Full Detail]:', {
+      message: err.message,
+      stack: err.stack,
+      response: err.response ? await err.response.text() : 'No response body'
+    });
     return posts; // Fallback to original posts if AI fails
   }
 }
