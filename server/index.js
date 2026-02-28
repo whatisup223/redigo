@@ -2248,28 +2248,42 @@ const adminAuth = (req, res, next) => {
 // ─── Extension Download Tracking ──────────────────────────────────────
 app.get('/api/download-extension', async (req, res) => {
   try {
-    // Robust download with tracking logic
-    // Track in background
+    // 1. Background tracking (won't block download)
     Setting.findOneAndUpdate(
       { key: 'extensionDownloadCount' },
       { $inc: { 'value': 1 } },
       { upsert: true }
-    ).catch(e => console.error('Download counter update failed:', e));
+    ).catch(e => console.error('[DOWNLOAD] Counter error:', e));
 
     addSystemLog('INFO', 'Browser extension download initiated');
 
-    const filePath = path.join(__dirname, '../public/redigo-extension.zip');
+    // 2. Resolve Paths (Try multiple to be safe on production/Linux/Windows)
+    const possiblePaths = [
+      path.resolve(__dirname, '../public/redigo-extension.zip'),
+      path.resolve(process.cwd(), 'public/redigo-extension.zip'),
+      path.join(process.cwd(), 'public/redigo-extension.zip')
+    ];
 
-    // Check if file exists before sending
-    if (fs.existsSync(filePath)) {
-      res.download(filePath, 'redigo-extension.zip');
-    } else {
-      console.error('Extension zip file not found:', filePath);
-      res.status(404).send('Extension file not found on server.');
+    let foundPath = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        foundPath = p;
+        break;
+      }
     }
+
+    if (foundPath) {
+      console.log(`[DOWNLOAD] Sending file: ${foundPath}`);
+      return res.download(foundPath, 'redigo-extension.zip');
+    }
+
+    // Fallback if absolutely not found
+    console.error('[DOWNLOAD] File not found in any location:', possiblePaths);
+    res.status(404).send('Extension file not found on server. Please ensure public/redigo-extension.zip exists and pull latest changes.');
+
   } catch (err) {
-    console.error('Fatal download error:', err);
-    res.status(500).send('Internal server error during download.');
+    console.error('[DOWNLOAD] Fatal error:', err);
+    res.status(500).send('Internal server error during download process.');
   }
 });
 
@@ -2344,10 +2358,14 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
       closed: await Ticket.countDocuments({ status: 'closed' })
     };
 
-    // 5. Extension Stats
+    // 5. Extension Stats: Calculate active based on last 15 minutes
+    const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const activeExtensions = await User.countDocuments({
+      lastExtensionPing: { $gte: fifteenMinsAgo }
+    });
+
     const downloadCountSetting = await Setting.findOne({ key: 'extensionDownloadCount' });
     const extensionDownloadCount = downloadCountSetting ? (downloadCountSetting.value || 0) : 0;
-    const activeExtensions = await User.countDocuments({ extensionInstalled: true });
 
     res.json({
       totalUsers,
@@ -2477,10 +2495,13 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
       });
     }
 
-    // 5. Extension Stats
+    // 5. Extension Stats: Calculate active based on last 15 minutes
+    const fifteenMinsAgoForAnalytics = new Date(Date.now() - 15 * 60 * 1000);
     const downloadCountSetting = await Setting.findOne({ key: 'extensionDownloadCount' });
     const extensionDownloadCount = downloadCountSetting ? (downloadCountSetting.value || 0) : 0;
-    const activeExtensions = await User.countDocuments({ extensionInstalled: true });
+    const activeExtensionsAnalytics = await User.countDocuments({
+      lastExtensionPing: { $gte: fifteenMinsAgoForAnalytics }
+    });
 
     res.json({
       totalRevenue,
@@ -2494,7 +2515,7 @@ app.get('/api/admin/analytics', adminAuth, async (req, res) => {
       recentTransactions: transactions.slice(0, 50),
       extensionStats: {
         downloads: extensionDownloadCount,
-        active: activeExtensions
+        active: activeExtensionsAnalytics
       }
     });
   } catch (err) {
@@ -3174,7 +3195,12 @@ app.post('/api/user/extension-ping', async (req, res) => {
 
     await User.updateOne(
       { id: userId.toString() },
-      { $set: { extensionInstalled: true } }
+      {
+        $set: {
+          extensionInstalled: true,
+          lastExtensionPing: new Date()
+        }
+      }
     );
 
     res.json({ success: true });

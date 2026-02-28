@@ -3,13 +3,31 @@
 
 console.log('🔗 Redigo Dashboard Bridge Connected');
 
+// Global state for heartbeat
+let activeUserId = null;
+let heartbeatInterval = null;
+
 // Tell the React dashboard "Hey, I am installed!" by setting a data attribute on the DOM.
-// This avoids Chrome Extension Manifest V3 Content Security Policy (CSP) errors.
 document.documentElement.setAttribute('data-redigo-extension', 'installed');
 
 // ── EXTENSION PRESENCE PING ─────────────────────────────────────────────────
 // Announce presence immediately when the bridge loads (page load / tab refresh)
 window.postMessage({ source: 'REDIGO_EXT', type: 'EXTENSION_PONG' }, '*');
+
+function sendHeartbeat(userId) {
+    if (!userId) return;
+    const token = localStorage.getItem('token');
+    if (token) {
+        fetch('/api/user/extension-ping', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId })
+        }).catch(() => { });
+    }
+}
 
 // Listen for messages from the React app
 window.addEventListener('message', (event) => {
@@ -19,22 +37,21 @@ window.addEventListener('message', (event) => {
     }
 
     // ── Handle Presence Detection Request ───────────────────────────────────
-    // React asks "are you there?" → we immediately reply "yes!"
     if (event.data.type === 'EXTENSION_PING') {
         window.postMessage({ source: 'REDIGO_EXT', type: 'EXTENSION_PONG' }, '*');
 
-        // Also notify the server so extensionInstalled stays up to date in DB
-        const token = localStorage.getItem('token');
-        const userId = event.data.userId;
-        if (token && userId) {
-            fetch('/api/user/extension-ping', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ userId })
-            }).catch(() => { }); // Silent fail — UI is already updated via postMessage
+        // Capture userId for heartbeat
+        if (event.data.userId) {
+            activeUserId = event.data.userId;
+
+            // Immediate heartbeat
+            sendHeartbeat(activeUserId);
+
+            // Set up periodic heartbeat (every 5 minutes)
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(() => {
+                sendHeartbeat(activeUserId);
+            }, 5 * 60 * 1000);
         }
     }
 
@@ -50,7 +67,6 @@ window.addEventListener('message', (event) => {
                 isPost: event.data.isPost || false
             },
             (response) => {
-                // Send the response back to React
                 window.postMessage({ source: 'REDIGO_EXT', type: 'DEPLOY_RESPONSE', payload: response }, '*');
             }
         );
