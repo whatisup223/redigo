@@ -256,7 +256,17 @@ export const Admin: React.FC = () => {
         }
     });
     const [systemLogs, setSystemLogs] = useState<any[]>([]);
-    const [analytics, setAnalytics] = useState<any>(null);
+    const [analytics, setAnalytics] = useState<any>({
+        totalRevenue: 0,
+        totalPaidCreditsCirculating: 0,
+        totalFreeCreditsCirculating: 0,
+        totalUsers: 0,
+        chartData: [],
+        planDistribution: [],
+        topConsumers: [],
+        recentActivity: [],
+        extensionStats: { downloads: 0, active: 0 }
+    });
     const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
     // --- Subscription Management States ---
@@ -1268,11 +1278,6 @@ export const Admin: React.FC = () => {
                                             <div className="flex flex-col items-center justify-center h-64 gap-4">
                                                 <RefreshCw className="animate-spin text-orange-600" size={48} />
                                                 <p className="text-slate-400 font-bold">Aggregating system data...</p>
-                                            </div>
-                                        ) : !analytics ? (
-                                            <div className="flex flex-col items-center justify-center h-64 gap-4 text-slate-400">
-                                                <Activity size={64} className="opacity-10" />
-                                                <p className="font-bold">No analytics data available.</p>
                                             </div>
                                         ) : (
                                             <>
