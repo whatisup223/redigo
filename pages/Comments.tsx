@@ -32,7 +32,8 @@ import {
   Trash2,
   Link as LinkIcon,
   Filter,
-  MessageSquare
+  MessageSquare,
+  ArrowUpCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { RedditPost, GeneratedReply } from '../types';
@@ -105,6 +106,8 @@ export const Comments: React.FC = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [activeIntentFilter, setActiveIntentFilter] = useState<string>('All');
   const [targetCooldown, setTargetCooldown] = useState(30);
+  const [sortBy, setSortBy] = useState('new');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
   const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
@@ -498,7 +501,7 @@ export const Comments: React.FC = () => {
     }, 1000);
 
     try {
-      const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}`);
+      const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
 
       if (response.status === 402) {
         setShowNoCreditsModal(true);
@@ -756,19 +759,82 @@ export const Comments: React.FC = () => {
                 className="p-2.5 bg-transparent focus:outline-none font-bold text-xs w-32"
               />
             </div>
-            <button
-              onClick={fetchPosts}
-              disabled={isFetching || reloadCooldown > 0 || !targetSubreddit.trim() || !searchKeywords.trim()}
-              className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-center gap-2">
-                <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-                {reloadCooldown > 0 ? `Wait ${reloadCooldown}s` : 'Search Posts'}
+            <div className="flex items-center gap-2">
+              {/* Sort Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                  className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-2.5 text-xs font-bold text-slate-700 hover:border-orange-200 transition-all"
+                >
+                  {sortBy === 'new' && <Clock size={14} className="text-orange-600" />}
+                  {sortBy === 'hot' && <Flame size={14} className="text-orange-600" />}
+                  {sortBy === 'rising' && <Zap size={14} className="text-orange-600" />}
+                  {sortBy === 'top' && <ArrowUpCircle size={14} className="text-orange-600" />}
+                  {sortBy === 'controversial' && <AlertCircle size={14} className="text-orange-600" />}
+                  <span className="capitalize">{sortBy}</span>
+                  <ChevronDown size={14} className={`transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isSortMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsSortMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200 origin-top-right">
+                      <p className="text-[10px] font-black text-slate-400 px-3 py-2 uppercase tracking-widest">Sort by</p>
+                      {[
+                        { id: 'new', icon: Clock, label: 'Newest' },
+                        { id: 'hot', icon: Flame, label: 'Hot' },
+                        { id: 'rising', icon: Zap, label: 'Rising' },
+                        { id: 'top', icon: ArrowUpCircle, label: 'Top' },
+                        { id: 'controversial', icon: AlertCircle, label: 'Controversial' }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setSortBy(item.id);
+                            setIsSortMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${sortBy === item.id
+                            ? 'bg-orange-50 text-orange-600'
+                            : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                        >
+                          <item.icon size={14} />
+                          {item.label}
+                          {sortBy === item.id && <Check size={12} className="ml-auto" />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-              {reloadCooldown === 0 && !isFetching && (
-                <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT REQUIRED</span>
+
+              <button
+                onClick={fetchPosts}
+                disabled={isFetching || reloadCooldown > 0 || !targetSubreddit.trim() || !searchKeywords.trim()}
+                className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed group"
+              >
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+                  {reloadCooldown > 0 ? `Wait ${reloadCooldown}s` : 'Search Posts'}
+                </div>
+                {reloadCooldown === 0 && !isFetching && (
+                  <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT REQUIRED</span>
+                )}
+              </button>
+
+              {posts.length > 0 && (
+                <button
+                  onClick={() => setPosts([])}
+                  className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all rounded-xl"
+                  title="Clear results"
+                >
+                  <Trash2 size={18} />
+                </button>
               )}
-            </button>
+            </div>
           </div>
         </div>
 

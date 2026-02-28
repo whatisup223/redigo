@@ -4395,21 +4395,28 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
 
       addSystemLog('INFO', `Reddit Fetch by User ${userId}`, { subreddit, cost, creditsRemaining: updatedUser.credits });
 
+      const sortBy = req.query.sort || 'new';
+
       // ── PERFORM REDDIT API FETCH (PUBLIC JSON - EXTENSION PIVOT) ────────────────────────────────────────
       let searchQuery = '';
       if (keywords) {
-        // Advanced Boolean Search: Split by comma and join with OR to ensure Reddit brings exact matches
-        // E.g., "startup, business" -> "(startup OR business)"
         const kwList = keywords.split(',').map(k => k.trim()).filter(k => k);
         if (kwList.length > 0) {
           searchQuery = `(${kwList.map(k => `"${k}"`).join(' OR ')})`;
         }
       }
 
-      // Use public www endpoint instead of oauth
-      const fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&restrict_sr=1&limit=25`;
+      // Determine if we use search (good for large subreddits with keywords) 
+      // or listing (good for Rising/Controversial which Search API doesn't support well)
+      let fetchUrl = '';
+      if (sortBy === 'rising' || sortBy === 'controversial') {
+        fetchUrl = `https://www.reddit.com/r/${subreddit}/${sortBy}.json?limit=100`;
+      } else {
+        // hot, new, top, relevance
+        fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=${sortBy}&restrict_sr=1&limit=100`;
+      }
+
       const fetchHeaders = {
-        // No Authorization header needed!
         'User-Agent': getDynamicUserAgent(userId)
       };
 
@@ -4447,11 +4454,17 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
           opportunityScore, intent, isHot: post.ups > 100 || post.num_comments > 50,
           competitors: competitors.filter(c => content.includes(c))
         };
-      });
+      }).filter(post => {
+        // If keywords are provided, ensure at least one keyword is present in the title or text
+        if (!keywords) return true;
+        const searchContent = (post.title + ' ' + post.selftext).toLowerCase();
+        const kwList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+        return kwList.some(kw => searchContent.includes(kw));
+      }).sort((a, b) => b.opportunityScore - a.opportunityScore); // Sort by highest score first
 
       // Return posts + updated credits for immediate frontend sync
       return res.json({
-        posts: posts.sort((a, b) => b.opportunityScore - a.opportunityScore).slice(0, 20),
+        posts: posts.slice(0, 50),
         credits: updatedUser.credits,
         dailyUsagePoints: updatedUser.dailyUsagePoints,
         dailyUsage: updatedUser.dailyUsage,
