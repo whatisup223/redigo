@@ -52,10 +52,10 @@ const PROGRESS_STEPS = [
 ];
 
 const SEARCH_PROGRESS_STEPS = [
-  { message: 'جاري البحث في Reddit...', icon: '🔍', duration: 1500 },
-  { message: 'تحليل نية كاتب المنشور...', icon: '🧠', duration: 2000 },
-  { message: 'تقييم مدى احتياج العميل...', icon: '📊', duration: 1800 },
-  { message: 'ترتيب أفضل الفرص لك...', icon: '🎯', duration: 1200 },
+  { message: 'Searching Reddit...', icon: '🔍', duration: 1500 },
+  { message: 'Analyzing post intent...', icon: '🧠', duration: 2000 },
+  { message: 'Scoring lead quality...', icon: '📊', duration: 1800 },
+  { message: 'Ranking top opportunities...', icon: '🎯', duration: 1200 },
 ];
 
 const MOCK_POSTS: RedditPost[] = [
@@ -769,18 +769,18 @@ export const Comments: React.FC = () => {
         <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] p-8 md:p-14 max-w-md w-full shadow-2xl text-center space-y-8 animate-in zoom-in-95 duration-300">
             <div className="relative w-24 h-24 mx-auto">
-              <div className="absolute inset-0 rounded-full bg-blue-100 animate-ping opacity-60" />
-              <div className="relative w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center text-4xl shadow-2xl shadow-blue-300">
+              <div className="absolute inset-0 rounded-full bg-orange-100 animate-ping opacity-60" />
+              <div className="relative w-24 h-24 bg-orange-600 rounded-full flex items-center justify-center text-4xl shadow-2xl shadow-orange-300">
                 {SEARCH_PROGRESS_STEPS[searchProgressStep]?.icon}
               </div>
             </div>
             <div className="space-y-3 font-['Outfit']">
               <p className="text-2xl font-extrabold text-slate-900">{SEARCH_PROGRESS_STEPS[searchProgressStep]?.message}</p>
-              <p className="text-slate-400 font-medium text-sm">تقوم Redigo الآن بتحليل عميق للفرص</p>
+              <p className="text-slate-400 font-medium text-sm">Powered by Redigo AI</p>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
               <div
-                className="h-full bg-blue-600 rounded-full transition-all duration-1000"
+                className="h-full bg-orange-600 rounded-full transition-all duration-1000"
                 style={{ width: `${((searchProgressStep + 1) / SEARCH_PROGRESS_STEPS.length) * 100}%` }}
               />
             </div>
