@@ -57,14 +57,13 @@ export const Settings: React.FC = () => {
 
     // ── Extension Real-time Detection ─────────────────────────────────────
     useEffect(() => {
-        // Listen for PONG from the extension bridge
-        const handleExtMessage = (event: MessageEvent) => {
-            if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
-                // Clear the timeout — extension responded!
-                if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+        const checkExtensionAttribute = () => {
+            const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+            if (isInstalled) {
                 setExtensionDetected(true);
+                if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
 
-                // Persist to server so next page load picks it up from DB
+                // Trigger server persistence if needed
                 if (user?.id) {
                     fetch('/api/user/extension-ping', {
                         method: 'POST',
@@ -74,8 +73,28 @@ export const Settings: React.FC = () => {
                         },
                         body: JSON.stringify({ userId: user.id })
                     }).catch(() => { });
+                    updateUser({ extensionInstalled: true });
+                }
+                return true;
+            }
+            return false;
+        };
 
-                    // Also update local user state immediately
+        // Listen for PONG from the extension bridge
+        const handleExtMessage = (event: MessageEvent) => {
+            if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'EXTENSION_PONG') {
+                if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+                setExtensionDetected(true);
+
+                if (user?.id) {
+                    fetch('/api/user/extension-ping', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ userId: user.id })
+                    }).catch(() => { });
                     updateUser({ extensionInstalled: true });
                 }
             }
@@ -83,20 +102,31 @@ export const Settings: React.FC = () => {
 
         window.addEventListener('message', handleExtMessage);
 
-        // Send PING to the bridge (if installed, it will respond with PONG)
-        setExtensionDetected(null); // Reset to "checking" state
+        // Immediate check
+        if (checkExtensionAttribute()) {
+            return () => window.removeEventListener('message', handleExtMessage);
+        }
+
+        // Send PING and wait
+        setExtensionDetected(null);
         window.postMessage({ source: 'REDIGO_WEB_APP', type: 'EXTENSION_PING', userId: user?.id }, '*');
 
-        // Timeout: if no PONG in 2 seconds → not detected
         pingTimeoutRef.current = setTimeout(() => {
-            setExtensionDetected(prev => prev === null ? false : prev);
-        }, 2000);
+            // Final check of attribute before giving up
+            if (!checkExtensionAttribute()) {
+                setExtensionDetected(prev => prev === null ? false : prev);
+            }
+        }, 2500); // Slightly longer to be safe
+
+        // Periodic attribute check (in case it injects late)
+        const attrInterval = setInterval(checkExtensionAttribute, 1000);
 
         return () => {
             window.removeEventListener('message', handleExtMessage);
             if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+            clearInterval(attrInterval);
         };
-    }, [user?.id]);
+    }, [user?.id, updateUser]);
 
     // New state variables
     const [isUploading, setIsUploading] = useState(false);
@@ -864,8 +894,8 @@ export const Settings: React.FC = () => {
                             <div className="flex flex-col md:flex-row items-center gap-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-200/50">
                                 {/* Status Icon */}
                                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0 transition-all duration-500 ${extensionDetected === null ? 'bg-slate-300 shadow-slate-200 animate-pulse' :
-                                        extensionDetected ? 'bg-emerald-600 shadow-emerald-200' :
-                                            'bg-slate-300 shadow-slate-200'
+                                    extensionDetected ? 'bg-emerald-600 shadow-emerald-200' :
+                                        'bg-slate-300 shadow-slate-200'
                                     }`}>
                                     {extensionDetected === null
                                         ? <RefreshCw size={28} className="animate-spin" />
@@ -879,8 +909,8 @@ export const Settings: React.FC = () => {
                                     <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
                                         <h3 className="font-extrabold text-slate-900 text-lg">Chrome Extension Status</h3>
                                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${extensionDetected === null ? 'bg-slate-100 text-slate-400 animate-pulse' :
-                                                extensionDetected ? 'bg-emerald-100 text-emerald-700' :
-                                                    'bg-slate-100 text-slate-500'
+                                            extensionDetected ? 'bg-emerald-100 text-emerald-700' :
+                                                'bg-slate-100 text-slate-500'
                                             }`}>
                                             {extensionDetected === null ? 'Checking...' :
                                                 extensionDetected ? 'Active & Verified' : 'Not Detected'}
@@ -894,12 +924,11 @@ export const Settings: React.FC = () => {
                                 </div>
 
                                 <a
-                                    href="https://chromewebstore.google.com/"
-                                    target="_blank"
-                                    rel="noreferrer"
+                                    href="/redigo-extension.zip"
+                                    download="redigo-extension.zip"
                                     className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${extensionDetected
-                                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                            : 'bg-slate-900 text-white hover:bg-orange-600'
+                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                        : 'bg-slate-900 text-white hover:bg-orange-600'
                                         }`}
                                 >
                                     {extensionDetected ? 'Installed ✓' : 'Download Extension'}

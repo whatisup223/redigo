@@ -12,7 +12,8 @@
     "host_permissions": [
         "https://*.reddit.com/*",
         "http://localhost:5173/*",
-        "https://redditgo.online/*"
+        "http://127.0.0.1:5173/*",
+        "https://*.redditgo.online/*"
     ],
     "action": {
         "default_popup": "popup.html",
@@ -40,7 +41,8 @@
         {
             "matches": [
                 "http://localhost:5173/*",
-                "https://redditgo.online/*"
+                "http://127.0.0.1:5173/*",
+                "https://*.redditgo.online/*"
             ],
             "js": [
                 "dashboard_bridge.js"
