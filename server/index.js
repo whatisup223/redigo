@@ -2248,22 +2248,24 @@ const adminAuth = (req, res, next) => {
 // ─── Extension Download Tracking ──────────────────────────────────────
 app.get('/api/download-extension', async (req, res) => {
   try {
-    // Increment download counter in settings
-    await Setting.findOneAndUpdate(
+    // Background tracking to avoid blocking response
+    Setting.findOneAndUpdate(
       { key: 'extensionDownloadCount' },
       { $inc: { 'value': 1 } },
-      { upsert: true, new: true }
-    );
+      { upsert: true }
+    ).catch(e => console.error('Download tracking error:', e));
 
-    // Track in logs
-    addSystemLog('INFO', 'Browser extension download initiated');
+    // Optional: Log it via system logs (silently in background)
+    // Avoid await here so IDM multiple requests don't lag
+    try { addSystemLog('INFO', 'Browser extension download initiated'); } catch (e) { }
 
-    // Send the file
-    const filePath = path.join(__dirname, '../public/redigo-extension.zip');
-    res.download(filePath, 'redigo-extension.zip');
+    // Simply redirect to the static file URL
+    // In Dev: Vite serves this from /public
+    // In Prod: Express serves this from /dist
+    res.redirect('/redigo-extension.zip');
   } catch (err) {
-    console.error('Download tracking error:', err);
-    res.status(500).json({ error: 'Failed to process download' });
+    console.error('Download error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
