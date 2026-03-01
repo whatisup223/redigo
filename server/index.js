@@ -4552,7 +4552,19 @@ async function performSemanticAnalysis(posts) {
   try {
     const provider = aiSettings.analyzerProvider || 'google';
     const modelName = aiSettings.analyzerModel || 'gemini-1.5-flash';
-    const systemPrompt = aiSettings.analyzerSystemPrompt || "Analyze these Reddit posts for sales intent. Return JSON array.";
+    const systemPrompt = aiSettings.analyzerSystemPrompt || `You are an Elite Sales Intelligence Agent. Your mission is to extract high-intent sales leads from Reddit data.
+
+CRITICAL RULES:
+1. REJECT (Score 0): Any post where the author is promoting their own product, service, or 'just launched' something. We don't want to sell to competitors or self-promoters.
+2. IDENTIFY (High Score): Users asking for tool recommendations, users frustrated with a specific competitor (e.g., "too expensive", "missing features"), or users asking about budget/pricing.
+3. INTENT CATEGORIES: 
+   - 'Switching Intent': User is unhappy with a current provider and wants to switch.
+   - 'Buying Research': User is comparing tools or asking if a product is worth the cost.
+   - 'Problem/Pain': User has a specific business struggle and is looking for an automated/external solution.
+4. SCORING: Assign an 'opportunityScore' (0-100) based on 'Propensity to Purchase'. 100 = Ready to buy now.
+5. REASONING: Provide a brief 'analysisReason' in English explaining the specific sales opportunity identified.
+
+Return a JSON array of objects with: { "id": "post_id", "score": number, "intent": "string", "reason": "string" }`;
 
     // Simplify posts to save tokens
     const simplifiedPosts = posts.map(p => ({
@@ -4735,15 +4747,26 @@ app.post('/api/reddit/analyze', async (req, res) => {
         keywordList.forEach(word => { if (content.includes(word)) score += 40; });
 
         let intent = 'General';
-        if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
-        else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
-        else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
-        else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
+        const isSelfPromo = content.match(/launched|my tool|my app|my product|proud to share|check out my/i);
 
-        if (intent !== 'General') score += 20;
+        if (isSelfPromo) {
+          intent = 'Self Promotion';
+          score -= 60; // Heavy penalty for competitors/self-promoters
+        } else if (content.match(/alternative|instead of|replace|better than|unhappy with|too expensive/i)) {
+          intent = 'Seeking Alternative';
+          score += 40;
+        } else if (content.match(/how to|help|question|issue|problem|struggle/i)) {
+          intent = 'Problem Solving';
+          score += 20;
+        } else if (content.match(/recommend|best|any advice|suggestion|looking for|worth the money/i)) {
+          intent = 'Request Advice';
+          score += 35;
+        }
+
+        if (intent !== 'General' && intent !== 'Self Promotion') score += 20;
         score += Math.min((post.ups || 0) / 5, 20);
         score += Math.min((post.num_comments || 0) * 2, 20);
-        const opportunityScore = Math.min(Math.round(score), 100);
+        const opportunityScore = Math.max(0, Math.min(Math.round(score), 100));
 
         return {
           id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
