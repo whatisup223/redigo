@@ -7,6 +7,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'REDIGO_DEPLOY') {
         const { text, targetUrl } = request;
 
+        // Set a loading flag so content.js can show a "Loading" indicator immediately
+        chrome.storage.local.set({ redigo_loading: true });
+
         // 1. Create a new tab with the target Reddit post URL
         chrome.tabs.create({ url: targetUrl, active: true }, (newTab) => {
 

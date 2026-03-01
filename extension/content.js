@@ -1,14 +1,67 @@
 // content.js - Injected ONLY into reddit.com pages
 console.log('🛡️ Redigo Security Engine connected to Reddit tab.');
 
-chrome.storage.local.get(['redigo_assistant_draft'], (res) => {
+chrome.storage.local.get(['redigo_assistant_draft', 'redigo_loading'], (res) => {
   if (res.redigo_assistant_draft) {
     const { title, text, imageUrl } = res.redigo_assistant_draft;
     injectFloatingAssistant(title, text, imageUrl, true);
+  } else if (res.redigo_loading) {
+    showRedigoLoader();
   }
 });
 
+function showRedigoLoader() {
+  if (document.getElementById('redigo-loader-root')) return;
+  const loader = document.createElement('div');
+  loader.id = 'redigo-loader-root';
+  loader.innerHTML = `
+    <div class="redigo-loader-container">
+      <div class="redigo-loader-spinner"></div>
+      <div class="redigo-loader-logo">🛡️</div>
+      <div class="redigo-loader-text">Redigo is preparing...</div>
+    </div>
+    <style>
+      #redigo-loader-root {
+        position: fixed; bottom: 30px; right: 30px; z-index: 9999999;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        pointer-events: none;
+      }
+      .redigo-loader-container {
+        background: white; padding: 10px 20px; border-radius: 50px;
+        box-shadow: 0 10px 40px rgba(234, 88, 12, 0.2);
+        display: flex; align-items: center; gap: 12px;
+        border: 2px solid #ea580c;
+        animation: redigoPulse 2s infinite ease-in-out;
+      }
+      .redigo-loader-spinner {
+        width: 18px; height: 18px; border: 3px solid #f3f3f3;
+        border-top: 3px solid #ea580c; border-radius: 50%;
+        animation: redigoSpin 1s linear infinite;
+      }
+      .redigo-loader-logo { font-size: 18px; }
+      .redigo-loader-text { font-size: 12px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 0.5px; }
+      @keyframes redigoSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      @keyframes redigoPulse { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.05); opacity: 1; } }
+    </style>
+  `;
+  document.body.appendChild(loader);
+
+  // Failsafe: Remove loader after 10s if injection doesn't happen
+  setTimeout(() => {
+    const l = document.getElementById('redigo-loader-root');
+    if (l) {
+      l.remove();
+      chrome.storage.local.set({ redigo_loading: false });
+    }
+  }, 10000);
+}
+
 function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
+  // Remove loading indicator if exists
+  const loader = document.getElementById('redigo-loader-root');
+  if (loader) loader.remove();
+  chrome.storage.local.set({ redigo_loading: false });
+
   // Prevent duplicate injections
   if (document.getElementById('redigo-assistant-root')) return;
 
