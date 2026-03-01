@@ -633,34 +633,74 @@ export const Analytics: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-10 space-y-10">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
-                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Original Post</h3>
-                  </div>
-                  <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${selectedEntry.postUrl.includes('/submit') ? 'text-orange-600 hover:text-orange-700' : 'text-blue-600 hover:text-blue-700'}`}>
-                    {selectedEntry.postUrl.includes('/submit') ? 'Go to Submit Page' : 'View on Reddit'} <ExternalLink size={12} />
-                  </a>
-                </div>
-                <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100">
-                  <h4 className="text-lg font-bold text-slate-900 mb-4">{selectedEntry.postTitle}</h4>
-                  <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{selectedEntry.postContent || "No body content available."}</p>
-                </div>
-              </div>
+              {(() => {
+                let displayTitle = selectedEntry.postTitle;
+                let displayContent = selectedEntry.postContent;
+                let displayImage = selectedEntry.imageUrl;
 
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
-                </div>
-                <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative">
-                  <div className="absolute top-0 right-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest shadow-lg shadow-orange-200">
-                    {selectedEntry.productMention} Mentioned
-                  </div>
-                  <p className="text-slate-800 text-base leading-relaxed whitespace-pre-wrap italic font-medium">"{selectedEntry.comment}"</p>
-                </div>
-              </div>
+                // Try to parse JSON if it's a post
+                if (activeTab === 'posts' && selectedEntry.postContent?.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(selectedEntry.postContent);
+                    displayTitle = parsed.title || displayTitle;
+                    displayContent = parsed.content || displayContent;
+                  } catch (e) { }
+                }
+
+                return (
+                  <>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
+                          <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">
+                            {activeTab === 'posts' ? 'Generated Post' : 'Original Post'}
+                          </h3>
+                        </div>
+                        <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${selectedEntry.postUrl?.includes('/submit') ? 'text-orange-600 hover:text-orange-700' : 'text-blue-600 hover:text-blue-700'}`}>
+                          {selectedEntry.postUrl?.includes('/submit') ? 'Go to Submit Page' : 'View on Reddit'} <ExternalLink size={12} />
+                        </a>
+                      </div>
+                      <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100">
+                        <h4 className="text-lg font-bold text-slate-900 mb-4">{displayTitle}</h4>
+                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{displayContent || "No body content available."}</p>
+
+                        {displayImage && (
+                          <div className="mt-8 pt-8 border-t border-slate-200/60">
+                            <div className="flex items-center gap-2 mb-4">
+                              <ImageIcon size={16} className="text-orange-600" />
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Generated Media</span>
+                            </div>
+                            <img
+                              src={displayImage}
+                              alt="Post Media"
+                              className="rounded-2xl max-h-[400px] w-full object-contain bg-white shadow-sm border border-slate-100"
+                              onError={(e: any) => e.target.style.display = 'none'}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {activeTab === 'comments' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
+                          <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
+                        </div>
+                        <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative">
+                          {selectedEntry.productMention && (
+                            <div className="absolute top-0 right-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest shadow-lg shadow-orange-200">
+                              {selectedEntry.productMention} Mentioned
+                            </div>
+                          )}
+                          <p className="text-slate-800 text-base leading-relaxed whitespace-pre-wrap italic font-medium">"{selectedEntry.comment}"</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
