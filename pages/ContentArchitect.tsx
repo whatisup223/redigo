@@ -27,7 +27,9 @@ import {
     Clock,
     Crown,
     AlertTriangle,
-    Download
+    Download,
+    Copy,
+    Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -353,6 +355,31 @@ export const ContentArchitect: React.FC = () => {
         if (isInstalledInDOM) return true;
 
         return false;
+    };
+
+    const handleCopy = (text: string, label: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        showToast(`${label} copied to clipboard! 📋`, 'success');
+    };
+
+    const handleDownloadImage = async () => {
+        if (!postData.imageUrl) return;
+        try {
+            const response = await fetch(postData.imageUrl);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `redditgo-post-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showToast('Image downloaded! 🖼️', 'success');
+        } catch (err) {
+            showToast('Failed to download image', 'error');
+        }
     };
 
     const triggerImageGeneration = async (prompt: string, skipExtensionCheck = false) => {
@@ -1408,7 +1435,15 @@ export const ContentArchitect: React.FC = () => {
 
                                 <div className="space-y-6">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headline</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headline</label>
+                                            <button
+                                                onClick={() => handleCopy(postData.title, 'Headline')}
+                                                className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
+                                            >
+                                                <Copy size={10} /> Copy
+                                            </button>
+                                        </div>
                                         <input
                                             type="text"
                                             value={postData.title}
@@ -1418,7 +1453,15 @@ export const ContentArchitect: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Thread Body</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Thread Body</label>
+                                            <button
+                                                onClick={() => handleCopy(postData.content, 'Thread body')}
+                                                className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
+                                            >
+                                                <Copy size={10} /> Copy
+                                            </button>
+                                        </div>
                                         <textarea
                                             rows={9}
                                             value={postData.content}
@@ -1441,15 +1484,23 @@ export const ContentArchitect: React.FC = () => {
                                                     )}
                                                 </label>
                                                 {!isGeneratingImage && postData.imageUrl && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setRegenMode('image');
-                                                            setShowRegenConfirm(true);
-                                                        }}
-                                                        className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
-                                                    >
-                                                        <RefreshCw size={10} /> Regenerate
-                                                    </button>
+                                                    <div className="flex items-center gap-4">
+                                                        <button
+                                                            onClick={handleDownloadImage}
+                                                            className="text-[10px] font-black text-slate-400 hover:text-blue-600 flex items-center gap-1 transition-colors"
+                                                        >
+                                                            <Download size={10} /> Download
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setRegenMode('image');
+                                                                setShowRegenConfirm(true);
+                                                            }}
+                                                            className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
+                                                        >
+                                                            <RefreshCw size={10} /> Regenerate
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
 
