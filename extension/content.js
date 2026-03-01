@@ -254,6 +254,11 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     btn.style.color = 'white';
     btn.disabled = true;
 
+    if (window.location.href.includes('/submit')) {
+      showToast('Please publish on Reddit first, then confirm on the live page!', 'warning');
+      return;
+    }
+
     chrome.runtime.sendMessage({
       type: 'OUTREACH_CONFIRM',
       itemId: currentDraftId,

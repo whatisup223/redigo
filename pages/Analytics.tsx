@@ -138,6 +138,10 @@ export const Analytics: React.FC = () => {
     }
 
     if (item.postUrl.includes('/submit')) {
+      if (item.status === 'Sent' || item.status === 'Active') {
+        showToast('Live URL not captured correctly. Please verify manually.', 'warning');
+        return;
+      }
       window.open(item.postUrl, '_blank');
       return;
     }
