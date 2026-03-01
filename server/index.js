@@ -2860,6 +2860,30 @@ app.post('/api/outreach/confirm', async (req, res) => {
   }
 });
 
+app.post('/api/outreach/update-stats', async (req, res) => {
+  try {
+    const { itemId, userId, type, ups, replies } = req.body;
+    if (!itemId || !userId) return res.status(400).json({ error: 'Missing fields' });
+
+    const Model = type === 'post' ? RedditPost : RedditReply;
+    await Model.updateOne(
+      { id: itemId.toString(), userId: userId.toString() },
+      {
+        $set: {
+          status: 'Active',
+          ups: Number(ups) || 0,
+          replies: Number(replies) || 0
+        }
+      }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update stats error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Admin Logs
 app.get('/api/admin/logs', adminAuth, async (req, res) => {
   try {

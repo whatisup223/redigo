@@ -69,6 +69,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
     }
 
+    if (request.type === 'FETCH_REDDIT_STATS') {
+        const url = request.url.split('?')[0].replace(/\/$/, '') + '.json';
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                let ups = 0, replies = 0;
+                try {
+                    if (Array.isArray(data) && data[0]?.data?.children?.[0]?.data) {
+                        const main = data[0].data.children[0].data;
+                        ups = main.ups || 0;
+                        replies = main.num_comments || 0;
+                    } else if (data?.data?.children?.[0]?.data) {
+                        ups = data.data.children[0].data.ups || 0;
+                        replies = data.data.children[0].data.num_comments || 0;
+                    }
+                    chrome.storage.local.get(['redigo_user_id', 'redigo_token'], (res) => {
+                        if (res.redigo_user_id && res.redigo_token) {
+                            fetch('https://redditgo.online/api/outreach/update-stats', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${res.redigo_token}`
+                                },
+                                body: JSON.stringify({
+                                    itemId: request.itemId,
+                                    userId: res.redigo_user_id,
+                                    type: request.itemType,
+                                    ups,
+                                    replies
+                                })
+                            }).catch(() => {
+                                fetch('http://localhost:3001/api/outreach/update-stats', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        itemId: request.itemId,
+                                        userId: res.redigo_user_id,
+                                        type: request.itemType,
+                                        ups,
+                                        replies
+                                    })
+                                }).catch(() => { });
+                            });
+                        }
+                    });
+                    sendResponse({ success: true, itemId: request.itemId, ups, replies });
+                } catch (err) {
+                    sendResponse({ success: false, error: err.message });
+                }
+            })
+            .catch(e => sendResponse({ success: false, error: e.message }));
+        return true;
+    }
+
     if (request.type === 'REDDIT_SEARCH') {
         const { subreddit, keywords, sortBy } = request;
         const searchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(keywords)}&restrict_sr=on&sort=${sortBy || 'new'}&t=all&limit=100`;

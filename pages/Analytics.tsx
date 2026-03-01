@@ -109,18 +109,59 @@ export const Analytics: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
 
-  // No longer needed: Live Stats listeners removed in favor of manual confirmation
+  // Listen for Live Stats from Extension (Manual Refresh)
   useEffect(() => {
+    const handleExtMessage = (event: MessageEvent) => {
+      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'STATS_RESPONSE') {
+        const { itemId, ups, replies, success } = event.data.payload;
+        if (success) {
+          setHistory(prev => prev.map(h => h.id === itemId ? { ...h, ups, replies, status: 'Active' } : h));
+          setPostsHistory(prev => prev.map(p => p.id === itemId ? { ...p, ups, replies, status: 'Active' } : p));
+          showToast('Stats updated! 🚀', 'success');
+        }
+        setVerifyingIds(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('message', handleExtMessage);
     fetchData();
+    return () => window.removeEventListener('message', handleExtMessage);
   }, [user?.id]);
 
   const handleVerify = (item: any) => {
-    // Manual fallback for verification if needed
-    if (item.postUrl) {
-      window.open(item.postUrl, '_blank');
-    } else {
+    if (!item.postUrl) {
       showToast('No URL found.', 'error');
+      return;
     }
+
+    if (item.postUrl.includes('/submit')) {
+      window.open(item.postUrl, '_blank');
+      return;
+    }
+
+    // Trigger manual refresh via extension
+    setVerifyingIds(prev => new Set(prev).add(item.id));
+    window.postMessage({
+      source: 'REDIGO_WEB_APP',
+      type: 'FETCH_STATS',
+      itemId: item.id,
+      url: item.postUrl,
+      redditType: activeTab === 'posts' ? 'post' : 'comment'
+    }, '*');
+
+    // Timeout fallback
+    setTimeout(() => {
+      setVerifyingIds(prev => {
+        const next = new Set(prev);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+        }
+        return next;
+      });
+    }, 8000);
   };
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
@@ -304,7 +345,7 @@ export const Analytics: React.FC = () => {
             if (isNaN(dateObj.getTime())) return;
             const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             if (!dataByDate[dateKey]) {
-              dataByDate[dateKey] = { name: dateKey, clicks: 0, upvotes: 0, replies: 0 };
+              dataByDate[dateKey] = { name: dateKey, clicks: 0 };
             }
             dataByDate[dateKey].clicks += 1;
           });
@@ -312,16 +353,15 @@ export const Analytics: React.FC = () => {
       });
     } else {
       sourceData.forEach((current: any) => {
-        const ts = current.deployedAt;
+        const ts = current.deployedAt || current.createdAt;
         if (!ts) return;
         const dateObj = new Date(ts);
         if (isNaN(dateObj.getTime())) return;
         const dateKey = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         if (!dataByDate[dateKey]) {
-          dataByDate[dateKey] = { name: dateKey, clicks: 0, upvotes: 0, replies: 0 };
+          dataByDate[dateKey] = { name: dateKey, production: 0 };
         }
-        dataByDate[dateKey].upvotes += current.ups || 0;
-        dataByDate[dateKey].replies += current.replies || 0;
+        dataByDate[dateKey].production += 1; // Count of items published
       });
     }
 
@@ -335,7 +375,7 @@ export const Analytics: React.FC = () => {
     });
   }, [activeTab, activeLinks, activeHistory, dateFilter, customRange]);
 
-  const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', upvotes: 0, replies: 0, clicks: 0 }];
+  const displayData = chartData.length > 0 ? chartData : [{ name: 'Today', production: 0, clicks: 0 }];
 
   const totalUpvotes = activeHistory.reduce((a, b) => a + (b.ups || 0), 0);
   const totalReplies = activeHistory.reduce((a, b) => a + (b.replies || 0), 0);
@@ -941,8 +981,10 @@ export const Analytics: React.FC = () => {
           <div className="flex items-center justify-between mb-10">
             <h2 className="text-xl font-extrabold text-slate-900">Growth Velocity</h2>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-orange-600"></span>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Sync</span>
+              <span className={`w-3 h-3 rounded-full ${activeTab === 'links' ? 'bg-blue-600' : 'bg-orange-600'}`}></span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                {activeTab === 'links' ? 'Clicks' : 'Daily Volume'}
+              </span>
             </div>
           </div>
           <div className="h-[300px]">
@@ -956,7 +998,7 @@ export const Analytics: React.FC = () => {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#94a3b8' }} />
                 <Tooltip cursor={{ stroke: '#f97316', strokeWidth: 1, strokeDasharray: '5 5' }} contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '20px' }} />
-                <Area type="monotone" dataKey={activeTab === 'links' ? "clicks" : "upvotes"} stroke={activeTab === 'links' ? "#2563eb" : "#f97316"} strokeWidth={4} fillOpacity={1} fill={activeTab === 'links' ? "url(#colorClick)" : "url(#colorUp)"} />
+                <Area type="monotone" dataKey={activeTab === 'links' ? "clicks" : "production"} stroke={activeTab === 'links' ? "#2563eb" : "#f97316"} strokeWidth={4} fillOpacity={1} fill={activeTab === 'links' ? "url(#colorClick)" : "url(#colorUp)"} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -1098,13 +1140,14 @@ export const Analytics: React.FC = () => {
                       ) : (
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            disabled={verifyingIds.has(row.id)}
                             onClick={() => handleVerify(row)}
-                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Sent' || row.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50'}`}
-                            title="View on Reddit"
+                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Sent' || row.status === 'Active' ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50'}`}
+                            title="Refresh Stats"
                           >
-                            <ExternalLink size={14} />
+                            {verifyingIds.has(row.id) ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                             <span className="hidden xl:inline">
-                              {row.status === 'Sent' || row.status === 'Active' ? 'Confirmed' : 'Verify'}
+                              {row.status === 'Sent' || row.status === 'Active' ? 'Refresh' : 'Verify'}
                             </span>
                           </button>
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
