@@ -298,7 +298,7 @@ document.addEventListener('click', (e) => {
         type: 'OUTREACH_CONFIRM',
         itemId: currentDraftId,
         userId: currentDraftUserId,
-        type: currentDraftType
+        itemType: currentDraftType
       });
 
       // Clear draft tracking

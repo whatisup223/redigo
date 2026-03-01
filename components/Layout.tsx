@@ -64,12 +64,21 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       // Let's just check the attribute.
       const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
       setIsExtensionMissing(!isInstalled);
+
+      // Sync User ID with Extension for background tasks (Karma, Stats, etc.)
+      if (isInstalled && user?.id) {
+        window.postMessage({
+          source: 'REDIGO_WEB_APP',
+          type: 'EXTENSION_PING',
+          userId: user.id
+        }, '*');
+      }
     };
     checkExtension();
     // Re-check periodically in case they install it while page is open.
-    const interval = setInterval(checkExtension, 2000);
+    const interval = setInterval(checkExtension, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user?.id]);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },

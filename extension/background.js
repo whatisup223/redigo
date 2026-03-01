@@ -75,7 +75,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     body: JSON.stringify({
                         itemId: request.itemId,
                         userId: request.userId,
-                        type: request.type,
+                        type: request.itemType, // Use corrected itemType
                         permalink: sender.tab.url // Capture the URL where they clicked
                     })
                 }).catch(() => {
@@ -85,7 +85,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         body: JSON.stringify({
                             itemId: request.itemId,
                             userId: request.userId,
-                            type: request.type,
+                            type: request.itemType,
                             permalink: sender.tab.url
                         })
                     }).catch(() => { });
