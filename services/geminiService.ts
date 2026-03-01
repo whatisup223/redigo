@@ -118,7 +118,7 @@ export const generateRedditReply = async (
   includeBrandName: boolean = true,
   includeLink: boolean = true,
   useTracking: boolean = false
-): Promise<GeneratedReply & { credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
+): Promise<GeneratedReply & { imagePrompt?: string; credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
     const effectiveProfile = mergeProfiles(savedProfile, overrideProfile);
@@ -219,7 +219,8 @@ Return STRICT JSON (no markdown code blocks, no extra text outside the JSON):
   "tone": "${tone}",
   "actionable_points": ["key takeaway 1", "key takeaway 2"],
   "keywords": ["relevant", "keywords"],
-  "reddit_strategy": "brief note on why this approach works for this post"
+  "reddit_strategy": "brief note on why this approach works for this post",
+  "imagePrompt": "a concise DALL-E image prompt for a visual that complements this reply (modern, clean, minimal style — no text in image)"
 }`,
         context: { postId: post.id, subreddit: post.subreddit }
       })

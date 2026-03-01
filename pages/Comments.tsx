@@ -35,7 +35,9 @@ import {
   Filter,
   MessageSquare,
   ArrowUpCircle,
-  Download
+  Download,
+  Image as ImageIcon,
+  PenTool
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { RedditPost, GeneratedReply } from '../types';
@@ -90,11 +92,16 @@ export const Comments: React.FC = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [targetSubreddit, setTargetSubreddit] = useState('saas');
   const [searchKeywords, setSearchKeywords] = useState('');
   const [generatedReply, setGeneratedReply] = useState<GeneratedReply | null>(null);
   const [editedComment, setEditedComment] = useState('');
+  const [commentImagePrompt, setCommentImagePrompt] = useState('');
+  const [commentImageUrl, setCommentImageUrl] = useState('');
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [includeImage, setIncludeImage] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [reloadCooldown, setReloadCooldown] = useState(0);
@@ -107,7 +114,7 @@ export const Comments: React.FC = () => {
   const [wizardStep, setWizardStep] = useState(1);
   const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1 });
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
-  const [regenType, setRegenType] = useState<'full' | 'refine'>('full');
+  const [regenMode, setRegenMode] = useState<'text' | 'image' | 'both'>('text');
   const [refinePrompt, setRefinePrompt] = useState('');
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -126,6 +133,7 @@ export const Comments: React.FC = () => {
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
   const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
+  const canGenerateImages = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowImages));
 
   const [wizardData, setWizardData] = useState({
     tone: 'helpful_peer',
@@ -180,6 +188,9 @@ export const Comments: React.FC = () => {
           setGeneratedReply(null);
           setSelectedPost(null);
           setEditedComment('');
+          setCommentImagePrompt('');
+          setCommentImageUrl('');
+          setIncludeImage(false);
           setWizardData({
             tone: 'helpful_peer',
             goal: 'help',
@@ -228,6 +239,9 @@ export const Comments: React.FC = () => {
         selectedPost,
         generatedReply,
         editedComment,
+        commentImagePrompt,
+        commentImageUrl,
+        includeImage,
         wizardData,
         brandProfile,
         activeTone,
@@ -241,7 +255,7 @@ export const Comments: React.FC = () => {
       // ONLY remove if it's explicitly empty and we're not currently showing a draft banner
       localStorage.removeItem('redditgo_comment_draft');
     }
-  }, [selectedPost, generatedReply, editedComment, wizardData, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
+  }, [selectedPost, generatedReply, editedComment, commentImagePrompt, commentImageUrl, includeImage, wizardData, brandProfile, activeTone, language, showDraftBanner, isInitialCheckDone, includeBrandName, includeLink, useTracking]);
 
   // ── Extension Real-time Detection ─────────────────────────────────────
   useEffect(() => {
@@ -282,6 +296,9 @@ export const Comments: React.FC = () => {
       setSelectedPost(draft.selectedPost);
       setGeneratedReply(draft.generatedReply);
       setEditedComment(draft.editedComment || draft.generatedReply?.comment || '');
+      if (draft.commentImagePrompt) setCommentImagePrompt(draft.commentImagePrompt);
+      if (draft.commentImageUrl) { setCommentImageUrl(draft.commentImageUrl); setImageLoaded(false); }
+      if (draft.includeImage !== undefined) setIncludeImage(draft.includeImage);
       setWizardData(draft.wizardData);
       if (draft.brandProfile) setBrandProfile(draft.brandProfile);
       setActiveTone(draft.activeTone);
@@ -309,6 +326,9 @@ export const Comments: React.FC = () => {
     setSelectedPost(null);
     setGeneratedReply(null);
     setEditedComment('');
+    setCommentImagePrompt('');
+    setCommentImageUrl('');
+    setIncludeImage(false);
     setWizardData({
       tone: 'helpful_peer',
       goal: 'help',
@@ -370,6 +390,118 @@ export const Comments: React.FC = () => {
     return false;
   };
 
+  const triggerCommentImageGeneration = async (prompt: string, subreddit: string, skipExtensionCheck = false) => {
+    const needsCheck = !skipExtensionCheck && !isExtensionActive();
+    if (needsCheck && !isForcedRef.current) {
+      setPendingAction(() => () => triggerCommentImageGeneration(prompt, subreddit));
+      setShowExtensionWarning(true);
+      return;
+    }
+    if (!skipExtensionCheck) isForcedRef.current = false;
+    setPendingAction(null);
+
+    // --- Subreddit Comment Image Pre-flight Check ---
+    if (subreddit) {
+      try {
+        const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(subreddit)}`);
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          const data = subData.data || {};
+          // For comments, check allowed_media_in_comments field
+          const commentMediaAllowed = data.allowed_media_in_comments;
+          const isBlocked =
+            commentMediaAllowed === '' ||
+            commentMediaAllowed === null ||
+            commentMediaAllowed === undefined ||
+            commentMediaAllowed === 'none' ||
+            data.submission_type === 'self';
+
+          if (isBlocked) {
+            showToast(`r/${subreddit} does not allow images in comments. Skipped to save credits! 🛡️`, 'error');
+            setIncludeImage(false);
+            setIsGeneratingImage(false);
+            return;
+          }
+        } else if (subRes.status === 429 || subRes.status === 403 || subRes.status === 500) {
+          showToast(`Cannot verify image support for r/${subreddit}. Image skipped for safety.`, 'error');
+          setIncludeImage(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Subreddit image-in-comment check failed (ignoring)', err);
+      }
+    }
+
+    // Proactive Daily Limit Pre-check
+    if (user && user.role !== 'admin') {
+      const plan = plans.find(p => (p.name || '').toLowerCase() === (user.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user.plan || '').toLowerCase());
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0) {
+        const currentUsage = (user.dailyUsagePoints || 0);
+        if ((currentUsage + Number(costs.image || 5)) > dailyLimit) {
+          setShowDailyLimitModal(true);
+          return;
+        }
+      }
+    }
+
+    setIsGeneratingImage(true);
+    try {
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, userId: user!.id, subreddit })
+      });
+
+      if (response.status === 402) { setShowNoCreditsModal(true); return; }
+      if (response.status === 429) { setShowDailyLimitModal(true); return; }
+      if (response.status === 403) {
+        const errData = await response.json();
+        showToast(errData.error || 'Image not allowed for this subreddit.', 'error');
+        setIncludeImage(false);
+        return;
+      }
+      if (!response.ok) throw new Error('Failed to generate image');
+
+      const data = await response.json();
+      setCommentImageUrl(data.url);
+      setImageLoaded(false);
+      showToast('Image generated! 🎨', 'success');
+
+      if (data.credits !== undefined) {
+        updateUser({
+          credits: data.credits,
+          dailyUsagePoints: data.dailyUsagePoints,
+          dailyUsage: data.dailyUsage
+        });
+      }
+    } catch (err) {
+      console.error('Comment image gen failed:', err);
+      showToast('Image generation failed.', 'error');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleDownloadImage = async () => {
+    if (!commentImageUrl) return;
+    try {
+      const filename = `redditgo-comment-${Date.now()}.png`;
+      const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(commentImageUrl)}&filename=${encodeURIComponent(filename)}`;
+      const a = document.createElement('a');
+      a.href = proxyUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('Download started! 🖼️', 'success');
+    } catch (err) {
+      showToast('Failed to download image', 'error');
+    }
+  };
+
   const handleGenerate = async (post: any, customSettings?: any) => {
     if (!user?.id) return;
 
@@ -380,10 +512,12 @@ export const Comments: React.FC = () => {
       setShowExtensionWarning(true);
       return;
     }
-    isForcedRef.current = false; // Reset for next time
-    setPendingAction(null); // Clear after check passes or forced continue
+    isForcedRef.current = false;
+    setPendingAction(null);
 
-    const cost = costs.comment;
+    const isImageRequested = includeImage && canGenerateImages;
+    const commentCost = costs.comment;
+    const totalCost = commentCost; // Image is billed separately via triggerCommentImageGeneration
 
     // Proactive Daily Limit Pre-check
     if (user && user.role !== 'admin') {
@@ -393,14 +527,14 @@ export const Comments: React.FC = () => {
 
       if (dailyLimit > 0) {
         const currentUsage = (user.dailyUsagePoints || 0);
-        if ((currentUsage + cost) > dailyLimit) {
+        if ((currentUsage + totalCost) > dailyLimit) {
           setShowDailyLimitModal(true);
           return;
         }
       }
     }
 
-    if ((user?.credits || 0) < cost && user?.role !== 'admin') {
+    if ((user?.credits || 0) < totalCost && user?.role !== 'admin') {
       setShowNoCreditsModal(true);
       return;
     }
@@ -408,6 +542,8 @@ export const Comments: React.FC = () => {
     setSelectedPost(post);
     setIsGenerating(true);
     setGeneratedReply(null);
+    setCommentImageUrl('');
+    setCommentImagePrompt('');
     setIsWizardOpen(false);
 
     try {
@@ -428,6 +564,12 @@ export const Comments: React.FC = () => {
 
       setGeneratedReply(reply);
       setEditedComment(reply.comment);
+
+      // Store image prompt if returned
+      if ((reply as any).imagePrompt) {
+        setCommentImagePrompt((reply as any).imagePrompt);
+      }
+
       showToast('AI Reply Generated!', 'success');
 
       if (reply.credits !== undefined) {
@@ -436,6 +578,11 @@ export const Comments: React.FC = () => {
           dailyUsagePoints: reply.dailyUsagePoints,
           dailyUsage: reply.dailyUsage
         });
+      }
+
+      // Trigger image generation non-blocking if enabled
+      if (isImageRequested && (reply as any).imagePrompt) {
+        triggerCommentImageGeneration((reply as any).imagePrompt, post.subreddit, true);
       }
 
       setTimeout(() => {
@@ -538,6 +685,7 @@ export const Comments: React.FC = () => {
         source: 'REDIGO_WEB_APP',
         type: 'REDIGO_DEPLOY',
         text: editedComment,
+        imageUrl: commentImageUrl || undefined,
         targetUrl: targetUrl
       }, '*');
 
@@ -836,7 +984,7 @@ export const Comments: React.FC = () => {
                   <RefreshCw size={24} />
                 </div>
                 <h3 className="text-xl font-black text-slate-900">
-                  {regenType === 'full' ? 'Regenerate' : 'Refine'}
+                  {regenMode === 'text' ? 'Regenerate Text' : regenMode === 'image' ? 'Regenerate Image' : 'Regenerate Both'}
                 </h3>
               </div>
               <button onClick={() => setShowRegenConfirm(false)} className="text-slate-400 hover:text-slate-600">✕</button>
@@ -844,15 +992,19 @@ export const Comments: React.FC = () => {
 
             <div className="space-y-4">
               <p className="text-slate-500 text-sm font-medium leading-relaxed text-center px-4">
-                {regenType === 'full'
-                  ? "Brand new version based on original settings."
-                  : `Modification: "${refinePrompt}".`
+                {regenMode === 'text'
+                  ? 'Brand new reply text based on original settings.'
+                  : regenMode === 'image'
+                    ? `Regenerate the image using the same prompt.`
+                    : 'Regenerate both the reply text and a fresh image.'
                 }
               </p>
 
               <div className="bg-orange-50 p-4 rounded-2xl flex items-center justify-between">
                 <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Confirmation Cost</span>
-                <span className="font-black text-orange-600">{costs.comment} PTS</span>
+                <span className="font-black text-orange-600">
+                  {regenMode === 'text' ? costs.comment : regenMode === 'image' ? costs.image : (costs.comment + costs.image)} PTS
+                </span>
               </div>
             </div>
 
@@ -866,10 +1018,10 @@ export const Comments: React.FC = () => {
               <button
                 onClick={() => {
                   setShowRegenConfirm(false);
-                  if (regenType === 'full') {
+                  if (regenMode === 'text' || regenMode === 'both') {
                     handleGenerate(selectedPost!, { tone: activeTone });
-                  } else {
-                    handleRefine(refinePrompt);
+                  } else if (regenMode === 'image' && commentImagePrompt) {
+                    triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '');
                   }
                 }}
                 className="flex-1 py-4 bg-orange-600 text-white rounded-2xl font-black shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
@@ -1329,20 +1481,124 @@ export const Comments: React.FC = () => {
                           />
                         </div>
 
-                        {/* Quick Refine */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setRegenType('full'); setShowRegenConfirm(true); }}
-                            className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:border-orange-200 hover:text-orange-600 transition-all"
-                          >
-                            Regenerate
-                          </button>
-                          <button
-                            onClick={() => { setRegenType('refine'); setRefinePrompt('Make it shorter and more punchy'); setShowRegenConfirm(true); }}
-                            className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:border-orange-200 hover:text-orange-600 transition-all font-['Outfit']"
-                          >
-                            Make Shorter
-                          </button>
+                        {/* Quick Refine & Image Controls */}
+                        <div className="space-y-3">
+                          {/* Text regen buttons */}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { setRegenMode('text'); setShowRegenConfirm(true); }}
+                              className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:border-orange-200 hover:text-orange-600 transition-all flex items-center justify-center gap-1"
+                            >
+                              <RefreshCw size={11} /> Regen Text
+                            </button>
+                            {(commentImageUrl || commentImagePrompt) && canGenerateImages && (
+                              <button
+                                onClick={() => { setRegenMode('image'); setShowRegenConfirm(true); }}
+                                className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:border-orange-200 hover:text-orange-600 transition-all flex items-center justify-center gap-1"
+                              >
+                                <RefreshCw size={11} /> Regen Image
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Image Generation Section */}
+                          {canGenerateImages && (
+                            <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
+                              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 bg-slate-900 rounded-xl flex items-center justify-center">
+                                    <ImageIcon size={13} className="text-white" />
+                                  </div>
+                                  <p className="text-xs font-black text-slate-900">Image Companion</p>
+                                </div>
+                                <button
+                                  onClick={() => setIncludeImage(v => !v)}
+                                  className={`w-10 h-6 rounded-full transition-all relative ${includeImage ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                >
+                                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
+                              </div>
+
+                              {includeImage && (
+                                <div className="p-4 space-y-3">
+                                  {/* Image not yet generated */}
+                                  {!commentImageUrl && !isGeneratingImage && (
+                                    <div className="space-y-2">
+                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Image Prompt</p>
+                                      <textarea
+                                        rows={2}
+                                        value={commentImagePrompt}
+                                        onChange={(e) => setCommentImagePrompt(e.target.value)}
+                                        placeholder="Describe an image to accompany this reply..."
+                                        className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none resize-none"
+                                      />
+                                      <button
+                                        onClick={() => {
+                                          if (commentImagePrompt.trim()) {
+                                            triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '');
+                                          } else {
+                                            showToast('Enter an image prompt first.', 'error');
+                                          }
+                                        }}
+                                        className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
+                                      >
+                                        <ImageIcon size={12} /> Generate Image · {costs.image} PTS
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* Generating spinner */}
+                                  {isGeneratingImage && (
+                                    <div className="flex items-center justify-center gap-3 py-4">
+                                      <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center animate-pulse">
+                                        <ImageIcon size={16} className="text-white" />
+                                      </div>
+                                      <p className="text-xs font-bold text-slate-500">Generating image...</p>
+                                    </div>
+                                  )}
+
+                                  {/* Image ready */}
+                                  {commentImageUrl && !isGeneratingImage && (
+                                    <div className="space-y-2">
+                                      <div className="relative rounded-xl overflow-hidden border border-slate-100 shadow-sm">
+                                        {!imageLoaded && (
+                                          <div className="absolute inset-0 bg-slate-100 animate-pulse rounded-xl" />
+                                        )}
+                                        <img
+                                          src={commentImageUrl}
+                                          alt="Generated comment image"
+                                          className={`w-full h-36 object-cover transition-opacity duration-500 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                          onLoad={() => setImageLoaded(true)}
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={handleDownloadImage}
+                                          className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 hover:border-slate-400 hover:text-slate-900 transition-all flex items-center justify-center gap-1"
+                                        >
+                                          <Download size={11} /> Save
+                                        </button>
+                                        <button
+                                          onClick={() => { setRegenMode('image'); setShowRegenConfirm(true); }}
+                                          className="flex-1 py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 hover:border-orange-200 hover:text-orange-600 transition-all flex items-center justify-center gap-1"
+                                        >
+                                          <RefreshCw size={11} /> Re-gen
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Plan lock */}
+                              {!canGenerateImages && (
+                                <div className="px-4 py-3 flex items-center gap-3">
+                                  <Crown size={14} className="text-slate-400" />
+                                  <p className="text-[10px] font-bold text-slate-400">Available on Pro plan <a href="/pricing" className="text-orange-600 hover:underline">Upgrade</a></p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1667,6 +1923,30 @@ export const Comments: React.FC = () => {
                       )}
                     </div>
 
+                    {/* Image Toggle */}
+                    {canGenerateImages && (
+                      <div className="flex items-center justify-between p-4 bg-purple-50/30 rounded-2xl border border-purple-100 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-purple-600 shadow-sm">
+                            <ImageIcon size={16} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-slate-900">Generate Image</p>
+                              <span className="bg-purple-100 text-purple-600 text-[7px] font-black px-1 py-0.5 rounded-md uppercase tracking-tighter">+{costs.image} PTS</span>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-medium">AI image companion for your reply</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIncludeImage(!includeImage)}
+                          className={`w-10 h-6 rounded-full transition-all relative ${includeImage ? 'bg-purple-600' : 'bg-slate-300'}`}
+                        >
+                          <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${includeImage ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex gap-3">
                       <button onClick={() => setWizardStep(1)} className="px-8 py-5 bg-slate-50 text-slate-400 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all">Back</button>
                       <button
@@ -1677,7 +1957,9 @@ export const Comments: React.FC = () => {
                           <span>Generate Reply</span>
                           <Sparkles size={16} />
                         </div>
-                        <span className="text-[9px] text-orange-200 font-black uppercase tracking-[0.2em] mt-0.5">Will cost {costs.comment} PTS</span>
+                        <span className="text-[9px] text-orange-200 font-black uppercase tracking-[0.2em] mt-0.5">
+                          {includeImage && canGenerateImages ? `${costs.comment} + ${costs.image} PTS` : `${costs.comment} PTS`}
+                        </span>
                       </button>
                     </div>
                   </div>
