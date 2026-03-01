@@ -106,7 +106,7 @@ export const Analytics: React.FC = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
 
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
 
   // Listen for Live Stats from Extension
@@ -131,14 +131,17 @@ export const Analytics: React.FC = () => {
   }, []);
 
   const handleVerify = (item: any) => {
-    if (item.status === 'Pending') {
-      showToast('Publish this item first to verify stats!', 'error');
+    if (!item.postUrl) {
+      showToast('No URL found for this item.', 'error');
       return;
     }
-    if (!item.postUrl || item.postUrl.includes('/submit')) {
-      showToast('Live link not found. Try publishing again.', 'error');
+
+    if (item.postUrl.includes('/submit')) {
+      showToast('Please ensure you clicked "Post" on the Reddit page!', 'warning');
+      window.open(item.postUrl, '_blank');
       return;
     }
+
     setVerifyingIds(prev => new Set(prev).add(item.id));
     window.postMessage({
       source: 'REDIGO_WEB_APP',
@@ -161,7 +164,7 @@ export const Analytics: React.FC = () => {
     }, 10000);
   };
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
@@ -613,9 +616,9 @@ export const Analytics: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4">
       {toast && (
-        <div className={`fixed top-10 right-10 z-[300] p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-10 duration-500 ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
-          {toast.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
-          <span className="font-bold">{toast.message}</span>
+        <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 px-8 py-4 rounded-[2rem] shadow-2xl z-[300] flex items-center gap-3 animate-in slide-in-from-bottom-5 font-black text-sm uppercase tracking-widest ${toast.type === 'success' ? 'bg-emerald-600 text-white' : (toast.type === 'warning' ? 'bg-orange-500 text-white' : 'bg-red-600 text-white')}`}>
+          {toast.type === 'success' ? <ShieldCheck size={18} /> : (toast.type === 'warning' ? <AlertCircle size={18} /> : <AlertCircle size={18} />)}
+          {toast.message}
         </div>
       )}
 
@@ -644,8 +647,8 @@ export const Analytics: React.FC = () => {
                     <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Original Post</h3>
                   </div>
-                  <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                    View on Reddit <ExternalLink size={12} />
+                  <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${selectedEntry.postUrl.includes('/submit') ? 'text-orange-600 hover:text-orange-700' : 'text-blue-600 hover:text-blue-700'}`}>
+                    {selectedEntry.postUrl.includes('/submit') ? 'Go to Submit Page' : 'View on Reddit'} <ExternalLink size={12} />
                   </a>
                 </div>
                 <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100">
@@ -670,8 +673,8 @@ export const Analytics: React.FC = () => {
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
               <button onClick={() => setSelectedEntry(null)} className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95">Close</button>
-              <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className="px-8 py-4 bg-orange-600 text-white rounded-[1.5rem] shadow-lg shadow-orange-100 hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2">
-                Verify on Live Reddit <ExternalLink size={18} />
+              <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className={`px-8 py-4 text-white rounded-[1.5rem] shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 ${selectedEntry.postUrl.includes('/submit') ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
+                {selectedEntry.postUrl.includes('/submit') ? 'Post on Reddit' : 'Verify on Live Reddit'} <ExternalLink size={18} />
               </a>
             </div>
           </div>
@@ -1155,7 +1158,15 @@ export const Analytics: React.FC = () => {
                           </button>
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
                           <button onClick={() => handleDeleteReddit(row.id, row.redditCommentId, activeTab === 'posts' ? 'post' : 'reply')} className="p-2.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all title" title="Delete from Reddit"><Trash2 size={16} /></button>
-                          <a href={row.postUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
+                          <a
+                            href={row.postUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`p-2.5 rounded-xl transition-all shadow-sm ${row.postUrl?.includes('/submit') ? 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white' : 'bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                            title={row.postUrl?.includes('/submit') ? 'Finish Posting on Reddit' : 'View Live Content'}
+                          >
+                            {row.postUrl?.includes('/submit') ? <PenTool size={16} /> : <ExternalLink size={16} />}
+                          </a>
                         </div>
                       )}
                     </td>

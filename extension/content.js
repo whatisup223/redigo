@@ -283,28 +283,43 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
 
-  const text = btn.innerText.toLowerCase();
+  const btnText = btn.innerText.toLowerCase();
+  const isAction = btnText.includes('comment') ||
+    btnText.includes('post') ||
+    btnText.includes('reply') ||
+    btnText.includes('نشر') || // Arabic Post/Publish
+    btnText.includes('تعليق') || // Arabic Comment
+    btnText.includes('رد');     // Arabic Reply
 
-  // Logic: If we recently injected a draft, and the user clicks "Comment"
-  if ((text.includes('comment') || text.includes('post') || text.includes('reply')) && currentDraftId) {
-    console.log('🛡️ Redigo: Publication detected! Notifying dashboard...');
+  if (isAction && currentDraftId) {
+    console.log('🛡️ Redigo: Publication action detected! Waiting for final URL...');
+    const originalUrl = window.location.href;
+    const checkType = currentDraftType;
+    const checkId = currentDraftId;
+    const checkUserId = currentDraftUserId;
 
-    // We wait a bit for the post to actually "go through"
-    setTimeout(() => {
-      // Try to find the permalink of the last comment added (this is tricky on Reddit)
-      // For now, we communicate the SUCCESS. The link can be fetched 
-      // by the user refreshing or by the extension looking for the newest comment by "Self"
-      chrome.runtime.sendMessage({
-        type: 'OUTREACH_CONFIRM',
-        itemId: currentDraftId,
-        userId: currentDraftUserId,
-        itemType: currentDraftType,
-        url: window.location.href // Send the actual URL after redirect/click
-      });
+    // Polling to capture the final URL after redirect (especially for posts)
+    let attempts = 0;
+    const pollInterval = setInterval(() => {
+      attempts++;
+      const currentUrl = window.location.href;
 
-      // Clear draft tracking
-      currentDraftId = null;
-    }, 2000);
+      // If URL changed and no longer on /submit, or if we've waited 6s
+      if ((currentUrl !== originalUrl && !currentUrl.includes('/submit')) || attempts > 12) {
+        clearInterval(pollInterval);
+        console.log('🛡️ Redigo: Capturing final URL:', currentUrl);
+
+        chrome.runtime.sendMessage({
+          type: 'OUTREACH_CONFIRM',
+          itemId: checkId,
+          userId: checkUserId,
+          itemType: checkType,
+          url: currentUrl
+        });
+
+        if (currentDraftId === checkId) currentDraftId = null;
+      }
+    }, 500); // Check every 500ms
   }
 }, true);
 

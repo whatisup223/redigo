@@ -102,37 +102,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             .then(data => {
                 let ups = 0, replies = 0;
 
-                // Reddit JSON structure varies for posts vs comments
-                if (Array.isArray(data)) {
-                    // Post or Comment thread
-                    const main = data[0].data.children[0].data;
-                    ups = main.ups;
-                    replies = main.num_comments || 0;
-                } else {
-                    ups = data.data.children[0].data.ups;
-                }
-
-                // Update Backend
-                chrome.storage.local.get(['redigo_user_id', 'redigo_token'], (res) => {
-                    if (res.redigo_user_id && res.redigo_token) {
-                        fetch('https://redditgo.online/api/outreach/update-stats', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${res.redigo_token}`
-                            },
-                            body: JSON.stringify({
-                                itemId: request.itemId,
-                                userId: res.redigo_user_id,
-                                type: request.itemType, // Use correct item type
-                                ups,
-                                replies
-                            })
-                        }).catch(() => { });
+                try {
+                    // Reddit JSON structure varies for posts vs comments
+                    if (Array.isArray(data) && data[0]?.data?.children?.[0]?.data) {
+                        // Success case for thread
+                        const main = data[0].data.children[0].data;
+                        ups = main.ups || 0;
+                        replies = main.num_comments || 0;
+                    } else if (data?.data?.children?.[0]?.data) {
+                        // Success case for individual landing
+                        ups = data.data.children[0].data.ups || 0;
+                        replies = data.data.children[0].data.num_comments || 0;
+                    } else {
+                        throw new Error('Could not parse Reddit data. Is it a live post URL?');
                     }
-                });
 
-                sendResponse({ success: true, itemId: request.itemId, ups, replies });
+                    // Update Backend
+                    chrome.storage.local.get(['redigo_user_id', 'redigo_token'], (res) => {
+                        if (res.redigo_user_id && res.redigo_token) {
+                            fetch('https://redditgo.online/api/outreach/update-stats', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${res.redigo_token}`
+                                },
+                                body: JSON.stringify({
+                                    itemId: request.itemId,
+                                    userId: res.redigo_user_id,
+                                    type: request.itemType,
+                                    ups,
+                                    replies
+                                })
+                            }).catch(() => { });
+                        }
+                    });
+
+                    sendResponse({ success: true, itemId: request.itemId, ups, replies });
+                } catch (err) {
+                    sendResponse({ success: false, itemId: request.itemId, error: err.message });
+                }
             })
             .catch(e => sendResponse({ success: false, itemId: request.itemId, error: e.message }));
         return true;
