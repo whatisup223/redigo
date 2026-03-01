@@ -713,7 +713,11 @@ export const Analytics: React.FC = () => {
                             <img
                               src={displayImage}
                               alt="Post Media"
-                              className="rounded-2xl max-h-[400px] w-full object-contain bg-white shadow-sm border border-slate-100"
+                              loading="lazy"
+                              decoding="async"
+                              className="rounded-2xl max-h-[450px] w-full object-contain bg-slate-50 shadow-inner border border-slate-100 transition-opacity duration-500"
+                              style={{ minHeight: '200px' }}
+                              onLoad={(e: any) => e.target.style.opacity = '1'}
                               onError={(e: any) => e.target.style.display = 'none'}
                             />
                           </div>
