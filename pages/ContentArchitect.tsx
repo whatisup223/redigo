@@ -365,17 +365,18 @@ export const ContentArchitect: React.FC = () => {
     const handleDownloadImage = async () => {
         if (!postData.imageUrl) return;
         try {
-            const response = await fetch(postData.imageUrl);
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
+            const filename = `redditgo-post-${Date.now()}.png`;
+            // Use our server-side proxy to bypass CORS
+            const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(postData.imageUrl)}&filename=${encodeURIComponent(filename)}`;
+
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `redditgo-post-${Date.now()}.png`;
+            a.href = proxyUrl;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            showToast('Image downloaded! 🖼️', 'success');
+
+            showToast('Download started! 🖼️', 'success');
         } catch (err) {
             showToast('Failed to download image', 'error');
         }
@@ -410,10 +411,16 @@ export const ContentArchitect: React.FC = () => {
                         data.submission_type === 'self';
 
                     if (isBlocked) {
-                        showToast(`r/${postData.subreddit} does not allow images. Generation skipped.`, 'error');
+                        showToast(`r/${postData.subreddit} does not allow images. Generation stopped to save credits. 🛡️`, 'error');
                         setIncludeImage(false);
+                        setIsGeneratingImage(false); // Stop progress spinner
                         return;
                     }
+                } else if (subRes.status === 429 || subRes.status === 403) {
+                    // Reddit is blocking our server, safer to not charge for an image that might fail to post
+                    showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit). Skipping image for safety.`, 'error');
+                    setIncludeImage(false);
+                    return;
                 }
             } catch (err) {
                 console.warn('Subreddit image support check failed (ignoring)', err);
@@ -511,7 +518,6 @@ export const ContentArchitect: React.FC = () => {
                 if (subRes.ok) {
                     const subData = await subRes.json();
                     const data = subData.data || {};
-                    // Explicit block check: allow_images, allow_media, or submission_type
                     const isBlocked = data.allow_images === false ||
                         data.allow_images === 0 ||
                         data.allow_media === false ||
@@ -529,6 +535,16 @@ export const ContentArchitect: React.FC = () => {
                         }
                         mode = 'text'; // Fallback to text
                     }
+                } else if (subRes.status === 429 || subRes.status === 403 || subRes.status === 500) {
+                    // Fail-safe: if we can't check, we don't dare generate an image
+                    showToast(`Unable to verify r/${postData.subreddit} support. Image skipped to save credits.`, 'error');
+                    isImageRequested = false;
+                    setIncludeImage(false);
+                    if (mode === 'image') {
+                        setIsGenerating(false);
+                        return;
+                    }
+                    mode = 'text';
                 }
             } catch (err) {
                 console.warn('Subreddit image support check failed (ignoring)', err);

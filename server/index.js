@@ -471,26 +471,6 @@ app.use(helmet({
 app.use(cors());
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
-// --- Subreddit Info Proxy ---
-app.get('/api/subreddit/about', async (req, res) => {
-  try {
-    let sub = req.query.name || '';
-    sub = sub.replace(/^r\//, '').replace(/\/$/, '').trim();
-    if (!sub) return res.status(400).json({ error: 'Subreddit name required' });
-
-    const response = await fetch(`https://www.reddit.com/r/${sub}/about.json`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RedigoServerProxy/1.0' }
-    });
-    if (!response.ok) throw new Error('Reddit API error');
-
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    console.error('Subreddit fetch error:', err);
-    res.status(500).json({ error: 'Failed to fetch subreddit info' });
-  }
-});
-
 // --- Reddit API Rate Limiters (Compliance) ---
 // Per Reddit's Responsible Builder Policy, clients must respect rate limits.
 
@@ -541,7 +521,9 @@ const generateLimiter = rateLimit({
   windowMs: 60 * 1000,       // 1 minute
   max: 20,                   // 20 AI generation requests per user per minute
   keyGenerator: (req) => {
-    return (req.body && req.body.userId) ? String(req.body.userId) : (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1');
+    // Correctly handle IPv6 and userId to prevent ERR_ERL_KEY_GEN_IPV6
+    if (req.body && req.body.userId) return String(req.body.userId);
+    return req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -4625,6 +4607,27 @@ async function performSemanticAnalysis(posts) {
 }
 
 // Analyze Reddit Data (triggered by extension-based fetching)
+// Proxy for downloading images (bypasses CORS)
+app.get('/api/proxy-download', async (req, res) => {
+  try {
+    const { url, filename } = req.query;
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+
+    const contentType = response.headers.get('content-type') || 'image/png';
+    const buffer = await response.arrayBuffer();
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename || 'download.png'}"`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('[Proxy Download Error]', err);
+    res.status(500).json({ error: 'Failed to download image through proxy' });
+  }
+});
+
 app.post('/api/reddit/analyze', async (req, res) => {
   try {
     const { rawJson, keywords, userId } = req.body;
@@ -4783,11 +4786,19 @@ app.get('/api/subreddit/about', async (req, res) => {
     });
 
     if (!response.ok) {
-      console.warn(`[Subreddit Check] Reddit API returned ${response.status} for r/${cleanName}`);
-      return res.status(response.status).json({ error: 'Failed to fetch subreddit data from Reddit' });
+      const errorText = await response.text();
+      console.warn(`[Subreddit Check] Reddit API returned ${response.status} for r/${cleanName}: ${errorText.substring(0, 100)}`);
+      // If 404 or 403, it's definitely not going to allow images we can post to
+      if (response.status === 404 || response.status === 403) {
+        return res.json({ data: { allow_images: false, allow_media: false, submission_type: 'self', error: 'Subreddit not accessible' } });
+      }
+      return res.status(response.status).json({ error: 'Subreddit data inaccessible' });
     }
 
     const data = await response.json();
+    if (!data || !data.data) {
+      return res.json({ data: { allow_images: false, allow_media: false, submission_type: 'self', error: 'Invalid Reddit data' } });
+    }
     res.json(data);
   } catch (err) {
     console.error('[Subreddit About Error]', err);
