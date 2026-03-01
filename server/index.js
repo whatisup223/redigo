@@ -2834,19 +2834,6 @@ app.post('/api/user/announcements/dismiss', async (req, res) => {
 
 // ─── Analytics & Extension Endpoints ─────────────────────────────────────────
 
-app.post('/api/user/update-karma', async (req, res) => {
-  try {
-    const { userId, karma } = req.body;
-    if (!userId) return res.status(400).json({ error: 'User ID is required' });
-
-    await User.updateOne({ id: userId.toString() }, { $set: { karma: Number(karma) || 0 } });
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Update karma error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 app.post('/api/outreach/confirm', async (req, res) => {
   try {
     const { itemId, userId, type, permalink, redditCommentId } = req.body;
@@ -2869,30 +2856,6 @@ app.post('/api/outreach/confirm', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Confirm outreach error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/outreach/update-stats', async (req, res) => {
-  try {
-    const { itemId, userId, type, ups, replies } = req.body;
-    if (!itemId || !userId) return res.status(400).json({ error: 'Missing fields' });
-
-    const Model = type === 'post' ? RedditPost : RedditReply;
-    await Model.updateOne(
-      { id: itemId.toString(), userId: userId.toString() },
-      {
-        $set: {
-          status: 'Active',
-          ups: Number(ups) || 0,
-          replies: Number(replies) || 0
-        }
-      }
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Update stats error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -4432,134 +4395,31 @@ app.get('/api/user/posts', async (req, res) => {
   }
 });
 
-// Sync History for Posts with Real Reddit Data
+// Sync History for Posts (Local Database Only)
 app.get('/api/user/posts/sync', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const user = await User.findOne({ id: userId.toString() });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const userPosts = await RedditPost.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
-
-    if (userPosts.length > 0) {
-      const token = req.headers['x-redigo-token'];
-      if (token) {
-        // Collect all valid IDs, ensuring t3_ prefix for posts
-        const ids = userPosts
-          .filter(r => r.redditCommentId)
-          .map(r => r.redditCommentId.startsWith('t3_') ? r.redditCommentId : `t3_${r.redditCommentId}`)
-          .join(',');
-
-        if (ids) {
-          const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'User-Agent': getDynamicUserAgent(userId, user.redditUsername)
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const liveItems = data.data?.children || [];
-
-            for (const child of liveItems) {
-              const liveData = child.data;
-              const entryIdMatch = liveData.name; // t3_xxxx
-              const shortId = liveData.id; // xxxx
-
-              // Determine status
-              let status = 'Sent';
-              if (liveData.removed_by_category) status = 'Removed';
-              else if (liveData.author === '[deleted]') status = 'Deleted';
-              else if (liveData.selftext === '[removed]') status = 'Removed';
-
-              await RedditPost.updateOne(
-                { $or: [{ redditCommentId: entryIdMatch }, { redditCommentId: shortId }] },
-                {
-                  $set: {
-                    ups: liveData.ups || 0,
-                    replies: liveData.num_comments || 0,
-                    status: status
-                  }
-                }
-              );
-            }
-          }
-        }
-      }
-    }
-
     const updatedHistory = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
   } catch (error) {
     console.error('[Reddit Post Sync Error]', error);
-    res.status(500).json({ error: 'Sync failed' });
+    res.status(500).json({ error: 'Fetch failed' });
   }
 });
 
-// Sync History with Real Reddit Data
+// Sync History for Replies (Local Database Only)
 app.get('/api/user/replies/sync', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const user = await User.findOne({ id: userId.toString() });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const userReplies = await RedditReply.find({ userId: userId.toString(), redditCommentId: { $ne: null } });
-
-    if (userReplies.length > 0) {
-      const token = req.headers['x-redigo-token'];
-      if (token) {
-        const ids = userReplies
-          .filter(r => r.redditCommentId)
-          .map(r => r.redditCommentId.startsWith('t1_') ? r.redditCommentId : `t1_${r.redditCommentId}`)
-          .join(',');
-
-        if (ids) {
-          const response = await fetch(`https://oauth.reddit.com/api/info?id=${ids}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'User-Agent': getDynamicUserAgent(userId, user.redditUsername)
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const liveItems = data.data?.children || [];
-
-            for (const child of liveItems) {
-              const liveData = child.data;
-
-              // Determine status
-              let status = 'Sent';
-              if (liveData.removed_by_category) status = 'Removed';
-              else if (liveData.author === '[deleted]') status = 'Deleted';
-              else if (liveData.body === '[removed]') status = 'Removed';
-
-              await RedditReply.updateOne(
-                { redditCommentId: liveData.name },
-                {
-                  $set: {
-                    ups: liveData.ups || 0,
-                    replies: (liveData.replies?.data?.children?.length) || 0,
-                    status: status
-                  }
-                }
-              );
-            }
-          }
-        }
-      }
-    }
-
     const updatedHistory = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
   } catch (error) {
-    console.error('[Reddit Sync Error] Non-critical sync failure:', error);
-    res.status(500).json({ error: 'Sync failed' });
+    console.error('[Reddit Sync Error]', error);
+    res.status(500).json({ error: 'Fetch failed' });
   }
 });
 

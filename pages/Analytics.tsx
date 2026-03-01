@@ -109,59 +109,18 @@ export const Analytics: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
 
-  // Listen for Live Stats from Extension
+  // No longer needed: Live Stats listeners removed in favor of manual confirmation
   useEffect(() => {
-    const handleExtMessage = (event: MessageEvent) => {
-      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'STATS_RESPONSE') {
-        const { itemId, ups, replies, success } = event.data.payload;
-        if (success) {
-          setHistory(prev => prev.map(h => h.id === itemId ? { ...h, ups, replies, status: 'Active' } : h));
-          setPostsHistory(prev => prev.map(p => p.id === itemId ? { ...p, ups, replies, status: 'Active' } : p));
-          showToast('Live stats updated! 🚀', 'success');
-        }
-        setVerifyingIds(prev => {
-          const next = new Set(prev);
-          next.delete(itemId);
-          return next;
-        });
-      }
-    };
-    window.addEventListener('message', handleExtMessage);
-    return () => window.removeEventListener('message', handleExtMessage);
-  }, []);
+    fetchData();
+  }, [user?.id]);
 
   const handleVerify = (item: any) => {
-    if (!item.postUrl) {
-      showToast('No URL found for this item.', 'error');
-      return;
-    }
-
-    if (item.postUrl.includes('/submit')) {
-      showToast('Please ensure you clicked "Post" on the Reddit page!', 'warning');
+    // Manual fallback for verification if needed
+    if (item.postUrl) {
       window.open(item.postUrl, '_blank');
-      return;
+    } else {
+      showToast('No URL found.', 'error');
     }
-
-    setVerifyingIds(prev => new Set(prev).add(item.id));
-    window.postMessage({
-      source: 'REDIGO_WEB_APP',
-      type: 'FETCH_STATS',
-      itemId: item.id,
-      url: item.postUrl,
-      redditType: activeTab === 'posts' ? 'post' : 'comment'
-    }, '*');
-
-    // Timeout fallback
-    setTimeout(() => {
-      setVerifyingIds(prev => {
-        const next = new Set(prev);
-        if (next.has(item.id)) {
-          next.delete(item.id);
-          showToast('Verification timed out. Is extension active?', 'error');
-        }
-        return next;
-      });
-    }, 10000);
   };
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
@@ -188,14 +147,7 @@ export const Analytics: React.FC = () => {
       const tracksRes = await fetch(`/api/tracking/user/${user.id}?_=${ts}`);
       if (tracksRes.ok) {
         const tracksData = await tracksRes.json();
-        console.log(`[DEBUG] Received ${tracksData.length} links for user ${user.id}`);
         setTrackingLinks(Array.isArray(tracksData) ? tracksData : []);
-      }
-
-      const profileRes = await fetch(`/api/user/reddit/profile?userId=${user.id}${selectedAccount !== 'all' ? `&username=${selectedAccount}` : ''}&_=${ts}`);
-      if (profileRes.ok) {
-        const profileData = await profileRes.json();
-        setProfile(profileData);
       }
 
 
@@ -898,31 +850,31 @@ export const Analytics: React.FC = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard
-          label={activeTab === 'comments' ? "Total Upvotes" : (activeTab === 'posts' ? "Post Karma" : "Active Links")}
-          value={activeTab === 'links' ? activeLinks.length : totalUpvotes.toLocaleString()}
-          trend={activeTab === 'links' ? `${trackingLinks.length} Total` : "+12.5%"}
-          icon={activeTab === 'links' ? BarChart3 : (activeTab === 'comments' ? MessageSquare : PenTool)}
+          label={activeTab === 'links' ? "Active Tracking Links" : "Total Outreach"}
+          value={activeTab === 'links' ? activeLinks.length : activeHistory.length}
+          trend="Confirmed"
+          icon={activeTab === 'links' ? Link2 : (activeTab === 'comments' ? MessageSquare : PenTool)}
           color={activeTab === 'links' ? "bg-blue-600 text-white" : "bg-orange-600 text-white"}
         />
         <StatCard
-          label={activeTab === 'links' ? "Avg Click Rate" : "Account Authority"}
-          value={activeTab === 'links' ? (activeLinks.length > 0 ? (totalClicks / activeLinks.length).toFixed(1) : "0.0") : (profile ? (activeTab === 'comments' ? (profile.commentKarma || 0).toLocaleString() : (profile.linkKarma || profile.totalKarma || 0).toLocaleString()) : "---")}
-          trend={getGrowthTrend(totalUpvotes || totalClicks)}
-          icon={activeTab === 'links' ? TrendingUp : Users}
-          color={activeTab === 'links' ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"}
+          label="Outreach Success"
+          value={activeHistory.filter(h => h.status === 'Sent' || h.status === 'Active').length}
+          trend="Real-time"
+          icon={CheckCircle2}
+          color="bg-emerald-600 text-white"
         />
         <StatCard
           label="Total Link Clicks"
           value={totalClicks.toLocaleString()}
-          trend="Real-time"
+          trend="Impact"
           icon={MousePointer2}
           color="bg-indigo-600 text-white"
         />
         <StatCard
-          label="Target Communities"
+          label="Active Communities"
           value={activeSubreddits}
-          trend="Active"
-          icon={ExternalLink}
+          trend="Spread"
+          icon={Globe}
           color="bg-slate-900 text-white"
         />
       </div>
@@ -1146,14 +1098,13 @@ export const Analytics: React.FC = () => {
                       ) : (
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            disabled={verifyingIds.has(row.id)}
                             onClick={() => handleVerify(row)}
-                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Active' ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white' : (row.status === 'Pending' ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50')}`}
-                            title={row.status === 'Pending' ? 'Publish from Reddit first' : 'Verify on Reddit Live'}
+                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Sent' || row.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50'}`}
+                            title="View on Reddit"
                           >
-                            {verifyingIds.has(row.id) ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                            <ExternalLink size={14} />
                             <span className="hidden xl:inline">
-                              {row.status === 'Active' ? 'Refreshed' : (row.status === 'Pending' ? 'Pending' : 'Verify')}
+                              {row.status === 'Sent' || row.status === 'Active' ? 'Confirmed' : 'Verify'}
                             </span>
                           </button>
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
