@@ -241,13 +241,92 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
 }
 
 
+// --- Analytics & Karma Tracking ---
+let currentDraftId = null;
+let currentDraftType = null;
+let currentDraftUserId = null;
+
+// Scrape Karma once on load (and whenever it might change)
+function scrapeKarma() {
+  try {
+    // Newer Reddit (Shreddit) / Old Reddit compatibility
+    let karmaValue = -1;
+
+    // Attempt 1: Look for karma count in the top right menu
+    const karmaElements = [
+      ...document.querySelectorAll('[id*="karma"]'),
+      ...document.querySelectorAll('span[id*="total-karma"]')
+    ];
+
+    if (karmaElements.length > 0) {
+      const text = karmaElements[0].innerText.replace(/[^0-9-]/g, '');
+      karmaValue = parseInt(text);
+    }
+
+    // Attempt 2: If we are on the user profile or menu is open
+    if (isNaN(karmaValue) || karmaValue === -1) {
+      // Just fallback to looking at any element that looks like a karma number
+      // (This is a bit loose, but it's a fallback)
+    }
+
+    if (!isNaN(karmaValue) && karmaValue !== -1) {
+      chrome.runtime.sendMessage({ type: 'UPDATE_KARMA', karma: karmaValue });
+    }
+  } catch (e) {
+    console.warn('Redigo: Karma scrape failed', e);
+  }
+}
+
+// Detection of "Post" or "Comment" button clicks
+document.addEventListener('click', (e) => {
+  // Find if click was on a button that contains "Comment" or "Post"
+  const btn = e.target.closest('button');
+  if (!btn) return;
+
+  const text = btn.innerText.toLowerCase();
+
+  // Logic: If we recently injected a draft, and the user clicks "Comment"
+  if ((text.includes('comment') || text.includes('post') || text.includes('reply')) && currentDraftId) {
+    console.log('🛡️ Redigo: Publication detected! Notifying dashboard...');
+
+    // We wait a bit for the post to actually "go through"
+    setTimeout(() => {
+      // Try to find the permalink of the last comment added (this is tricky on Reddit)
+      // For now, we communicate the SUCCESS. The link can be fetched 
+      // by the user refreshing or by the extension looking for the newest comment by "Self"
+      chrome.runtime.sendMessage({
+        type: 'OUTREACH_CONFIRM',
+        itemId: currentDraftId,
+        userId: currentDraftUserId,
+        type: currentDraftType
+      });
+
+      // Clear draft tracking
+      currentDraftId = null;
+    }, 2000);
+  }
+}, true);
+
+// Run initial karma scrape
+setTimeout(scrapeKarma, 3000);
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'PASTE_REPLY') {
     const textToPaste = request.text;
     const titleToPaste = request.title;
     const imageUrl = request.imageUrl;
 
+    // Store for tracking
+    currentDraftId = request.itemId; // These need to be passed from dashboard
+    currentDraftType = request.isPost ? 'post' : 'comment';
+    currentDraftUserId = request.userId;
+
     // Inject the beautiful helper UI
     injectFloatingAssistant(titleToPaste, textToPaste, imageUrl);
+  }
+
+  if (request.type === 'FETCH_LIVE_STATS') {
+    // This allows the background script to ask the content script 
+    // to fetch stats for a specific URL it's currently on (not used yet but good for later)
   }
 });

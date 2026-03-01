@@ -41,7 +41,8 @@ import {
   Rocket,
   Star,
   Tag,
-  Archive
+  Archive,
+  ShieldCheck
 } from 'lucide-react';
 import {
   LineChart,
@@ -106,6 +107,52 @@ export const Analytics: React.FC = () => {
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
+
+  // Listen for Live Stats from Extension
+  useEffect(() => {
+    const handleExtMessage = (event: MessageEvent) => {
+      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'STATS_RESPONSE') {
+        const { itemId, ups, replies, success } = event.data.payload;
+        if (success) {
+          setHistory(prev => prev.map(h => h.id === itemId ? { ...h, ups, replies, status: 'Active' } : h));
+          setPostsHistory(prev => prev.map(p => p.id === itemId ? { ...p, ups, replies, status: 'Active' } : p));
+          showToast('Live stats updated! 🚀', 'success');
+        }
+        setVerifyingIds(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('message', handleExtMessage);
+    return () => window.removeEventListener('message', handleExtMessage);
+  }, []);
+
+  const handleVerify = (item: any) => {
+    if (!item.postUrl) return;
+    setVerifyingIds(prev => new Set(prev).add(item.id));
+    window.postMessage({
+      source: 'REDIGO_WEB_APP',
+      type: 'FETCH_STATS',
+      itemId: item.id,
+      url: item.postUrl,
+      redditType: activeTab === 'posts' ? 'post' : 'comment'
+    }, '*');
+
+    // Timeout fallback
+    setTimeout(() => {
+      setVerifyingIds(prev => {
+        const next = new Set(prev);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+          showToast('Verification timed out. Is extension active?', 'error');
+        }
+        return next;
+      });
+    }, 10000);
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -1088,6 +1135,15 @@ export const Analytics: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            disabled={verifyingIds.has(row.id)}
+                            onClick={() => handleVerify(row)}
+                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Active' ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50'}`}
+                            title="Verify on Reddit Live"
+                          >
+                            {verifyingIds.has(row.id) ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                            <span className="hidden xl:inline">{row.status === 'Active' ? 'Refreshed' : 'Verify'}</span>
+                          </button>
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
                           <button onClick={() => handleDeleteReddit(row.id, row.redditCommentId, activeTab === 'posts' ? 'post' : 'reply')} className="p-2.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all title" title="Delete from Reddit"><Trash2 size={16} /></button>
                           <a href={row.postUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>

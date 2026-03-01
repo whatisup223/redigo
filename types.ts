@@ -12,6 +12,7 @@ export interface RedditPost {
 }
 
 export interface GeneratedReply {
+  id: string;
   comment: string;
   tone: string;
   actionable_points: string[];

@@ -46,7 +46,8 @@ const UserSchema = new mongoose.Schema({
     isSuspended: { type: Boolean, default: false },
     extensionInstalled: { type: Boolean, default: false },
     lastExtensionPing: Date,
-    redditUsername: String
+    redditUsername: String,
+    karma: { type: Number, default: 0 }
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const AnnouncementSchema = new mongoose.Schema({

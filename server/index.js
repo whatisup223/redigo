@@ -2832,6 +2832,71 @@ app.post('/api/user/announcements/dismiss', async (req, res) => {
   }
 });
 
+// ─── Analytics & Extension Endpoints ─────────────────────────────────────────
+
+app.post('/api/user/update-karma', async (req, res) => {
+  try {
+    const { userId, karma } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    await User.updateOne({ id: userId.toString() }, { $set: { karma: Number(karma) || 0 } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update karma error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/outreach/confirm', async (req, res) => {
+  try {
+    const { itemId, userId, type, permalink, redditCommentId } = req.body;
+    if (!itemId || !userId) return res.status(400).json({ error: 'Item ID and User ID are required' });
+
+    const Model = type === 'post' ? RedditPost : RedditReply;
+    await Model.updateOne(
+      { id: itemId.toString(), userId: userId.toString() },
+      {
+        $set: {
+          status: 'Sent',
+          postUrl: permalink,
+          redditCommentId: redditCommentId || '',
+          deployedAt: new Date()
+        }
+      }
+    );
+
+    addSystemLog('SUCCESS', `Publication confirmed for ${type} ${itemId} by user ${userId}`, { permalink });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Confirm outreach error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/outreach/update-stats', async (req, res) => {
+  try {
+    const { itemId, userId, type, ups, replies } = req.body;
+    if (!itemId || !userId) return res.status(400).json({ error: 'Missing fields' });
+
+    const Model = type === 'post' ? RedditPost : RedditReply;
+    await Model.updateOne(
+      { id: itemId.toString(), userId: userId.toString() },
+      {
+        $set: {
+          status: 'Active',
+          ups: Number(ups) || 0,
+          replies: Number(replies) || 0
+        }
+      }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update stats error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Admin Logs
 app.get('/api/admin/logs', adminAuth, async (req, res) => {
   try {
@@ -3933,7 +3998,40 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     // Check low credits (fire and forget)
     checkLowCredits(updatedUser).catch(e => console.error('Low credits check error:', e));
 
+    // ── NEW: Pre-save as Pending for Analytics ──────────────────────────────
+    let itemId = null;
+    try {
+      const id = Math.random().toString(36).substring(2, 15);
+      itemId = id;
+      if (type === 'comment') {
+        await RedditReply.create({
+          id,
+          userId: userId.toString(),
+          postId: context?.postId,
+          postTitle: context?.postTitle || 'Reddit Post',
+          postUrl: context?.postUrl || context?.url,
+          subreddit: context?.subreddit,
+          comment: text,
+          status: 'pending',
+          createdAt: new Date()
+        });
+      } else if (type === 'post') {
+        await RedditPost.create({
+          id,
+          userId: userId.toString(),
+          subreddit: context?.subreddit,
+          postTitle: context?.title || 'Reddit Post',
+          postContent: text,
+          status: 'pending',
+          createdAt: new Date()
+        });
+      }
+    } catch (dbErr) {
+      console.error('[/api/generate] Error pre-saving item:', dbErr);
+    }
+
     res.json({
+      id: itemId, // Return the DB ID
       text,
       credits: updatedUser.credits,
       dailyUsage: updatedUser.dailyUsage,

@@ -244,7 +244,7 @@ Return STRICT JSON (no markdown code blocks, no extra text outside the JSON):
     const jsonStr = text.substring(startIndex, endIndex + 1);
     const result = JSON.parse(jsonStr) as GeneratedReply;
 
-    return { ...result, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
+    return { ...result, id: data.id, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
   } catch (error) {
     console.error("Error generating reply via backend:", error);
     throw error;
@@ -397,7 +397,7 @@ Return STRICT JSON (no markdown code blocks, no extra text):
     const jsonStr = text.substring(startIndex, endIndex + 1);
     const result = JSON.parse(jsonStr);
 
-    return { ...result, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
+    return { ...result, id: data.id, credits: data.credits, dailyUsagePoints: data.dailyUsagePoints, dailyUsage: data.dailyUsage };
   } catch (error) {
     console.error("Error generating post:", error);
     throw error;

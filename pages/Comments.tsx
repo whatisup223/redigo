@@ -689,6 +689,7 @@ export const Comments: React.FC = () => {
       window.postMessage({
         source: 'REDIGO_WEB_APP',
         type: 'REDIGO_DEPLOY',
+        itemId: generatedReply?.id, // Link back to DB item
         text: editedComment,
         imageUrl: commentImageUrl || undefined,
         targetUrl: targetUrl

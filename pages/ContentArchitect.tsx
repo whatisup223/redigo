@@ -108,6 +108,7 @@ export const ContentArchitect: React.FC = () => {
         content: '',
         imagePrompt: '',
         imageUrl: '',
+        id: '', // DB Link ID
         productMention: '',
         productUrl: '',
         description: '',
@@ -614,6 +615,7 @@ export const ContentArchitect: React.FC = () => {
 
             setPostData(prev => ({
                 ...prev,
+                id: generated.id,
                 title: generated.title,
                 content: generated.content,
                 imagePrompt: generated.imagePrompt,
@@ -671,6 +673,7 @@ export const ContentArchitect: React.FC = () => {
             window.postMessage({
                 source: 'REDIGO_WEB_APP',
                 type: 'REDIGO_DEPLOY',
+                itemId: postData.id,
                 title: postData.title,
                 text: postData.content,
                 imageUrl: postData.imageUrl,

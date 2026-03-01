@@ -61,6 +61,13 @@ window.addEventListener('message', (event) => {
         // Capture userId for heartbeat
         if (event.data.userId) {
             activeUserId = event.data.userId;
+            const token = localStorage.getItem('token');
+
+            // Sync with extension storage for background use
+            chrome.storage.local.set({
+                redigo_user_id: activeUserId,
+                redigo_token: token
+            });
 
             // Immediate heartbeat
             sendHeartbeat(activeUserId);
@@ -83,6 +90,8 @@ window.addEventListener('message', (event) => {
             chrome.runtime.sendMessage(
                 {
                     type: 'REDIGO_DEPLOY',
+                    itemId: event.data.itemId, // New: Link back to DB item
+                    userId: activeUserId,
                     text: event.data.text,
                     title: event.data.title,
                     imageUrl: event.data.imageUrl,
@@ -101,6 +110,29 @@ window.addEventListener('message', (event) => {
             window.postMessage({ source: 'REDIGO_EXT', type: 'CONTEXT_INVALIDATED', error: 'Please refresh the page.' }, '*');
         }
     }
+
+    // ── Handle Stats Fetch (On-Demand) ──────────────────────────────────────
+    if (event.data.type === 'FETCH_STATS') {
+        try {
+            const { itemId, redditType, url } = event.data;
+            chrome.runtime.sendMessage(
+                {
+                    type: 'FETCH_REDDIT_STATS',
+                    itemId,
+                    itemType: redditType,
+                    url
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        // silently fail
+                    } else {
+                        window.postMessage({ source: 'REDIGO_EXT', type: 'STATS_RESPONSE', payload: response }, '*');
+                    }
+                }
+            );
+        } catch (e) { }
+    }
+
     // ── Handle Search (Fetching posts via Extension) ────────────────────────
     if (event.data.type === 'REDDIT_SEARCH') {
         try {
