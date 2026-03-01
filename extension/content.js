@@ -304,10 +304,10 @@ document.addEventListener('click', (e) => {
       attempts++;
       const currentUrl = window.location.href;
 
-      // If URL changed and no longer on /submit, or if we've waited 6s
-      if ((currentUrl !== originalUrl && !currentUrl.includes('/submit')) || attempts > 12) {
+      // If URL changed and no longer on /submit, OR if it's a comment (not on /submit)
+      if (!currentUrl.includes('/submit')) {
         clearInterval(pollInterval);
-        console.log('🛡️ Redigo: Capturing final URL:', currentUrl);
+        console.log('🛡️ Redigo: Success! Capturing live URL:', currentUrl);
 
         chrome.runtime.sendMessage({
           type: 'OUTREACH_CONFIRM',
@@ -318,6 +318,10 @@ document.addEventListener('click', (e) => {
         });
 
         if (currentDraftId === checkId) currentDraftId = null;
+      } else if (attempts > 12) {
+        // Timed out and still on /submit - User probably had an error or cancelled
+        clearInterval(pollInterval);
+        console.log('🛡️ Redigo: Publication possibly failed or still in progress. Not confirming.');
       }
     }, 500); // Check every 500ms
   }
