@@ -186,9 +186,12 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
         </button>
       ` : ''}
       
-      <div style="font-size: 11px; color:#94a3b8; text-align:center; display:flex; gap: 6px; align-items:center; justify-content:center; margin-top:6px; font-weight:600;">
-         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-         Click to copy, then paste in Reddit.
+      <div style="font-size: 11px; color:#94a3b8; text-align:center; display:flex; flex-direction:column; gap: 4px; align-items:center; justify-content:center; margin-top:6px; font-weight:600;">
+         <div style="display:flex; gap:6px; align-items:center;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <span>Click to copy, then paste in Reddit.</span>
+         </div>
+         <div style="color:#ea580c; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;">💡 Use "Markdown Mode" on Reddit for links</div>
       </div>
     </div>
   `;
