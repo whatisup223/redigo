@@ -16,6 +16,7 @@ export interface GeneratedReply {
   tone: string;
   actionable_points: string[];
   keywords: string[];
+  imagePrompt?: string;
 }
 
 export interface ScheduledPost {

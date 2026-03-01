@@ -502,13 +502,13 @@ export const Comments: React.FC = () => {
     }
   };
 
-  const handleGenerate = async (post: any, customSettings?: any) => {
+  const handleGenerate = async (post: any, customSettings?: any, mode: 'text' | 'both' | 'fresh' = 'fresh') => {
     if (!user?.id) return;
 
     // --- Extension Check ---
     const needsCheck = !isExtensionActive();
     if (needsCheck && !isForcedRef.current) {
-      setPendingAction(() => () => handleGenerate(post, customSettings));
+      setPendingAction(() => () => handleGenerate(post, customSettings, mode));
       setShowExtensionWarning(true);
       return;
     }
@@ -539,11 +539,16 @@ export const Comments: React.FC = () => {
       return;
     }
 
+    // Only clear everything if it's a fresh generation or explicit 'both' regen
+    const shouldClearImage = mode === 'both' || mode === 'fresh';
+
     setSelectedPost(post);
     setIsGenerating(true);
     setGeneratedReply(null);
-    setCommentImageUrl('');
-    setCommentImagePrompt('');
+    if (shouldClearImage) {
+      setCommentImageUrl('');
+      setCommentImagePrompt('');
+    }
     setIsWizardOpen(false);
 
     try {
@@ -1018,8 +1023,11 @@ export const Comments: React.FC = () => {
               <button
                 onClick={() => {
                   setShowRegenConfirm(false);
-                  if (regenMode === 'text' || regenMode === 'both') {
-                    handleGenerate(selectedPost!, { tone: activeTone });
+                  if (regenMode === 'both') {
+                    setIncludeImage(true);
+                    handleGenerate(selectedPost!, { tone: activeTone }, 'both');
+                  } else if (regenMode === 'text') {
+                    handleGenerate(selectedPost!, { tone: activeTone }, 'text');
                   } else if (regenMode === 'image' && commentImagePrompt) {
                     triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '');
                   }
@@ -1491,7 +1499,7 @@ export const Comments: React.FC = () => {
                             >
                               <RefreshCw size={11} /> Regen Text
                             </button>
-                            {(commentImageUrl || commentImagePrompt) && canGenerateImages && (
+                            {commentImageUrl && canGenerateImages && (
                               <button
                                 onClick={() => { setRegenMode('image'); setShowRegenConfirm(true); }}
                                 className="flex-1 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-500 hover:border-orange-200 hover:text-orange-600 transition-all flex items-center justify-center gap-1"
@@ -1504,12 +1512,16 @@ export const Comments: React.FC = () => {
                           {/* Image Generation Section */}
                           {canGenerateImages && (
                             <div className="bg-slate-50 rounded-2xl border border-slate-100 overflow-hidden">
+                              {/* Header with toggle */}
                               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                                 <div className="flex items-center gap-2">
                                   <div className="w-7 h-7 bg-slate-900 rounded-xl flex items-center justify-center">
                                     <ImageIcon size={13} className="text-white" />
                                   </div>
-                                  <p className="text-xs font-black text-slate-900">Image Companion</p>
+                                  <div>
+                                    <p className="text-xs font-black text-slate-900">Image Companion</p>
+                                    <p className="text-[9px] text-slate-400 font-medium">AI-generated · {costs.image} PTS</p>
+                                  </div>
                                 </div>
                                 <button
                                   onClick={() => setIncludeImage(v => !v)}
@@ -1521,29 +1533,34 @@ export const Comments: React.FC = () => {
 
                               {includeImage && (
                                 <div className="p-4 space-y-3">
-                                  {/* Image not yet generated */}
-                                  {!commentImageUrl && !isGeneratingImage && (
-                                    <div className="space-y-2">
-                                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Image Prompt</p>
-                                      <textarea
-                                        rows={2}
-                                        value={commentImagePrompt}
-                                        onChange={(e) => setCommentImagePrompt(e.target.value)}
-                                        placeholder="Describe an image to accompany this reply..."
-                                        className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:ring-2 focus:ring-orange-200 focus:border-orange-400 outline-none resize-none"
-                                      />
-                                      <button
-                                        onClick={() => {
-                                          if (commentImagePrompt.trim()) {
-                                            triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '');
-                                          } else {
-                                            showToast('Enter an image prompt first.', 'error');
-                                          }
-                                        }}
-                                        className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
-                                      >
-                                        <ImageIcon size={12} /> Generate Image · {costs.image} PTS
-                                      </button>
+                                  {/* Waiting for AI prompt — no manual prompt allowed */}
+                                  {!commentImageUrl && !isGeneratingImage && !commentImagePrompt && (
+                                    <div className="flex items-center gap-3 py-2">
+                                      <div className="w-7 h-7 bg-slate-100 rounded-xl flex items-center justify-center">
+                                        <Sparkles size={13} className="text-slate-400" />
+                                      </div>
+                                      <p className="text-[10px] font-bold text-slate-400 leading-tight">
+                                        Image prompt is auto-generated.<br />
+                                        <span className="font-medium">Generate a reply first to activate.</span>
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Has prompt but image not yet generated (e.g. resumed draft) */}
+                                  {!commentImageUrl && !isGeneratingImage && commentImagePrompt && (
+                                    <div className="flex items-center gap-3 py-2">
+                                      <div className="w-7 h-7 bg-orange-50 rounded-xl flex items-center justify-center">
+                                        <ImageIcon size={13} className="text-orange-500" />
+                                      </div>
+                                      <div className="flex-1">
+                                        <p className="text-[10px] font-black text-slate-600">Prompt ready — click to generate</p>
+                                        <button
+                                          onClick={() => triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '')}
+                                          className="mt-1.5 w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-1.5"
+                                        >
+                                          <ImageIcon size={11} /> Generate · {costs.image} PTS
+                                        </button>
+                                      </div>
                                     </div>
                                   )}
 
@@ -1587,14 +1604,6 @@ export const Comments: React.FC = () => {
                                       </div>
                                     </div>
                                   )}
-                                </div>
-                              )}
-
-                              {/* Plan lock */}
-                              {!canGenerateImages && (
-                                <div className="px-4 py-3 flex items-center gap-3">
-                                  <Crown size={14} className="text-slate-400" />
-                                  <p className="text-[10px] font-bold text-slate-400">Available on Pro plan <a href="/pricing" className="text-orange-600 hover:underline">Upgrade</a></p>
                                 </div>
                               )}
                             </div>
