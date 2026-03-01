@@ -1465,7 +1465,29 @@ export const Comments: React.FC = () => {
                             <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">You (Verified)</span>
                             <span className="text-[10px] text-slate-400">• typing...</span>
                           </div>
-                          <div className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-orange-200 pl-4">{editedComment}</div>
+                          <div className="text-sm text-slate-700 leading-relaxed italic border-l-4 border-orange-200 pl-4 whitespace-pre-wrap">
+                            {(() => {
+                              const parts = editedComment.split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g);
+                              return parts.map((part, i) => {
+                                const match = part.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/);
+                                if (match) {
+                                  return (
+                                    <a
+                                      key={i}
+                                      href={match[2]}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-orange-600 hover:underline font-bold"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {match[1]}
+                                    </a>
+                                  );
+                                }
+                                return part;
+                              });
+                            })()}
+                          </div>
                         </div>
 
                         {/* Editor */}

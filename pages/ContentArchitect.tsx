@@ -1636,7 +1636,29 @@ export const ContentArchitect: React.FC = () => {
                                     )}
                                     <div className="p-5 bg-slate-50 rounded-2xl space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Content Preview</p>
-                                        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap line-clamp-6">{postData.content}</p>
+                                        <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap line-clamp-6">
+                                            {(() => {
+                                                const parts = (postData.content || '').split(/(\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g);
+                                                return parts.map((part, i) => {
+                                                    const match = part.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/);
+                                                    if (match) {
+                                                        return (
+                                                            <a
+                                                                key={i}
+                                                                href={match[2]}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-orange-600 hover:underline font-bold"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                {match[1]}
+                                                            </a>
+                                                        );
+                                                    }
+                                                    return part;
+                                                });
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
 
