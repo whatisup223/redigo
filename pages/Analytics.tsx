@@ -168,6 +168,41 @@ export const Analytics: React.FC = () => {
     }, 8000);
   };
 
+  const handleResumeOutreach = (row: any) => {
+    if (!row.postUrl) {
+      showToast('No URL found.', 'error');
+      return;
+    }
+
+    let displayTitle = row.postTitle;
+    let displayContent = row.comment || row.postContent;
+    let displayImage = row.imageUrl;
+
+    // Handle JSON parsing for Posts if applicable
+    if (activeTab === 'posts' && row.postContent?.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(row.postContent);
+        displayTitle = parsed.title || displayTitle;
+        displayContent = parsed.content || displayContent;
+      } catch (e) { }
+    }
+
+    // Send the instruction to the extension bridge 
+    // This will open a new tab and show the floating assistant with the data
+    window.postMessage({
+      source: 'REDIGO_WEB_APP',
+      type: 'REDIGO_DEPLOY',
+      itemId: row.id,
+      text: displayContent,
+      title: displayTitle,
+      imageUrl: displayImage || undefined,
+      targetUrl: row.postUrl,
+      isPost: activeTab === 'posts'
+    }, '*');
+
+    showToast('Resuming deployment with Extension Assistant! 🚀', 'success');
+  };
+
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -709,9 +744,18 @@ export const Analytics: React.FC = () => {
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4 font-bold">
               <button onClick={() => setSelectedEntry(null)} className="px-8 py-4 bg-white border border-slate-200 rounded-[1.5rem] text-slate-600 hover:shadow-md transition-all active:scale-95">Close</button>
-              <a href={selectedEntry.postUrl} target="_blank" rel="noreferrer" className={`px-8 py-4 text-white rounded-[1.5rem] shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 ${selectedEntry.postUrl.includes('/submit') ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}>
-                {selectedEntry.postUrl.includes('/submit') ? 'Post on Reddit' : 'Verify on Live Reddit'} <ExternalLink size={18} />
-              </a>
+              <button
+                onClick={() => {
+                  if (selectedEntry.postUrl?.includes('/submit')) {
+                    handleResumeOutreach(selectedEntry);
+                  } else {
+                    window.open(selectedEntry.postUrl, '_blank');
+                  }
+                }}
+                className={`px-8 py-4 text-white rounded-[1.5rem] shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 ${selectedEntry.postUrl?.includes('/submit') ? 'bg-orange-600 shadow-orange-100' : 'bg-slate-900 shadow-slate-200'}`}
+              >
+                {selectedEntry.postUrl?.includes('/submit') ? 'Post on Reddit' : 'Verify on Live Reddit'} <ExternalLink size={18} />
+              </button>
             </div>
           </div>
         </div>
@@ -1196,15 +1240,19 @@ export const Analytics: React.FC = () => {
                           </button>
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
                           <button onClick={() => handleDeleteReddit(row.id, row.redditCommentId, activeTab === 'posts' ? 'post' : 'reply')} className="p-2.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all title" title="Delete from Reddit"><Trash2 size={16} /></button>
-                          <a
-                            href={row.postUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            onClick={() => {
+                              if (row.postUrl?.includes('/submit')) {
+                                handleResumeOutreach(row);
+                              } else {
+                                window.open(row.postUrl, '_blank');
+                              }
+                            }}
                             className={`p-2.5 rounded-xl transition-all shadow-sm ${row.postUrl?.includes('/submit') ? 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white' : 'bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
                             title={row.postUrl?.includes('/submit') ? 'Finish Posting on Reddit' : 'View Live Content'}
                           >
                             {row.postUrl?.includes('/submit') ? <PenTool size={16} /> : <ExternalLink size={16} />}
-                          </a>
+                          </button>
                         </div>
                       )}
                     </td>
