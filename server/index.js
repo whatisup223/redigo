@@ -788,17 +788,48 @@ app.use((req, res, next) => {
     if (res.statusCode >= 400) logLevel = 'WARN';
     if (res.statusCode >= 500) logLevel = 'ERROR';
 
-    // Don't flood logs with internal administrative requests or health checks
+    // Don't flood logs with internal administrative requests, settings reads, or health checks
     const noisyPaths = [
       '/api/health',
       '/api/admin/logs',
       '/api/admin/stats',
       '/api/admin/users',
+      '/api/admin/ai-settings',
+      '/api/admin/stripe-settings',
+      '/api/admin/paypal-settings',
+      '/api/admin/reddit-settings',
+      '/api/admin/smtp-settings',
+      '/api/admin/email-templates',
+      '/api/admin/payment-policy',
+      '/api/admin/cancellation-feedback',
+      '/api/admin/analytics',
+      '/api/user/brand-profile',
+      '/api/user/extension-ping',
+      '/api/config',
       '/api/plans'
     ];
-    if (noisyPaths.includes(path) || path.includes('/wp-admin') || path.includes('setup-config.php') || path.endsWith('.ico') || path.endsWith('.js') || path.endsWith('.css')) {
-      return;
+
+    // Skip if it's a noisy path OR a common static/probing path
+    const isNoisy = noisyPaths.includes(path) ||
+      path.startsWith('/api/admin/users/') ||
+      path.startsWith('/api/users/') ||
+      path.includes('/wp-admin') ||
+      path.includes('setup-config.php') ||
+      path.endsWith('.ico') ||
+      path.endsWith('.js') ||
+      path.endsWith('.css');
+
+    // Only log settings/data reads if they fail (>=400) or if they are NOT GET requests
+    if (isNoisy) {
+      // Skip background pings entirely if successful
+      if (path === '/api/user/extension-ping' && res.statusCode < 400) return;
+
+      // Skip GET requests for data reading if successful
+      if (req.method === 'GET' && res.statusCode < 400) return;
     }
+
+    // Also skip 304s for any GET request to save space, as it means nothing changed
+    if (req.method === 'GET' && res.statusCode === 304) return;
 
     addSystemLog(logLevel, `${req.method} ${path}`, {
       statusCode: res.statusCode,
