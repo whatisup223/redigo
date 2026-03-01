@@ -7,7 +7,6 @@ import {
     Image as ImageIcon,
     Send,
     ArrowRight,
-    Check,
     Target,
     Zap,
     RefreshCw,
@@ -402,12 +401,18 @@ export const ContentArchitect: React.FC = () => {
                 const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
                 if (subRes.ok) {
                     const subData = await subRes.json();
-                    if (subData.data && typeof subData.data.allow_images !== 'undefined') {
-                        if (!subData.data.allow_images) {
-                            showToast(`r/${postData.subreddit} does not allow images. Generation skipped.`, 'error');
-                            setIncludeImage(false);
-                            return; // Cannot generate image for this subreddit
-                        }
+                    const data = subData.data || {};
+                    // Explicit block check: allow_images, allow_media, or submission_type
+                    const isBlocked = data.allow_images === false ||
+                        data.allow_images === 0 ||
+                        data.allow_media === false ||
+                        data.allow_media === 0 ||
+                        data.submission_type === 'self';
+
+                    if (isBlocked) {
+                        showToast(`r/${postData.subreddit} does not allow images. Generation skipped.`, 'error');
+                        setIncludeImage(false);
+                        return;
                     }
                 }
             } catch (err) {
@@ -435,7 +440,7 @@ export const ContentArchitect: React.FC = () => {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, userId: user.id })
+                body: JSON.stringify({ prompt, userId: user.id, subreddit: postData.subreddit })
             });
 
             if (response.status === 402) {
@@ -505,14 +510,24 @@ export const ContentArchitect: React.FC = () => {
                 const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
                 if (subRes.ok) {
                     const subData = await subRes.json();
-                    if (subData.data && typeof subData.data.allow_images !== 'undefined') {
-                        if (!subData.data.allow_images) {
-                            showToast(`r/${postData.subreddit} does not allow images. Skipped to save credits!`, 'error');
-                            isImageRequested = false;
-                            setIncludeImage(false);
-                            if (mode === 'image') return; // Stop entirely if user wanted ONLY an image
-                            mode = 'text'; // Fallback to text so we don't charge for an image
+                    const data = subData.data || {};
+                    // Explicit block check: allow_images, allow_media, or submission_type
+                    const isBlocked = data.allow_images === false ||
+                        data.allow_images === 0 ||
+                        data.allow_media === false ||
+                        data.allow_media === 0 ||
+                        data.submission_type === 'self';
+
+                    if (isBlocked) {
+                        showToast(`r/${postData.subreddit} does not allow images. Skipped to save credits! 🛡️`, 'error');
+                        isImageRequested = false;
+                        setIncludeImage(false);
+                        if (mode === 'image') {
+                            setIsGenerating(false);
+                            setIsGeneratingImage(false);
+                            return;
                         }
+                        mode = 'text'; // Fallback to text
                     }
                 }
             } catch (err) {

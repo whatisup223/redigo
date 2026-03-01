@@ -3924,8 +3924,33 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
 
 app.post('/api/generate-image', async (req, res) => {
   try {
-    const { prompt, userId } = req.body;
+    const { prompt, userId, subreddit } = req.body;
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
+
+    // --- SUBREDDIT IMAGE SUPPORT CHECK (BACKEND PROTECTION) ---
+    if (subreddit) {
+      try {
+        const cleanSub = subreddit.replace(/^(\/)?r\//, '').trim();
+        const subAboutRes = await fetch(`https://www.reddit.com/r/${cleanSub}/about.json`, {
+          headers: { 'User-Agent': getDynamicUserAgent('system', 'guest') }
+        });
+        if (subAboutRes.ok) {
+          const subData = await subAboutRes.json();
+          const data = subData.data || {};
+          const isBlocked = data.allow_images === false ||
+            data.allow_images === 0 ||
+            data.allow_media === false ||
+            data.allow_media === 0 ||
+            data.submission_type === 'self';
+
+          if (isBlocked) {
+            return res.status(403).json({ error: `r/${cleanSub} does not allow image posts (Type: ${data.submission_type || 'Restricted'}). Process stopped to save your credits.` });
+          }
+        }
+      } catch (err) {
+        console.warn(`[Image Check] Background check failed for r/${subreddit}:`, err.message);
+      }
+    }
 
     if (!keyToUse || !keyToUse.startsWith('sk-')) {
       return res.status(400).json({ error: 'OpenAI API Key required for image generation.' });
@@ -4744,17 +4769,22 @@ app.post('/api/reddit/analyze', async (req, res) => {
 // Fetch Subreddit About (used for pre-flight checks like image support)
 app.get('/api/subreddit/about', async (req, res) => {
   try {
-    const { name } = req.query;
+    let { name } = req.query;
     if (!name) return res.status(400).json({ error: 'Subreddit name required' });
 
-    const response = await fetch(`https://www.reddit.com/r/${name}/about.json`, {
+    // Sanitize name: remove leading r/ or /r/
+    const cleanName = name.replace(/^(\/)?r\//, '').trim();
+    console.log(`[Subreddit Check] Checking r/${cleanName} (Original: ${name})`);
+
+    const response = await fetch(`https://www.reddit.com/r/${cleanName}/about.json`, {
       headers: {
         'User-Agent': getDynamicUserAgent('system', 'guest')
       }
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch subreddit data' });
+      console.warn(`[Subreddit Check] Reddit API returned ${response.status} for r/${cleanName}`);
+      return res.status(response.status).json({ error: 'Failed to fetch subreddit data from Reddit' });
     }
 
     const data = await response.json();
