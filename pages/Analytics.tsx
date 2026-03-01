@@ -131,7 +131,14 @@ export const Analytics: React.FC = () => {
   }, []);
 
   const handleVerify = (item: any) => {
-    if (!item.postUrl) return;
+    if (item.status === 'Pending') {
+      showToast('Publish this item first to verify stats!', 'error');
+      return;
+    }
+    if (!item.postUrl || item.postUrl.includes('/submit')) {
+      showToast('Live link not found. Try publishing again.', 'error');
+      return;
+    }
     setVerifyingIds(prev => new Set(prev).add(item.id));
     window.postMessage({
       source: 'REDIGO_WEB_APP',
@@ -1138,11 +1145,13 @@ export const Analytics: React.FC = () => {
                           <button
                             disabled={verifyingIds.has(row.id)}
                             onClick={() => handleVerify(row)}
-                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Active' ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50'}`}
-                            title="Verify on Reddit Live"
+                            className={`p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold ${row.status === 'Active' ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white' : (row.status === 'Pending' ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-slate-50 text-slate-400 hover:text-orange-600 hover:bg-orange-50')}`}
+                            title={row.status === 'Pending' ? 'Publish from Reddit first' : 'Verify on Reddit Live'}
                           >
                             {verifyingIds.has(row.id) ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                            <span className="hidden xl:inline">{row.status === 'Active' ? 'Refreshed' : 'Verify'}</span>
+                            <span className="hidden xl:inline">
+                              {row.status === 'Active' ? 'Refreshed' : (row.status === 'Pending' ? 'Pending' : 'Verify')}
+                            </span>
                           </button>
                           <button onClick={() => setSelectedEntry(row)} className="px-3 md:px-4 py-2 bg-slate-50 text-slate-600 rounded-xl font-bold hover:bg-slate-900 hover:text-white transition-all text-xs md:text-sm">Details</button>
                           <button onClick={() => handleDeleteReddit(row.id, row.redditCommentId, activeTab === 'posts' ? 'post' : 'reply')} className="p-2.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all title" title="Delete from Reddit"><Trash2 size={16} /></button>

@@ -75,8 +75,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     body: JSON.stringify({
                         itemId: request.itemId,
                         userId: request.userId,
-                        type: request.itemType, // Use corrected itemType
-                        permalink: sender.tab.url // Capture the URL where they clicked
+                        type: request.itemType,
+                        permalink: request.url || sender.tab.url // Prefer the URL from content script
                     })
                 }).catch(() => {
                     fetch('http://localhost:3001/api/outreach/confirm', {
@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             itemId: request.itemId,
                             userId: request.userId,
                             type: request.itemType,
-                            permalink: sender.tab.url
+                            permalink: request.url || sender.tab.url
                         })
                     }).catch(() => { });
                 });
@@ -132,9 +132,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     }
                 });
 
-                sendResponse({ success: true, ups, replies });
+                sendResponse({ success: true, itemId: request.itemId, ups, replies });
             })
-            .catch(e => sendResponse({ success: false, error: e.message }));
+            .catch(e => sendResponse({ success: false, itemId: request.itemId, error: e.message }));
         return true;
     }
 

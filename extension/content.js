@@ -298,7 +298,8 @@ document.addEventListener('click', (e) => {
         type: 'OUTREACH_CONFIRM',
         itemId: currentDraftId,
         userId: currentDraftUserId,
-        itemType: currentDraftType
+        itemType: currentDraftType,
+        url: window.location.href // Send the actual URL after redirect/click
       });
 
       // Clear draft tracking
