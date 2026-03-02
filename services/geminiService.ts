@@ -160,10 +160,11 @@ BRAND INTEGRATION (STRICT REQUIREMENT):
 - You MUST use the brand name: "${effectiveProfile.brandName}".
 - You MUST use the URL: "${effectiveWebsite}".
 - Mention "${effectiveProfile.brandName}" as a tool or discovery that helped you achieve a specific result.
-- Embed the link ONCE, naturally in a sentence: [${effectiveProfile.brandName}](${effectiveWebsite}).
+- Embed the link ONCE, naturally in a sentence using this format: "${effectiveProfile.brandName} (${effectiveWebsite})".
+- DO NOT use the [Name](URL) markdown syntax as it often fails to render in the default Reddit editor.
 - DO NOT hallucinate any other brand names, product names, or websites.
 - DO NOT use marketing superlatives (best, amazing, game-changer).
-- Frame it as an 'afterthought' or a 'side note': "By the way, I used [${effectiveProfile.brandName}](${effectiveWebsite}) to handle the X part of this, and it worked well."
+- Frame it as an 'afterthought' or a 'side note': "By the way, I used ${effectiveProfile.brandName} (${effectiveWebsite}) to handle the X part of this, and it worked well."
 - Redditgo is your internal identity, but your public recommendation is "${effectiveProfile.brandName}".`;
     } else if (hasBrand) {
       brandInstructions = `
@@ -175,8 +176,8 @@ BRAND INTEGRATION (STRICT REQUIREMENT):
     } else if (hasLink) {
       brandInstructions = `
 LINK INTEGRATION (STRICT REQUIREMENT):
-- Include ONE natural link using ONLY this URL: "${effectiveWebsite}".
-- Use natural anchor text: [this tool](${effectiveWebsite}) or [here](${effectiveWebsite}).
+- Include ONE natural link by just writing the URL: "${effectiveWebsite}".
+- Reddit will auto-link this URL. Do NOT use markdown brackets.
 - Embed it mid-sentence, not as a standalone or footer.
 - DO NOT mention any brand name if none was provided.`;
     } else {
@@ -314,11 +315,11 @@ BRAND INTEGRATION IN POST BODY (STRICT REQUIREMENT):
 - You MUST use the URL: "${effectiveWebsite}".
 - The post MUST feel like it is written by a community member, NOT by the brand itself.
 - Mention "${finalBrandName}" as a natural discovery or tool you found, not as a promotion.
-- Embed the link ONCE, naturally in the post body: [${finalBrandName}](${effectiveWebsite})
-- Anchor text = exact brand name. No exceptions.
+- Embed the link ONCE, naturally in the post body using this format: "${finalBrandName} (${effectiveWebsite})".
+- DO NOT use high-pressure names or raw markdown links [Name](URL).
 - DO NOT use any other brand names or websites.
-- GOOD: "After trying a bunch of things, [${finalBrandName}](${effectiveWebsite}) was the one that actually clicked for me."
-- BAD: "Try out our tool [${finalBrandName}](${effectiveWebsite})!" — this is promotional and will be flagged.`;
+- GOOD: "After trying a bunch of things, ${finalBrandName} (${effectiveWebsite}) was the one that actually clicked for me."
+- BAD: "Try out our tool ${finalBrandName}!" — this is promotional and will be flagged.`;
     } else if (hasBrand) {
       brandInstructions = `BRAND MENTION (STRICT): Reference "${finalBrandName}" once, casually, as something that worked for you. Do NOT use any other brand names or links.`;
     } else if (hasLink) {
