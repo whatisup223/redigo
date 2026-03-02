@@ -83,16 +83,42 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     });
   }
 
-  // --- Auto-scroll to comment if parentId exists ---
+  // --- Robust Auto-scroll to comment strategy ---
   if (currentDraftParentId) {
-    setTimeout(() => {
-      const commentEl = document.getElementById(currentDraftParentId);
-      if (commentEl) {
-        commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        commentEl.style.border = '2px solid #ea580c';
-        commentEl.style.borderRadius = '8px';
-      }
-    }, 2000);
+    const scrollToTarget = () => {
+      let attempts = 0;
+      const maxAttempts = 20; // Try for 10 seconds
+
+      const interval = setInterval(() => {
+        attempts++;
+        // Reddit uses t1_ID for comment element IDs
+        const targetId = currentDraftParentId.startsWith('t1_') ? currentDraftParentId : `t1_${currentDraftParentId}`;
+        const commentEl = document.getElementById(targetId) ||
+          document.querySelector(`[data-commentid="${currentDraftParentId}"]`) ||
+          document.querySelector(`a[name="${currentDraftParentId}"]`);
+
+        if (commentEl) {
+          clearInterval(interval);
+          commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          // Visual Highlighting with Animation
+          commentEl.style.transition = 'all 0.5s ease';
+          commentEl.style.outline = '4px solid #ea580c';
+          commentEl.style.outlineOffset = '2px';
+          commentEl.style.backgroundColor = '#fff7ed';
+          commentEl.style.borderRadius = '8px';
+          commentEl.style.boxShadow = '0 0 30px rgba(234, 88, 12, 0.3)';
+
+          console.log('🎯 Redigo: Target comment found and highlighted.');
+        } else if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          console.warn('🎯 Redigo: Could not find target comment after 10s.');
+        }
+      }, 500);
+    };
+
+    // Start searching after a short initial delay to let Reddit's JS settle
+    setTimeout(scrollToTarget, 1000);
   }
 
   const style = document.createElement('style');

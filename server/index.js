@@ -4935,17 +4935,30 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
         const genAI = new GoogleGenerativeAI(keyToUse);
         const model = genAI.getGenerativeModel({ model: aiSettings?.analyzerModel || 'gemini-1.5-flash' });
 
-        const prompt = `You are a Lead Intelligence agent. Analyze these 30 Reddit comments and extract only the ones where users are:
-1. Asking for help with a problem.
-2. Complaining about a competitor.
-3. Expressing a need for a specific solution.
+        const prompt = `You are a Lead Intelligence agent for a SaaS/Product growth tool. 
+Analyze these 30 Reddit comments and identify HIGH-INTENT leads. 
+A lead is someone who:
+1. Is explicitly asking for help with a specific problem.
+2. Is complaining about a deficiency in a competitor's product.
+3. Is asking for recommendations for a tool or service.
+4. Expresses a strong desire for a solution to a repetitive task.
 
-Comments: ${JSON.stringify(rawComments)}
+Comments Data: ${JSON.stringify(rawComments)}
 
-Return ONLY a JSON array: [ { "id": "comment_id", "opportunityScore": number, "reason": "brief reason" } ]`;
+Instructions:
+- Return ONLY a valid JSON array.
+- Each object must have: "id" (the comment id), "opportunityScore" (0-100), and "reason" (a SHARP, professional reason why this is a lead).
+- If no leads found, return an empty array [].
+- Do not include markdown formatting or explanations.
+
+Example Output Format:
+[ {"id": "k123", "opportunityScore": 85, "reason": "User is actively looking for an alternative to Slack for small teams."} ]`;
 
         const result = await model.generateContent(prompt);
+        if (!result.response) throw new Error('Empty response from Gemini');
         const text = result.response.text();
+        console.log('[Deep Scan AI Response]:', text);
+
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
           const analysis = JSON.parse(jsonMatch[0]);
@@ -4954,10 +4967,21 @@ Return ONLY a JSON array: [ { "id": "comment_id", "opportunityScore": number, "r
             if (scored) return { ...c, opportunityScore: scored.opportunityScore, reason: scored.reason };
             return null;
           }).filter(Boolean);
+        } else {
+          console.warn('[Deep Scan] No JSON array found in AI response');
+          throw new Error('Invalid AI response format');
         }
       } catch (aiErr) {
-        console.error('[Deep Scan] AI Analysis Error:', aiErr);
-        leads = rawComments.slice(0, 5).map(c => ({ ...c, opportunityScore: 50, reason: 'High engagement comment (AI Fallback)' }));
+        console.error('[Deep Scan] AI Analysis Error Detail:', {
+          message: aiErr.message,
+          stack: aiErr.stack,
+          aiSettings: { model: aiSettings?.analyzerModel, hasKey: !!keyToUse }
+        });
+        // Fallback: Pick top 3 by upvotes if AI fails
+        leads = rawComments
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3)
+          .map(c => ({ ...c, opportunityScore: 60, reason: 'High engagement comment (AI Analyze Failed)' }));
       }
     } else {
       leads = rawComments.slice(0, 5).map(c => ({ ...c, opportunityScore: 50, reason: 'High engagement comment (Manual Scan)' }));

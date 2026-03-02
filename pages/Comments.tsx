@@ -1565,9 +1565,11 @@ export const Comments: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const commentUrl = post.url.split('?')[0].replace(/\/$/, '') + '/' + comment.id;
                                 const pseudoPost = {
                                   ...post,
                                   id: comment.id,
+                                  url: commentUrl,
                                   title: `Replying to comment by u/${comment.author}`,
                                   selftext: comment.body,
                                   author: comment.author,
