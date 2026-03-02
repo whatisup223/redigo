@@ -130,6 +130,7 @@ export const Comments: React.FC = () => {
   const [showExtensionWarning, setShowExtensionWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
+  const [isScanning, setIsScanning] = useState<string | null>(null);
   const pingTimeoutRef = useRef<any>(null);
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
@@ -167,6 +168,17 @@ export const Comments: React.FC = () => {
         if (data.redditFetchCooldown) setTargetCooldown(data.redditFetchCooldown);
         if (data.creditCosts) setCosts(prev => ({ ...prev, ...data.creditCosts, fetch: Number(data.creditCosts.fetch) ?? 1 }));
         if (data.redditSettings) setRedditSettings(data.redditSettings);
+      })
+      .catch(console.error);
+
+    // Load saved leads on mount
+    fetch(`/api/user/saved-leads?userId=${user?.id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setPosts(data);
+          showToast('Search results restored! 📂', 'success');
+        }
       })
       .catch(console.error);
 
@@ -347,6 +359,67 @@ export const Comments: React.FC = () => {
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleClearLeads = async () => {
+    try {
+      const response = await fetch('/api/user/clear-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id })
+      });
+      if (response.ok) {
+        setPosts([]);
+        setSelectedPost(null);
+        showToast('All leads cleared.', 'success');
+      }
+    } catch (err) {
+      showToast('Failed to clear leads.', 'error');
+    }
+  };
+
+  const handleDeepScan = async (post: any) => {
+    if (!user?.id) return;
+    const scanCost = 0.5;
+
+    if (user.role !== 'admin' && (user.credits || 0) < scanCost) {
+      setShowNoCreditsModal(true);
+      return;
+    }
+
+    setIsScanning(post.id);
+    try {
+      const response = await fetch('/api/reddit/deep-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          postUrl: post.url,
+          postId: post.id,
+          subreddit: post.subreddit
+        })
+      });
+
+      if (response.status === 402) { setShowNoCreditsModal(true); return; }
+      if (!response.ok) throw new Error('Deep Scan failed');
+
+      const data = await response.json();
+
+      // Update local posts state to include the new comments
+      setPosts(prev => prev.map(p =>
+        p.id === post.id ? { ...p, scannedComments: data.comments } : p
+      ));
+
+      if (data.credits !== undefined) {
+        updateUser({ credits: data.credits });
+      }
+
+      showToast(`Scan complete! Found ${data.comments?.length || 0} opportunity in comments.`, 'success');
+    } catch (err) {
+      showToast('Deep Scan failed. Please try again.', 'error');
+    } finally {
+      setIsScanning(null);
+    }
   };
 
   // Cycle progress steps while fetching/analyzing
@@ -693,7 +766,9 @@ export const Comments: React.FC = () => {
         itemId: generatedReply?.id, // Link back to DB item
         text: editedComment,
         imageUrl: commentImageUrl || undefined,
-        targetUrl: targetUrl
+        targetUrl: targetUrl,
+        // If this is a reply to a comment, the target URL is the post, but the parentId is the comment
+        parentId: (selectedPost as any).isComment ? (selectedPost as any).redditId : undefined
       }, '*');
 
       // Loading state will be handled by the useEffect listener when the extension responds
@@ -1446,8 +1521,78 @@ export const Comments: React.FC = () => {
                       </div>
                       <span className="text-[9px] text-orange-400 font-black uppercase tracking-[0.2em] mt-0.5 group-hover:text-white transition-colors">{costs.comment} PTS</span>
                     </button>
+
+                    {!post.scannedComments && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeepScan(post); }}
+                        disabled={isScanning === post.id}
+                        className="w-full md:w-48 bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm border border-orange-100"
+                      >
+                        {isScanning === post.id ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
+                        {isScanning === post.id ? 'Scanning...' : 'Deep Scan'}
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Scanned Comments Results */}
+                {post.scannedComments && post.scannedComments.length > 0 && (
+                  <div className="mt-8 pt-6 border-t border-slate-50 space-y-4 animate-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <Sparkles size={12} className="text-orange-500" />
+                        {post.scannedComments.length} High-Intent Comments Found In Thread
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {post.scannedComments.map((comment: any) => (
+                        <div
+                          key={comment.id}
+                          className="bg-slate-50/50 hover:bg-white border border-slate-100 hover:border-orange-200 p-5 rounded-3xl transition-all shadow-sm group/comment relative"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-100 shadow-sm">u/</div>
+                              <span className="text-[11px] font-black text-slate-900">{comment.author}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 bg-orange-100 text-orange-700 px-2 py-1 rounded-lg text-[9px] font-black">
+                              SCORE: {comment.opportunityScore}
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed mb-4 line-clamp-2 italic">"{comment.body}"</p>
+                          <div className="flex items-center justify-between mt-auto">
+                            <p className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2.5 py-1 rounded-md border border-orange-100">💡 {comment.reason}</p>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const pseudoPost = {
+                                  ...post,
+                                  id: comment.id,
+                                  title: `Replying to comment by u/${comment.author}`,
+                                  selftext: comment.body,
+                                  author: comment.author,
+                                  isComment: true,
+                                  redditId: `t1_${comment.id}`
+                                };
+                                setSelectedPost(pseudoPost);
+                                setIsWizardOpen(true);
+                              }}
+                              className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-md"
+                            >
+                              Reply Now
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {post.scannedComments && post.scannedComments.length === 0 && (
+                  <div className="mt-6 pt-6 border-t border-slate-50 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 italic">No direct opportunities identified in this thread's comments.</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1766,6 +1911,42 @@ export const Comments: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-8">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button
+                          onClick={() => setSortBy('new')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${sortBy === 'new' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          New
+                        </button>
+                        <button
+                          onClick={() => setSortBy('relevance')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${sortBy === 'relevance' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          Best
+                        </button>
+                        <button
+                          onClick={() => setSortBy('top')}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${sortBy === 'top' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          Top
+                        </button>
+                      </div>
+                      {posts.length > 0 && (
+                        <button
+                          onClick={handleClearLeads}
+                          className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors flex items-center gap-2"
+                          title="Clear results"
+                        >
+                          <Trash2 size={16} />
+                          <span className="text-[10px] font-black uppercase">Clear All</span>
+                        </button>
+                      )}
+                      <div className="w-px h-8 bg-slate-100 mx-1" />
+                      <Link to="/analytics" className="w-11 h-11 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 hover:text-orange-600 hover:border-orange-200 transition-all shadow-sm">
+                        <Target size={20} />
+                      </Link>
+                    </div>
                     <div className="space-y-4">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Response Goal</label>
                       <div className="flex gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">

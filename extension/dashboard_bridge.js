@@ -96,7 +96,8 @@ window.addEventListener('message', (event) => {
                     title: event.data.title,
                     imageUrl: event.data.imageUrl,
                     targetUrl: event.data.targetUrl,
-                    isPost: event.data.isPost || false
+                    isPost: event.data.isPost || false,
+                    parentId: event.data.parentId
                 },
                 (response) => {
                     if (chrome.runtime.lastError) {

@@ -4,13 +4,15 @@ console.log('🛡️ Redigo Security Engine connected to Reddit tab.');
 let currentDraftId = null;
 let currentDraftType = null;
 let currentDraftUserId = null;
+let currentDraftParentId = null;
 
 chrome.storage.local.get(['redigo_assistant_draft', 'redigo_loading'], (res) => {
   if (res.redigo_assistant_draft) {
-    const { title, text, imageUrl, itemId, userId, isPost } = res.redigo_assistant_draft;
+    const { title, text, imageUrl, itemId, userId, isPost, parentId } = res.redigo_assistant_draft;
     currentDraftId = itemId;
     currentDraftType = isPost ? 'post' : 'comment';
     currentDraftUserId = userId;
+    currentDraftParentId = parentId;
     injectFloatingAssistant(title, text, imageUrl, true);
   } else if (res.redigo_loading) {
     showRedigoLoader();
@@ -75,9 +77,22 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
         title, text, imageUrl,
         itemId: currentDraftId,
         userId: currentDraftUserId,
-        isPost: currentDraftType === 'post'
+        isPost: currentDraftType === 'post',
+        parentId: currentDraftParentId
       }
     });
+  }
+
+  // --- Auto-scroll to comment if parentId exists ---
+  if (currentDraftParentId) {
+    setTimeout(() => {
+      const commentEl = document.getElementById(currentDraftParentId);
+      if (commentEl) {
+        commentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        commentEl.style.border = '2px solid #ea580c';
+        commentEl.style.borderRadius = '8px';
+      }
+    }, 2000);
   }
 
   const style = document.createElement('style');
@@ -169,11 +184,12 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     <div class="redigo-header">
       <div style="display:flex; align-items:center; gap:10px;">
         <div style="background:white; border-radius:8px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:#ea580c; font-size:14px;">🛡️</div>
-        <span>REDIGO ASSISTANT</span>
+        <span>REDIGO ${currentDraftParentId ? 'COMMENT' : 'POST'} REPLY</span>
       </div>
       <div class="redigo-close" id="redigo-close">✕</div>
     </div>
     <div class="redigo-body">
+      ${currentDraftParentId ? `<p style="font-size: 10px; color: #ea580c; font-weight: 800; margin-top: -10px; margin-bottom: 4px;">Targeting Specific Comment</p>` : ''}
       ${title ? `
         <span class="redigo-label">Headline</span>
         <button class="redigo-btn" id="redigo-copy-title">Copy Title</button>
@@ -284,6 +300,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     currentDraftId = request.itemId;
     currentDraftType = request.isPost ? 'post' : 'comment';
     currentDraftUserId = request.userId;
+    currentDraftParentId = request.parentId;
     injectFloatingAssistant(request.title, request.text, request.imageUrl);
   }
 });

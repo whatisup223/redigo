@@ -1637,6 +1637,30 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 
 
+// --- User Leads Persistence ---
+app.get('/api/user/saved-leads', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user.lastSearchLeads || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/user/clear-leads', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+    await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: [] } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/user/complete-onboarding', async (req, res) => {
   try {
     const { userId, redditUsername } = req.body;
@@ -4828,6 +4852,13 @@ app.post('/api/reddit/analyze', async (req, res) => {
       finalPosts = posts; // Fallback to raw processed posts
     }
 
+    // ── PERSIST RESULTS TO USER RECORD ──────────────────────────────────────
+    try {
+      await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: finalPosts.slice(0, 50) } });
+    } catch (dbErr) {
+      console.error('[Analyze] Failed to persist leads:', dbErr);
+    }
+
     res.json({
       posts: finalPosts.slice(0, 50),
       credits: updatedUser.credits,
@@ -4844,6 +4875,108 @@ app.post('/api/reddit/analyze', async (req, res) => {
 });
 
 // Fetch Subreddit About (used for pre-flight checks like image support)
+app.post('/api/reddit/deep-scan', async (req, res) => {
+  try {
+    const { userId, postUrl, postId, subreddit } = req.body;
+    if (!userId || !postUrl) return res.status(400).json({ error: 'Missing required parameters' });
+
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Credit Check
+    const cost = Number(aiSettings.creditCosts?.fetch || 1) * 0.5; // Deep scan is 0.5 credits
+    if (user.role !== 'admin' && (user.credits || 0) < cost) {
+      return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+    }
+
+    // Convert URL to JSON
+    const jsonUrl = postUrl.replace(/\/$/, '') + '/.json?limit=50&sort=top';
+    const response = await fetch(jsonUrl, {
+      headers: { 'User-Agent': getDynamicUserAgent(userId, user.redditUsername) }
+    });
+
+    if (!response.ok) throw new Error(`Reddit API Error: ${response.status}`);
+    const data = await response.json();
+
+    // Extract Comments (Data[1].data.children)
+    if (!data[1] || !data[1].data?.children) {
+      return res.json({ comments: [] });
+    }
+
+    const rawComments = data[1].data.children
+      .filter(c => c.kind === 't1')
+      .map(c => ({
+        id: c.data.id,
+        author: c.data.author,
+        body: c.data.body,
+        score: c.data.score,
+        depth: 0,
+        permalink: c.data.permalink
+      })).slice(0, 30); // Top 30 comments
+
+    if (rawComments.length === 0) return res.json({ comments: [] });
+
+    // AI Analysis to find "Thirsty Leads" in comments
+    const keyToUse = aiSettings.analyzerApiKey || aiSettings.apiKey || process.env.GEMINI_API_KEY;
+    let leads = [];
+
+    if (keyToUse) {
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
+      const genAI = new GoogleGenerativeAI(keyToUse);
+      const model = genAI.getGenerativeModel({ model: aiSettings.analyzerModel || 'gemini-1.5-flash' });
+
+      const prompt = `You are a Lead Intelligence agent. Analyze these 30 Reddit comments and extract only the ones where users are:
+1. Asking for help with a problem.
+2. Complaining about a competitor.
+3. Expressing a need for a specific solution.
+
+Comments: ${JSON.stringify(rawComments)}
+
+Return ONLY a JSON array: [ { "id": "comment_id", "opportunityScore": number, "reason": "brief reason" } ]`;
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const analysis = JSON.parse(jsonMatch[0]);
+        leads = rawComments.map(c => {
+          const scored = analysis.find(a => a.id === c.id);
+          if (scored) return { ...c, opportunityScore: scored.opportunityScore, reason: scored.reason };
+          return null;
+        }).filter(Boolean);
+      }
+    } else {
+      leads = rawComments.slice(0, 5); // Fallback without AI
+    }
+
+    // Atomic update user credits and saved leads structure
+    const updatedUser = await User.findOneAndUpdate(
+      { id: userId.toString() },
+      {
+        $inc: { credits: user.role === 'admin' ? 0 : -cost },
+        // Update the specific post in lastSearchLeads to include these comments
+        $set: { "lastSearchLeads.$[elem].scannedComments": leads },
+        $push: { "usageStats.history": { date: new Date().toISOString(), type: 'deep_scan', cost, postId } }
+      },
+      {
+        arrayFilters: [{ "elem.id": postId }],
+        new: true
+      }
+    );
+
+    addSystemLog('SUCCESS', `Deep Scan completed for post ${postId} (Found ${leads.length} leads in comments)`);
+
+    res.json({
+      comments: leads,
+      credits: updatedUser.credits
+    });
+
+  } catch (err) {
+    console.error('[Deep Scan Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/subreddit/about', async (req, res) => {
   try {
     let { name } = req.query;
@@ -5036,6 +5169,13 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       cost,
       creditsRemaining: updatedUser.credits
     });
+
+    // ── PERSIST RESULTS TO USER RECORD ──────────────────────────────────────
+    try {
+      await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: posts.slice(0, 50) } });
+    } catch (dbErr) {
+      console.error('[Fetch] Failed to persist leads:', dbErr);
+    }
 
     return res.json({
       posts: posts.slice(0, 50),
