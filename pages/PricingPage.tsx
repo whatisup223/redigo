@@ -244,34 +244,6 @@ export const PricingPage: React.FC = () => {
                                     {dailyLimit || 0} Daily Actions
                                 </li>
 
-                                {/* Feature Toggles (Visual) */}
-                                <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.maxAccounts > 1 ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
-                                        {plan.maxAccounts > 1 ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
-                                    </div>
-                                    <span className={plan.maxAccounts > 1 ? '' : 'text-slate-400'}>
-                                        {plan.maxAccounts >= 100 ? 'Unlimited Accounts' : plan.maxAccounts > 1 ? `Up to ${plan.maxAccounts} Accounts` : 'Multiple Accounts Support'}
-                                    </span>
-                                </li>
-
-                                <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.allowImages ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
-                                        {plan.allowImages ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
-                                    </div>
-                                    <span className={plan.allowImages ? '' : 'text-slate-400'}>
-                                        AI Image Generation
-                                    </span>
-                                </li>
-
-                                <li className="flex items-center gap-3 text-slate-700 font-medium text-sm">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${plan.allowTracking ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
-                                        {plan.allowTracking ? <Check size={12} strokeWidth={4} /> : <X size={12} strokeWidth={4} />}
-                                    </div>
-                                    <span className={plan.allowTracking ? '' : 'text-slate-400'}>
-                                        Advanced Link Tracking
-                                    </span>
-                                </li>
-
                                 {/* Custom Decorative Features */}
                                 {plan.features.map((feature, i) => (
                                     <li key={i} className="flex items-center gap-3 text-slate-700 font-medium text-sm">

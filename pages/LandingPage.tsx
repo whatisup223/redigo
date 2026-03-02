@@ -856,34 +856,6 @@ export const LandingPage: React.FC = () => {
                         {dailyLimit || 0} Actions / day
                       </li>
 
-                      {/* Dynamic Feature Toggles */}
-                      <li className="flex items-center gap-3.5 text-sm font-medium text-slate-700">
-                        <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.maxAccounts > 1 ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
-                          {plan.maxAccounts > 1 ? <Check size={14} strokeWidth={3} /> : <X size={14} strokeWidth={3} />}
-                        </div>
-                        <span className={plan.maxAccounts > 1 ? '' : 'text-slate-400'}>
-                          {plan.maxAccounts >= 100 ? 'Unlimited Accounts' : plan.maxAccounts > 1 ? `Up to ${plan.maxAccounts} Accounts` : 'Multiple Accounts Support'}
-                        </span>
-                      </li>
-
-                      <li className="flex items-center gap-3.5 text-sm font-medium text-slate-700">
-                        <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.allowImages ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
-                          {plan.allowImages ? <Check size={14} strokeWidth={3} /> : <X size={14} strokeWidth={3} />}
-                        </div>
-                        <span className={plan.allowImages ? '' : 'text-slate-400'}>
-                          AI Image Generation
-                        </span>
-                      </li>
-
-                      <li className="flex items-center gap-3.5 text-sm font-medium text-slate-700">
-                        <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.allowTracking ? (plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600') : 'bg-slate-50 text-slate-300'}`}>
-                          {plan.allowTracking ? <Check size={14} strokeWidth={3} /> : <X size={14} strokeWidth={3} />}
-                        </div>
-                        <span className={plan.allowTracking ? '' : 'text-slate-400'}>
-                          Advanced Link Tracking
-                        </span>
-                      </li>
-
                       {/* Custom Decorative Features */}
                       {plan.features.map((f: string, i: number) => (
                         <li key={i} className="flex items-center gap-3.5 text-sm font-medium text-slate-500">
