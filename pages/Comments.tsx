@@ -1509,7 +1509,7 @@ export const Comments: React.FC = () => {
                 <div className="flex flex-col md:flex-row items-start justify-between gap-8">
                   <div className="flex-1 min-w-0 space-y-4">
                     <h3 className="text-base md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors break-words">{post.title}</h3>
-                    <p className="text-slate-500 text-sm line-clamp-6 md:line-clamp-4 leading-relaxed overflow-hidden break-words">{post.selftext}</p>
+                    <p className="text-slate-500 text-sm max-h-[150px] overflow-y-auto custom-scrollbar leading-relaxed break-words pr-2">{post.selftext}</p>
                     <div className="flex items-center gap-5 pt-4">
                       {/* Footer Meta Data */}
                       <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><ThumbsUp size={14} /> {post.ups}</div>
@@ -1585,9 +1585,9 @@ export const Comments: React.FC = () => {
                               SCORE: {comment.opportunityScore}
                             </div>
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed mb-4 line-clamp-2 italic">"{comment.body}"</p>
-                          <div className="flex items-center justify-between mt-auto">
-                            <p className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2.5 py-1 rounded-md border border-orange-100">💡 {comment.reason}</p>
+                          <p className="text-xs text-slate-600 leading-relaxed mb-4 max-h-[100px] overflow-y-auto custom-scrollbar italic break-words pr-2">"{comment.body}"</p>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-auto gap-3">
+                            <p className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2.5 py-1.5 rounded-md border border-orange-100 flex-1 break-words">💡 {comment.reason}</p>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
