@@ -1393,9 +1393,19 @@ export const Comments: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      if (!user?.id) return;
                       setPosts([]);
                       setSelectedPost(null);
+                      try {
+                        await fetch('/api/user/clear-leads', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userId: user.id })
+                        });
+                      } catch (err) {
+                        console.error('Failed to clear saved leads:', err);
+                      }
                     }}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all text-xs font-black uppercase tracking-widest border border-red-100 shadow-sm"
                   >
@@ -1537,13 +1547,14 @@ export const Comments: React.FC = () => {
                     {!post.scannedComments && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDeepScan(post); }}
-                        disabled={isScanning === post.id}
+                        disabled={isScanning === post.id || post.num_comments === 0}
+                        title={post.num_comments === 0 ? "No comments to scan" : ""}
                         className="w-full md:w-48 bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm border border-orange-100"
                       >
                         {isScanning === post.id ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
                         <div className="flex flex-col items-center">
-                          <span>{isScanning === post.id ? 'Scanning...' : 'Deep Scan Comments'}</span>
-                          <span className="text-[8px] opacity-70">{costs.deepScan || 0.5} PTS</span>
+                          <span>{isScanning === post.id ? 'Scanning...' : (post.num_comments === 0 ? 'No Comments' : 'Deep Scan')}</span>
+                          <span className="text-[8px] opacity-70">{post.num_comments === 0 ? '0' : (costs.deepScan || 0.5)} PTS</span>
                         </div>
                       </button>
                     )}
