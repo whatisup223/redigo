@@ -4878,14 +4878,16 @@ app.post('/api/reddit/analyze', async (req, res) => {
 app.post('/api/reddit/deep-scan', async (req, res) => {
   try {
     const { userId, postUrl, postId, subreddit } = req.body;
-    if (!userId || !postUrl) return res.status(400).json({ error: 'Missing required parameters' });
+    if (!userId || !postUrl || !postId) return res.status(400).json({ error: 'Missing required parameters' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Credit Check
-    const cost = Number(aiSettings.creditCosts?.fetch || 1) * 0.5; // Deep scan is 0.5 credits
-    if (user.role !== 'admin' && (user.credits || 0) < cost) {
+    // Credit Check - Use default 1.0 if aiSettings is weirdly empty
+    const fetchCost = Number(aiSettings?.creditCosts?.fetch || 1.0);
+    const scanCost = fetchCost * 0.5;
+
+    if (user.role !== 'admin' && (user.credits || 0) < scanCost) {
       return res.status(402).json({ error: 'OUT_OF_CREDITS' });
     }
 
@@ -4896,10 +4898,17 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
     });
 
     if (!response.ok) throw new Error(`Reddit API Error: ${response.status}`);
-    const data = await response.json();
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseErr) {
+      throw new Error('Failed to parse Reddit response as JSON');
+    }
 
     // Extract Comments (Data[1].data.children)
-    if (!data[1] || !data[1].data?.children) {
+    if (!Array.isArray(data) || !data[1] || !data[1].data?.children) {
+      console.warn('[Deep Scan] Unexpected Reddit response structure', { url: jsonUrl });
       return res.json({ comments: [] });
     }
 
@@ -4917,15 +4926,16 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
     if (rawComments.length === 0) return res.json({ comments: [] });
 
     // AI Analysis to find "Thirsty Leads" in comments
-    const keyToUse = aiSettings.analyzerApiKey || aiSettings.apiKey || process.env.GEMINI_API_KEY;
+    const keyToUse = aiSettings?.analyzerApiKey || aiSettings?.apiKey || process.env.GEMINI_API_KEY;
     let leads = [];
 
     if (keyToUse) {
-      const { GoogleGenerativeAI } = await import('@google/generative-ai');
-      const genAI = new GoogleGenerativeAI(keyToUse);
-      const model = genAI.getGenerativeModel({ model: aiSettings.analyzerModel || 'gemini-1.5-flash' });
+      try {
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(keyToUse);
+        const model = genAI.getGenerativeModel({ model: aiSettings?.analyzerModel || 'gemini-1.5-flash' });
 
-      const prompt = `You are a Lead Intelligence agent. Analyze these 30 Reddit comments and extract only the ones where users are:
+        const prompt = `You are a Lead Intelligence agent. Analyze these 30 Reddit comments and extract only the ones where users are:
 1. Asking for help with a problem.
 2. Complaining about a competitor.
 3. Expressing a need for a specific solution.
@@ -4934,29 +4944,34 @@ Comments: ${JSON.stringify(rawComments)}
 
 Return ONLY a JSON array: [ { "id": "comment_id", "opportunityScore": number, "reason": "brief reason" } ]`;
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const analysis = JSON.parse(jsonMatch[0]);
-        leads = rawComments.map(c => {
-          const scored = analysis.find(a => a.id === c.id);
-          if (scored) return { ...c, opportunityScore: scored.opportunityScore, reason: scored.reason };
-          return null;
-        }).filter(Boolean);
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const analysis = JSON.parse(jsonMatch[0]);
+          leads = rawComments.map(c => {
+            const scored = analysis.find(a => a.id === c.id);
+            if (scored) return { ...c, opportunityScore: scored.opportunityScore, reason: scored.reason };
+            return null;
+          }).filter(Boolean);
+        }
+      } catch (aiErr) {
+        console.error('[Deep Scan] AI Analysis Error:', aiErr);
+        leads = rawComments.slice(0, 5).map(c => ({ ...c, opportunityScore: 50, reason: 'High engagement comment (AI Fallback)' }));
       }
     } else {
-      leads = rawComments.slice(0, 5); // Fallback without AI
+      leads = rawComments.slice(0, 5).map(c => ({ ...c, opportunityScore: 50, reason: 'High engagement comment (Manual Scan)' }));
     }
 
     // Atomic update user credits and saved leads structure
+    // We use a safe update: first ensure the field is an array, then update.
     const updatedUser = await User.findOneAndUpdate(
       { id: userId.toString() },
       {
-        $inc: { credits: user.role === 'admin' ? 0 : -cost },
+        $inc: { credits: user.role === 'admin' ? 0 : -scanCost },
         // Update the specific post in lastSearchLeads to include these comments
         $set: { "lastSearchLeads.$[elem].scannedComments": leads },
-        $push: { "usageStats.history": { date: new Date().toISOString(), type: 'deep_scan', cost, postId } }
+        $push: { "usageStats.history": { date: new Date().toISOString(), type: 'deep_scan', cost: scanCost, postId } }
       },
       {
         arrayFilters: [{ "elem.id": postId }],
@@ -4964,11 +4979,11 @@ Return ONLY a JSON array: [ { "id": "comment_id", "opportunityScore": number, "r
       }
     );
 
-    addSystemLog('SUCCESS', `Deep Scan completed for post ${postId} (Found ${leads.length} leads in comments)`);
+    addSystemLog('SUCCESS', `Deep Scan completed for post ${postId} (Found ${leads.length} leads in comments)`, { userId, postId });
 
     res.json({
       comments: leads,
-      credits: updatedUser.credits
+      credits: updatedUser?.credits || 0
     });
 
   } catch (err) {

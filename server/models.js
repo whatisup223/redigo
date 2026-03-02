@@ -47,7 +47,8 @@ const UserSchema = new mongoose.Schema({
     extensionInstalled: { type: Boolean, default: false },
     lastExtensionPing: Date,
     redditUsername: String,
-    karma: { type: Number, default: 0 }
+    karma: { type: Number, default: 0 },
+    lastSearchLeads: [mongoose.Schema.Types.Mixed]
 }, { strict: false }); // strict: false allows dynamic data from the old version safely
 
 const AnnouncementSchema = new mongoose.Schema({
