@@ -13,8 +13,6 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <ErrorBoundary fallback={<ErrorPage type="500" />}>
-      <App />
-    </ErrorBoundary>
+    <App />
   </React.StrictMode>
 );

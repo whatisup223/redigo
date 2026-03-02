@@ -14,6 +14,7 @@ export const SignupPage: React.FC = () => {
     const [isSuccess, setIsSuccess] = useState(false);
     const [isResending, setIsResending] = useState(false);
     const [resendStatus, setResendStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [agreedToTerms, setAgreedToTerms] = useState(false);
     const { signup } = useAuth();
     const navigate = useNavigate();
 
@@ -22,6 +23,12 @@ export const SignupPage: React.FC = () => {
         setError(null);
         setErrorReason(null);
         setIsBlocked(false);
+
+        if (!agreedToTerms) {
+            setError('You must agree to the Terms of Service and Privacy Policy to continue.');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
@@ -232,6 +239,20 @@ export const SignupPage: React.FC = () => {
                                         placeholder="Create a strong password"
                                         required
                                     />
+                                </div>
+
+                                <div className="flex items-start gap-3 py-2">
+                                    <input
+                                        type="checkbox"
+                                        id="terms"
+                                        checked={agreedToTerms}
+                                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                        className="mt-1 w-4 h-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                                        required
+                                    />
+                                    <label htmlFor="terms" className="text-xs text-slate-500 font-medium leading-relaxed cursor-pointer select-none">
+                                        I agree to the <Link to="/terms" className="text-orange-600 font-bold hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-orange-600 font-bold hover:underline">Privacy Policy</Link>.
+                                    </label>
                                 </div>
 
                                 <button

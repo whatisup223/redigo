@@ -1,48 +1,217 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RedditGo AI - Automation for Redditors</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <style>
-        body { 
-          font-family: 'Outfit', sans-serif;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
+        body {
+            font-family: 'Outfit', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
+
         .glass-effect {
             background: rgba(255, 255, 255, 0.6);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
+
         .mesh-gradient {
             background-color: #f8fafc;
-            background-image: 
+            background-image:
                 radial-gradient(at 0% 0%, rgba(249, 115, 22, 0.05) 0px, transparent 50%),
                 radial-gradient(at 100% 0%, rgba(251, 146, 60, 0.05) 0px, transparent 50%),
                 radial-gradient(at 100% 100%, rgba(249, 115, 22, 0.05) 0px, transparent 50%),
                 radial-gradient(at 0% 100%, rgba(251, 146, 60, 0.05) 0px, transparent 50%);
         }
+
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
         }
+
         .custom-scrollbar::-webkit-scrollbar-track {
             background: transparent;
         }
+
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #e2e8f0;
             border-radius: 10px;
         }
+
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #cbd5e1;
         }
+
+        @keyframes typing {
+            from {
+                width: 0
+            }
+
+            to {
+                width: 100%
+            }
+        }
+
+        @keyframes blink {
+            50% {
+                border-color: transparent
+            }
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        @keyframes float-shadow {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.1;
+            }
+
+            50% {
+                transform: scale(0.9);
+                opacity: 0.05;
+            }
+        }
+
+        @keyframes shine {
+            0% {
+                left: -100%;
+            }
+
+            100% {
+                left: 100%;
+            }
+        }
+
+        @keyframes grow-height {
+            from {
+                height: 0;
+            }
+        }
+
+        @keyframes slide-in-top {
+            from {
+                transform: translateY(-10px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse-soft {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        .animate-typing {
+            overflow: hidden;
+            white-space: nowrap;
+            border-right: 2px solid #f97316;
+            animation: typing 3.5s steps(40, end) infinite alternate, blink .75s step-end infinite;
+        }
+
+        .animate-grow-height {
+            animation: grow-height 1.5s ease-out forwards;
+        }
+
+        .animate-float {
+            animation: float 4s ease-in-out infinite;
+        }
+
+        .animate-shine {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .animate-shine::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transform: skewX(-25deg);
+            animation: shine 4s infinite;
+        }
+
+        .animate-pulse-soft {
+            animation: pulse-soft 2s infinite ease-in-out;
+        }
+
+        .animate-slide-in-top {
+            animation: slide-in-top 0.4s ease-out forwards;
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fade-out {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+                visibility: hidden;
+            }
+        }
+
+        .animate-reveal {
+            animation: reveal 0.5s ease-out forwards;
+        }
+
+        .animate-fade-out {
+            animation: fade-out 0.5s ease-out forwards;
+        }
+
+        .animate-typing-once {
+            overflow: hidden;
+            white-space: nowrap;
+            border-right: 2px solid #f97316;
+            animation: typing 2s steps(30, end) forwards, blink .75s step-end infinite;
+        }
     </style>
 </head>
+
 <body class="bg-[#fcfcfd] text-slate-900 mesh-gradient min-h-screen">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>

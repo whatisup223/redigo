@@ -10,8 +10,12 @@ interface ErrorPageProps {
 }
 
 export const ErrorPage: React.FC<ErrorPageProps> = ({ type = '404', message, error }) => {
-    const navigate = useNavigate();
-    const { user, isAuthenticated } = useAuth(); // Safe access to auth state
+    let navigate: any;
+    try { navigate = useNavigate(); } catch (e) { navigate = null; }
+
+    let auth: any;
+    try { auth = useAuth(); } catch (e) { auth = { user: null, isAuthenticated: false }; }
+    const { user, isAuthenticated } = auth;
 
     // Context-Aware Button Logic
     const getPrimaryAction = () => {
@@ -30,6 +34,16 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({ type = '404', message, err
     };
 
     const primaryAction = getPrimaryAction();
+
+    const handleBack = () => {
+        if (navigate) navigate(-1);
+        else window.history.back();
+    };
+
+    const handlePrimary = () => {
+        if (navigate) primaryAction.action();
+        else window.location.href = '/';
+    };
 
     let title = 'Page Not Found';
     let desc = 'The page you are looking for doesn\'t exist or has been moved.';
@@ -78,7 +92,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({ type = '404', message, err
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto relative z-10">
                     <button
-                        onClick={() => navigate(-1)}
+                        onClick={handleBack}
                         className="w-full sm:w-auto px-8 py-4 bg-white border border-slate-200 text-slate-600 rounded-[1.5rem] font-bold hover:bg-slate-50 hover:text-slate-900 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-sm"
                     >
                         <ArrowLeft size={18} />
@@ -86,7 +100,7 @@ export const ErrorPage: React.FC<ErrorPageProps> = ({ type = '404', message, err
                     </button>
 
                     <button
-                        onClick={primaryAction.action}
+                        onClick={handlePrimary}
                         className={`w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black hover:-translate-y-0.5 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-xl shadow-slate-200`}
                     >
                         {primaryAction.icon}
