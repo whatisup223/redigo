@@ -4602,7 +4602,10 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
     if (provider === 'google') {
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(keyToUse);
-      const model = genAI.getGenerativeModel({ model: modelName });
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: { responseMimeType: "application/json" }
+      });
 
       const result = await model.generateContent([
         systemPrompt,
@@ -4611,10 +4614,17 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
       const response = await result.response;
       const text = response.text().trim();
 
-      // Cleanup JSON (LLMs sometimes wrap in ```json ... ```)
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        analysisResults = JSON.parse(jsonMatch[0]);
+      // Robust Parsing
+      try {
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          analysisResults = JSON.parse(jsonMatch[0]);
+        } else {
+          const parsed = JSON.parse(text);
+          analysisResults = Array.isArray(parsed) ? parsed : (parsed.results || parsed.posts || Object.values(parsed).find(v => Array.isArray(v)) || []);
+        }
+      } catch (parseErr) {
+        console.error('[Gemini Parse Error] Raw text:', text);
       }
     } else {
       const url = provider === 'openai'
