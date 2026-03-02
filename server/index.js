@@ -4969,6 +4969,12 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       const response = await fetch(fetchUrl, { headers: fetchHeaders });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          return res.status(404).json({ error: 'SUBREDDIT_NOT_FOUND', message: `Subreddit r/${subreddit} not found.` });
+        }
+        if (response.status === 403) {
+          return res.status(403).json({ error: 'SUBREDDIT_PRIVATE', message: `Subreddit r/${subreddit} is private or inaccessible.` });
+        }
         throw new Error(`Reddit API Blocked (Status ${response.status}). Rate limit exceeded or Reddit is blocking our server IPs.`);
       }
 

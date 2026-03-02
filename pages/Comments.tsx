@@ -803,6 +803,18 @@ export const Comments: React.FC = () => {
     }, 1000);
 
     try {
+      // --- Subreddit Universal Pre-flight Check ---
+      const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}`);
+      if (!subRes.ok) {
+        const errData = await subRes.json();
+        const errMsg = errData.message || 'Subreddit not found or inaccessible.';
+        setSearchError(errMsg);
+        showToast(errMsg, 'error');
+        setIsFetching(false);
+        setReloadCooldown(0);
+        return;
+      }
+
       let data: any;
       const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
       const isExtActive = isExtensionActive();
@@ -1344,7 +1356,7 @@ export const Comments: React.FC = () => {
                 </div>
               </div>
             )}
-            
+
             {posts.length === 0 && !isFetching && !searchError && (
               <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
                 <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200">

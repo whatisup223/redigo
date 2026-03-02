@@ -139,6 +139,7 @@ export const ContentArchitect: React.FC = () => {
     const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
 
     const [useTracking, setUseTracking] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
 
     useEffect(() => {
         syncUser(); // Refresh credits & daily limits on mount
@@ -257,6 +258,11 @@ export const ContentArchitect: React.FC = () => {
             localStorage.removeItem('redditgo_post_draft');
         }
     }, [postData, step, includeBrandName, includeLink, useTracking, includeImage, language, isInitialCheckDone, showDraftBanner]);
+
+    // Clear search error when subreddit changes
+    useEffect(() => {
+        setSearchError(null);
+    }, [postData.subreddit]);
 
     const handleResumeDraft = async () => {
         const savedDraft = localStorage.getItem('redditgo_post_draft');
@@ -394,7 +400,7 @@ export const ContentArchitect: React.FC = () => {
             return;
         }
         if (!skipExtensionCheck) {
-            isForcedRef.current = false; // Reset for next time
+            isForcedRef.current = false;
         }
         setPendingAction(null); // Clear after check passes or forced continue
 
@@ -547,7 +553,9 @@ export const ContentArchitect: React.FC = () => {
                 }
             } else if (subRes.status === 404 || subRes.status === 403) {
                 const errData = await subRes.json();
-                showToast(errData.message || 'Subreddit not found or inaccessible.', 'error');
+                const errMsg = errData.message || 'Subreddit not found or inaccessible.';
+                setSearchError(errMsg);
+                showToast(errMsg, 'error');
                 setIsGenerating(false);
                 setIsGeneratingImage(false);
                 return;
@@ -1006,465 +1014,479 @@ export const ContentArchitect: React.FC = () => {
 
                         {/* STEP 1 */}
                         {step === 1 && (
-                            <div className="bg-white p-10 rounded-[3rem] border border-slate-200/60 shadow-xl space-y-10">
-                                <div className="space-y-8">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                                            <Target size={20} />
+                            <div className="space-y-8">
+                                {searchError && (
+                                    <div className="flex flex-col items-center justify-center py-10 bg-red-50 rounded-[3rem] border border-red-100 shadow-sm space-y-4 animate-in fade-in duration-300">
+                                        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-3xl flex items-center justify-center">
+                                            <AlertTriangle size={32} />
                                         </div>
-                                        <h2 className="text-xl font-extrabold text-slate-900">Campaign Foundation</h2>
+                                        <div className="text-center px-6">
+                                            <h3 className="text-lg font-extrabold text-red-900">Validation Error</h3>
+                                            <p className="text-red-700 text-sm font-medium">{searchError}</p>
+                                        </div>
                                     </div>
+                                )}
 
-                                    {/* Subreddit + Goal */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Target Community</label>
-                                            <div className="relative">
-                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">r/</span>
-                                                <input
-                                                    type="text"
-                                                    placeholder="saas, marketing, tech..."
-                                                    className="w-full pl-9 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all"
-                                                    value={postData.subreddit}
-                                                    onChange={(e) => setPostData({ ...postData, subreddit: e.target.value })}
-                                                />
+                                <div className="bg-white p-10 rounded-[3rem] border border-slate-200/60 shadow-xl space-y-10">
+                                    <div className="space-y-8">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                                                <Target size={20} />
                                             </div>
+                                            <h2 className="text-xl font-extrabold text-slate-900">Campaign Foundation</h2>
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Content Goal</label>
-                                            <select
-                                                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold appearance-none"
-                                                value={postData.goal}
-                                                onChange={(e) => setPostData({ ...postData, goal: e.target.value })}
-                                            >
-                                                {goals.map(g => <option key={g} value={g}>{g}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
 
-                                    {/* Brand Integration — Smart Override */}
-                                    {brandProfile.brandName ? (
-                                        <div className="rounded-3xl border-2 border-green-100 overflow-hidden">
-                                            {/* Active Brand Badge */}
-                                            <div className="flex items-center justify-between px-5 py-4 bg-green-50">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 bg-green-600 rounded-xl flex items-center justify-center">
-                                                        <Building2 size={14} className="text-white" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Brand Profile Active</p>
-                                                        <p className="font-extrabold text-slate-900 text-sm">{brandProfile.brandName}</p>
-                                                    </div>
-                                                    <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2.5 py-1 rounded-lg text-[10px] font-black">
-                                                        <Check size={10} /> Auto-applied
-                                                    </span>
+                                        {/* Subreddit + Goal */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Target Community</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">r/</span>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="saas, marketing, tech..."
+                                                        className="w-full pl-9 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all"
+                                                        value={postData.subreddit}
+                                                        onChange={(e) => setPostData({ ...postData, subreddit: e.target.value })}
+                                                    />
                                                 </div>
-                                                <button
-                                                    onClick={() => setShowBrandOverride(v => !v)}
-                                                    className="flex items-center gap-1.5 text-[11px] font-black text-slate-400 hover:text-orange-600 transition-colors"
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Content Goal</label>
+                                                <select
+                                                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold appearance-none"
+                                                    value={postData.goal}
+                                                    onChange={(e) => setPostData({ ...postData, goal: e.target.value })}
                                                 >
-                                                    {showBrandOverride ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                                    {showBrandOverride ? 'Hide override' : 'Override for this post'}
-                                                </button>
+                                                    {goals.map(g => <option key={g} value={g}>{g}</option>)}
+                                                </select>
                                             </div>
-
-                                            {/* Collapsible Override Panel */}
-                                            {showBrandOverride && (
-                                                <div className="p-5 bg-white border-t border-green-100 space-y-4">
-                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                                        <Tag size={10} /> Override for this post only — leave blank to use Profile defaults
-                                                    </p>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand Name</label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder={`Default: ${brandProfile.brandName}`}
-                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                                value={postData.productMention}
-                                                                onChange={(e) => setPostData({ ...postData, productMention: e.target.value })}
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                                                <LinkIcon size={10} /> Website URL
-                                                            </label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder={`Default: ${brandProfile.website || 'Not set'}`}
-                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                                value={postData.productUrl}
-                                                                onChange={(e) => setPostData({ ...postData, productUrl: e.target.value })}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">What does it do? (override)</label>
-                                                        <textarea
-                                                            rows={2}
-                                                            placeholder={`Default: ${brandProfile.description || 'From your Brand Profile'}`}
-                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none transition-all"
-                                                            value={postData.description}
-                                                            onChange={(e) => setPostData({ ...postData, description: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Audience (override)</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder={`Default: ${brandProfile.targetAudience || 'From your Brand Profile'}`}
-                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                            value={postData.targetAudience}
-                                                            onChange={(e) => setPostData({ ...postData, targetAudience: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Problem it solves (override)</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder={`Default: ${brandProfile.problem || 'From your Brand Profile'}`}
-                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                            value={postData.problemSolved}
-                                                            onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    {/* Color Overrides */}
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Color</label>
-                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
-                                                                <input
-                                                                    type="color"
-                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
-                                                                    value={postData.primaryColor || brandProfile.primaryColor || '#EA580C'}
-                                                                    onChange={(e) => setPostData({ ...postData, primaryColor: e.target.value })}
-                                                                />
-                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.primaryColor || brandProfile.primaryColor || '#EA580C'}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Color</label>
-                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
-                                                                <input
-                                                                    type="color"
-                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
-                                                                    value={postData.secondaryColor || brandProfile.secondaryColor || '#1E293B'}
-                                                                    onChange={(e) => setPostData({ ...postData, secondaryColor: e.target.value })}
-                                                                />
-                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.secondaryColor || brandProfile.secondaryColor || '#1E293B'}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
-                                    ) : (
-                                        /* No Brand Profile — Quick Override with full fields */
-                                        <div className="rounded-3xl border-2 border-orange-100 overflow-hidden">
-                                            <div className="flex items-center justify-between px-5 py-4 bg-orange-50">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center">
-                                                        <Building2 size={14} className="text-white" />
+
+                                        {/* Brand Integration — Smart Override */}
+                                        {brandProfile.brandName ? (
+                                            <div className="rounded-3xl border-2 border-green-100 overflow-hidden">
+                                                {/* Active Brand Badge */}
+                                                <div className="flex items-center justify-between px-5 py-4 bg-green-50">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 bg-green-600 rounded-xl flex items-center justify-center">
+                                                            <Building2 size={14} className="text-white" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black text-green-700 uppercase tracking-widest">Brand Profile Active</p>
+                                                            <p className="font-extrabold text-slate-900 text-sm">{brandProfile.brandName}</p>
+                                                        </div>
+                                                        <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2.5 py-1 rounded-lg text-[10px] font-black">
+                                                            <Check size={10} /> Auto-applied
+                                                        </span>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Quick Brand Override</p>
-                                                        <p className="text-[11px] text-slate-500 font-medium">Fill in for richer, more personalized AI output</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Link to="/settings" className="text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors">Save permanently →</Link>
                                                     <button
                                                         onClick={() => setShowBrandOverride(v => !v)}
                                                         className="flex items-center gap-1.5 text-[11px] font-black text-slate-400 hover:text-orange-600 transition-colors"
                                                     >
                                                         {showBrandOverride ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                                        {showBrandOverride ? 'Hide' : 'Fill in'}
+                                                        {showBrandOverride ? 'Hide override' : 'Override for this post'}
                                                     </button>
                                                 </div>
-                                            </div>
-                                            {showBrandOverride && (
-                                                <div className="p-5 bg-white border-t border-orange-100 space-y-4">
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                                                {/* Collapsible Override Panel */}
+                                                {showBrandOverride && (
+                                                    <div className="p-5 bg-white border-t border-green-100 space-y-4">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                            <Tag size={10} /> Override for this post only — leave blank to use Profile defaults
+                                                        </p>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={`Default: ${brandProfile.brandName}`}
+                                                                    className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                    value={postData.productMention}
+                                                                    onChange={(e) => setPostData({ ...postData, productMention: e.target.value })}
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                                    <LinkIcon size={10} /> Website URL
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={`Default: ${brandProfile.website || 'Not set'}`}
+                                                                    className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                    value={postData.productUrl}
+                                                                    onChange={(e) => setPostData({ ...postData, productUrl: e.target.value })}
+                                                                />
+                                                            </div>
+                                                        </div>
                                                         <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand / Product Name</label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="e.g. Redigo"
-                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                                value={postData.productMention}
-                                                                onChange={(e) => setPostData({ ...postData, productMention: e.target.value })}
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">What does it do? (override)</label>
+                                                            <textarea
+                                                                rows={2}
+                                                                placeholder={`Default: ${brandProfile.description || 'From your Brand Profile'}`}
+                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none transition-all"
+                                                                value={postData.description}
+                                                                onChange={(e) => setPostData({ ...postData, description: e.target.value })}
                                                             />
                                                         </div>
                                                         <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                                                <LinkIcon size={10} /> Website URL
-                                                            </label>
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Audience (override)</label>
                                                             <input
                                                                 type="text"
-                                                                placeholder="https://yoursite.com"
+                                                                placeholder={`Default: ${brandProfile.targetAudience || 'From your Brand Profile'}`}
                                                                 className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                                value={postData.productUrl}
-                                                                onChange={(e) => setPostData({ ...postData, productUrl: e.target.value })}
+                                                                value={postData.targetAudience}
+                                                                onChange={(e) => setPostData({ ...postData, targetAudience: e.target.value })}
                                                             />
                                                         </div>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">What does it do?</label>
-                                                        <textarea
-                                                            rows={2}
-                                                            placeholder="e.g. AI-powered Reddit outreach tool that helps SaaS founders find and engage their audience authentically."
-                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none transition-all"
-                                                            value={postData.description}
-                                                            onChange={(e) => setPostData({ ...postData, description: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Audience</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="e.g. SaaS founders, indie hackers, B2B marketers"
-                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                            value={postData.targetAudience}
-                                                            onChange={(e) => setPostData({ ...postData, targetAudience: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Problem it solves</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="e.g. Difficulty finding relevant Reddit conversations"
-                                                            className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
-                                                            value={postData.problemSolved}
-                                                            onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
-                                                        />
-                                                    </div>
-                                                    {/* Quick Override Colors */}
-                                                    <div className="grid grid-cols-2 gap-4">
                                                         <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Color</label>
-                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
-                                                                <input
-                                                                    type="color"
-                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
-                                                                    value={postData.primaryColor || '#EA580C'}
-                                                                    onChange={(e) => setPostData({ ...postData, primaryColor: e.target.value })}
-                                                                />
-                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.primaryColor || '#EA580C'}</span>
-                                                            </div>
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Problem it solves (override)</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder={`Default: ${brandProfile.problem || 'From your Brand Profile'}`}
+                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                value={postData.problemSolved}
+                                                                onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
+                                                            />
                                                         </div>
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Color</label>
-                                                            <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
-                                                                <input
-                                                                    type="color"
-                                                                    className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
-                                                                    value={postData.secondaryColor || '#1E293B'}
-                                                                    onChange={(e) => setPostData({ ...postData, secondaryColor: e.target.value })}
-                                                                />
-                                                                <span className="text-xs font-bold text-slate-600 uppercase">{postData.secondaryColor || '#1E293B'}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-400 font-medium">The more detail you provide, the more personalized the AI output will be.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-
-                                    {/* Tone of Voice - Cards */}
-                                    <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Tone of Voice</label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {TONES.map(tone => {
-                                                const Icon = tone.icon;
-                                                const isActive = postData.tone === tone.id;
-                                                return (
-                                                    <button
-                                                        key={tone.id}
-                                                        onClick={() => setPostData({ ...postData, tone: tone.id })}
-                                                        className={`group p-5 rounded-2xl border-2 text-left transition-all duration-200 ${isActive
-                                                            ? toneActiveMap[tone.color]
-                                                            : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-start gap-3">
-                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${toneColorMap[tone.color]}`}>
-                                                                <Icon size={16} />
-                                                            </div>
-                                                            <div className="space-y-0.5">
-                                                                <p className="font-extrabold text-slate-900 text-sm">{tone.label}</p>
-                                                                <p className="text-[11px] text-slate-400 font-medium leading-snug">{tone.desc}</p>
-                                                            </div>
-                                                            {isActive && (
-                                                                <div className="ml-auto">
-                                                                    <Check size={16} className="text-green-500" />
+                                                        {/* Color Overrides */}
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Color</label>
+                                                                <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                    <input
+                                                                        type="color"
+                                                                        className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                        value={postData.primaryColor || brandProfile.primaryColor || '#EA580C'}
+                                                                        onChange={(e) => setPostData({ ...postData, primaryColor: e.target.value })}
+                                                                    />
+                                                                    <span className="text-xs font-bold text-slate-600 uppercase">{postData.primaryColor || brandProfile.primaryColor || '#EA580C'}</span>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {/* Language Selector */}
-                                    <div className="space-y-4 pt-10 border-t border-slate-50">
-                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            🌐 Output Language
-                                        </label>
-                                        <select
-                                            value={language}
-                                            onChange={(e) => setLanguage(e.target.value)}
-                                            className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
-                                        >
-                                            <option value="English">🇺🇸 English</option>
-                                            <option value="Arabic">🇸🇦 Arabic (العربية)</option>
-                                            <option value="French">🇫🇷 French (Français)</option>
-                                            <option value="Spanish">🇪🇸 Spanish (Español)</option>
-                                            <option value="German">🇩🇪 German (Deutsch)</option>
-                                            <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
-                                            <option value="Italian">🇮🇹 Italian (Italiano)</option>
-                                            <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
-                                            <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
-                                            <option value="Japanese">🇯🇵 Japanese (日本語)</option>
-                                            <option value="Korean">🇰🇷 Korean (한국어)</option>
-                                            <option value="Chinese">🇨🇳 Chinese (中文)</option>
-                                        </select>
-                                    </div>
-
-
-
-                                    {/* Action Buttons */}
-                                    <div className="flex flex-col gap-4 mt-8">
-                                        <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${!canGenerateImages ? 'bg-slate-100 text-slate-400' : 'bg-white text-orange-600'}`}>
-                                                    {!canGenerateImages ? <Crown size={18} /> : <ImageIcon size={20} />}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="text-sm font-bold text-slate-900">Include Base Image</p>
-                                                        {!canGenerateImages && <span className="bg-orange-100 text-orange-600 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Pro Feature</span>}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="text-[10px] text-slate-500 font-medium">
-                                                            {canGenerateImages ? `Generate visual (+${Number(costs.image)} pts)` : 'Upgrade to generate AI visuals for your posts'}
-                                                        </p>
-                                                        {canGenerateImages && (
-                                                            <div className="flex gap-1" title="Applying your brand colors">
-                                                                <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
-                                                                <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="relative">
-                                                <button
-                                                    onClick={() => canGenerateImages ? setIncludeImage(!includeImage) : window.location.href = '/pricing'}
-                                                    className={`w-12 h-7 rounded-full transition-all relative ${includeImage && canGenerateImages ? 'bg-orange-600' : 'bg-slate-300'} ${!canGenerateImages ? 'cursor-pointer hover:bg-slate-400' : ''}`}
-                                                >
-                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage && canGenerateImages ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}>
-                                                        {!canGenerateImages && <AlertCircle size={10} className="text-slate-400" />}
-                                                    </div>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Include Brand Name Toggle */}
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
-                                                    <Tag size={20} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-900">Include Brand Name</p>
-                                                    <p className="text-[10px] text-slate-500 font-medium">Explicitly mention {postData.productMention || brandProfile.brandName || 'brand'} in post</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => setIncludeBrandName(!includeBrandName)}
-                                                className={`w-12 h-7 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
-                                            >
-                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-5' : 'translate-x-0'}`} />
-                                            </button>
-                                        </div>
-
-                                        {/* Include Link Toggle */}
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
-                                                    <LinkIcon size={20} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-900">Include Website Link</p>
-                                                    <p className="text-[10px] text-slate-500 font-medium">Embed link to {postData.productUrl || brandProfile.website || 'website'}</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => setIncludeLink(!includeLink)}
-                                                className={`w-12 h-7 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
-                                            >
-                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-5' : 'translate-x-0'}`} />
-                                            </button>
-                                        </div>
-
-                                        {/* Link Tracking Toggle */}
-                                        {includeLink && (
-                                            <div className="flex items-center justify-between p-4 bg-blue-50/30 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${!canTrack ? 'bg-slate-100 text-slate-400' : 'bg-white text-blue-600'}`}>
-                                                        {!canTrack ? <Crown size={18} /> : <Zap size={18} />}
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="text-sm font-bold text-slate-900">Enable Link Tracking</p>
-                                                            {!canTrack && <span className="bg-blue-100 text-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Pro Feature</span>}
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Color</label>
+                                                                <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                    <input
+                                                                        type="color"
+                                                                        className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                        value={postData.secondaryColor || brandProfile.secondaryColor || '#1E293B'}
+                                                                        onChange={(e) => setPostData({ ...postData, secondaryColor: e.target.value })}
+                                                                    />
+                                                                    <span className="text-xs font-bold text-slate-600 uppercase">{postData.secondaryColor || brandProfile.secondaryColor || '#1E293B'}</span>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <p className="text-[10px] text-slate-500 font-medium">
-                                                            {canTrack ? 'Get analytics on every click' : 'Track clicks & performance for your links'}
-                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            /* No Brand Profile — Quick Override with full fields */
+                                            <div className="rounded-3xl border-2 border-orange-100 overflow-hidden">
+                                                <div className="flex items-center justify-between px-5 py-4 bg-orange-50">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center">
+                                                            <Building2 size={14} className="text-white" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Quick Brand Override</p>
+                                                            <p className="text-[11px] text-slate-500 font-medium">Fill in for richer, more personalized AI output</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <Link to="/settings" className="text-[10px] font-black text-slate-400 hover:text-orange-600 transition-colors">Save permanently →</Link>
+                                                        <button
+                                                            onClick={() => setShowBrandOverride(v => !v)}
+                                                            className="flex items-center gap-1.5 text-[11px] font-black text-slate-400 hover:text-orange-600 transition-colors"
+                                                        >
+                                                            {showBrandOverride ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                            {showBrandOverride ? 'Hide' : 'Fill in'}
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => canTrack ? setUseTracking(!useTracking) : window.location.href = '/pricing'}
-                                                    className={`w-12 h-7 rounded-full transition-all relative ${useTracking && canTrack ? 'bg-blue-600' : 'bg-slate-300'}`}
-                                                >
-                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${useTracking && canTrack ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}>
-                                                        {!canTrack && <AlertCircle size={10} className="text-slate-400" />}
+                                                {showBrandOverride && (
+                                                    <div className="p-5 bg-white border-t border-orange-100 space-y-4">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand / Product Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="e.g. Redigo"
+                                                                    className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                    value={postData.productMention}
+                                                                    onChange={(e) => setPostData({ ...postData, productMention: e.target.value })}
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                                    <LinkIcon size={10} /> Website URL
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="https://yoursite.com"
+                                                                    className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                    value={postData.productUrl}
+                                                                    onChange={(e) => setPostData({ ...postData, productUrl: e.target.value })}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">What does it do?</label>
+                                                            <textarea
+                                                                rows={2}
+                                                                placeholder="e.g. AI-powered Reddit outreach tool that helps SaaS founders find and engage their audience authentically."
+                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-medium text-sm resize-none transition-all"
+                                                                value={postData.description}
+                                                                onChange={(e) => setPostData({ ...postData, description: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Audience</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="e.g. SaaS founders, indie hackers, B2B marketers"
+                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                value={postData.targetAudience}
+                                                                onChange={(e) => setPostData({ ...postData, targetAudience: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Problem it solves</label>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="e.g. Difficulty finding relevant Reddit conversations"
+                                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all text-sm"
+                                                                value={postData.problemSolved}
+                                                                onChange={(e) => setPostData({ ...postData, problemSolved: e.target.value })}
+                                                            />
+                                                        </div>
+                                                        {/* Quick Override Colors */}
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Primary Color</label>
+                                                                <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                    <input
+                                                                        type="color"
+                                                                        className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                        value={postData.primaryColor || '#EA580C'}
+                                                                        onChange={(e) => setPostData({ ...postData, primaryColor: e.target.value })}
+                                                                    />
+                                                                    <span className="text-xs font-bold text-slate-600 uppercase">{postData.primaryColor || '#EA580C'}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Secondary Color</label>
+                                                                <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-2xl">
+                                                                    <input
+                                                                        type="color"
+                                                                        className="w-8 h-8 rounded-lg cursor-pointer border-none bg-transparent"
+                                                                        value={postData.secondaryColor || '#1E293B'}
+                                                                        onChange={(e) => setPostData({ ...postData, secondaryColor: e.target.value })}
+                                                                    />
+                                                                    <span className="text-xs font-bold text-slate-600 uppercase">{postData.secondaryColor || '#1E293B'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-400 font-medium">The more detail you provide, the more personalized the AI output will be.</p>
                                                     </div>
-                                                </button>
+                                                )}
                                             </div>
                                         )}
 
-                                        <div className="flex gap-3">
-                                            {postData.title && postData.content && (
-                                                <button
-                                                    onClick={() => setStep(2)}
-                                                    className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2rem] font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 group"
-                                                >
-                                                    RESUME PROGRESS
-                                                    <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    if (postData.title || postData.content) {
-                                                        setShowRegenConfirm(true);
-                                                        return; // STOP HERE
-                                                    }
-                                                    handleGenerateContent();
-                                                }}
-                                                disabled={!postData.subreddit || isGenerating}
-                                                className={`py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50 ${postData.title && postData.content ? 'px-8' : 'w-full'}`}
+
+                                        {/* Tone of Voice - Cards */}
+                                        <div className="space-y-4">
+                                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Tone of Voice</label>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {TONES.map(tone => {
+                                                    const Icon = tone.icon;
+                                                    const isActive = postData.tone === tone.id;
+                                                    return (
+                                                        <button
+                                                            key={tone.id}
+                                                            onClick={() => setPostData({ ...postData, tone: tone.id })}
+                                                            className={`group p-5 rounded-2xl border-2 text-left transition-all duration-200 ${isActive
+                                                                ? toneActiveMap[tone.color]
+                                                                : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
+                                                                }`}
+                                                        >
+                                                            <div className="flex items-start gap-3">
+                                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${toneColorMap[tone.color]}`}>
+                                                                    <Icon size={16} />
+                                                                </div>
+                                                                <div className="space-y-0.5">
+                                                                    <p className="font-extrabold text-slate-900 text-sm">{tone.label}</p>
+                                                                    <p className="text-[11px] text-slate-400 font-medium leading-snug">{tone.desc}</p>
+                                                                </div>
+                                                                {isActive && (
+                                                                    <div className="ml-auto">
+                                                                        <Check size={16} className="text-green-500" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Language Selector */}
+                                        <div className="space-y-4 pt-10 border-t border-slate-50">
+                                            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                🌐 Output Language
+                                            </label>
+                                            <select
+                                                value={language}
+                                                onChange={(e) => setLanguage(e.target.value)}
+                                                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm text-slate-700 focus:outline-none focus:border-orange-500 cursor-pointer shadow-sm"
                                             >
-                                                <Sparkles size={20} />
-                                                {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${(includeImage && canGenerateImages) ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${(includeImage && canGenerateImages) ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
-                                                {!postData.title && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
-                                            </button>
+                                                <option value="English">🇺🇸 English</option>
+                                                <option value="Arabic">🇸🇦 Arabic (العربية)</option>
+                                                <option value="French">🇫🇷 French (Français)</option>
+                                                <option value="Spanish">🇪🇸 Spanish (Español)</option>
+                                                <option value="German">🇩🇪 German (Deutsch)</option>
+                                                <option value="Portuguese">🇧🇷 Portuguese (Português)</option>
+                                                <option value="Italian">🇮🇹 Italian (Italiano)</option>
+                                                <option value="Dutch">🇳🇱 Dutch (Nederlands)</option>
+                                                <option value="Turkish">🇹🇷 Turkish (Türkçe)</option>
+                                                <option value="Japanese">🇯🇵 Japanese (日本語)</option>
+                                                <option value="Korean">🇰🇷 Korean (한국어)</option>
+                                                <option value="Chinese">🇨🇳 Chinese (中文)</option>
+                                            </select>
+                                        </div>
+
+
+
+                                        {/* Action Buttons */}
+                                        <div className="flex flex-col gap-4 mt-8">
+                                            <div className="flex items-center justify-between p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${!canGenerateImages ? 'bg-slate-100 text-slate-400' : 'bg-white text-orange-600'}`}>
+                                                        {!canGenerateImages ? <Crown size={18} /> : <ImageIcon size={20} />}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-bold text-slate-900">Include Base Image</p>
+                                                            {!canGenerateImages && <span className="bg-orange-100 text-orange-600 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Pro Feature</span>}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-[10px] text-slate-500 font-medium">
+                                                                {canGenerateImages ? `Generate visual (+${Number(costs.image)} pts)` : 'Upgrade to generate AI visuals for your posts'}
+                                                            </p>
+                                                            {canGenerateImages && (
+                                                                <div className="flex gap-1" title="Applying your brand colors">
+                                                                    <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.primaryColor || '#EA580C' }} />
+                                                                    <div className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: brandProfile.secondaryColor || '#1E293B' }} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={() => canGenerateImages ? setIncludeImage(!includeImage) : window.location.href = '/pricing'}
+                                                        className={`w-12 h-7 rounded-full transition-all relative ${includeImage && canGenerateImages ? 'bg-orange-600' : 'bg-slate-300'} ${!canGenerateImages ? 'cursor-pointer hover:bg-slate-400' : ''}`}
+                                                    >
+                                                        <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeImage && canGenerateImages ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}>
+                                                            {!canGenerateImages && <AlertCircle size={10} className="text-slate-400" />}
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Include Brand Name Toggle */}
+                                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                                                        <Tag size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-900">Include Brand Name</p>
+                                                        <p className="text-[10px] text-slate-500 font-medium">Explicitly mention {postData.productMention || brandProfile.brandName || 'brand'} in post</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setIncludeBrandName(!includeBrandName)}
+                                                    className={`w-12 h-7 rounded-full transition-all relative ${includeBrandName ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeBrandName ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                            </div>
+
+                                            {/* Include Link Toggle */}
+                                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-600 shadow-sm">
+                                                        <LinkIcon size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-900">Include Website Link</p>
+                                                        <p className="text-[10px] text-slate-500 font-medium">Embed link to {postData.productUrl || brandProfile.website || 'website'}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => setIncludeLink(!includeLink)}
+                                                    className={`w-12 h-7 rounded-full transition-all relative ${includeLink ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${includeLink ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                            </div>
+
+                                            {/* Link Tracking Toggle */}
+                                            {includeLink && (
+                                                <div className="flex items-center justify-between p-4 bg-blue-50/30 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${!canTrack ? 'bg-slate-100 text-slate-400' : 'bg-white text-blue-600'}`}>
+                                                            {!canTrack ? <Crown size={18} /> : <Zap size={18} />}
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-sm font-bold text-slate-900">Enable Link Tracking</p>
+                                                                {!canTrack && <span className="bg-blue-100 text-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Pro Feature</span>}
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-500 font-medium">
+                                                                {canTrack ? 'Get analytics on every click' : 'Track clicks & performance for your links'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => canTrack ? setUseTracking(!useTracking) : window.location.href = '/pricing'}
+                                                        className={`w-12 h-7 rounded-full transition-all relative ${useTracking && canTrack ? 'bg-blue-600' : 'bg-slate-300'}`}
+                                                    >
+                                                        <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${useTracking && canTrack ? 'translate-x-5' : 'translate-x-0'} flex items-center justify-center`}>
+                                                            {!canTrack && <AlertCircle size={10} className="text-slate-400" />}
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <div className="flex gap-3">
+                                                {postData.title && postData.content && (
+                                                    <button
+                                                        onClick={() => setStep(2)}
+                                                        className="flex-1 py-5 bg-white border-2 border-slate-900 text-slate-900 rounded-[2rem] font-black hover:bg-slate-50 transition-all flex items-center justify-center gap-2 group"
+                                                    >
+                                                        RESUME PROGRESS
+                                                        <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        if (postData.title || postData.content) {
+                                                            setShowRegenConfirm(true);
+                                                            return; // STOP HERE
+                                                        }
+                                                        handleGenerateContent();
+                                                    }}
+                                                    disabled={!postData.subreddit || isGenerating}
+                                                    className={`py-5 bg-slate-900 text-white rounded-[2rem] font-black hover:bg-orange-600 transition-all shadow-2xl flex items-center justify-center gap-2 group disabled:opacity-50 ${postData.title && postData.content ? 'px-8' : 'w-full'}`}
+                                                >
+                                                    <Sparkles size={20} />
+                                                    {isGenerating ? 'ORCHESTRATING...' : postData.title ? `RE-GENERATE (${(includeImage && canGenerateImages) ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} pts)` : `GENERATE POST (${(includeImage && canGenerateImages) ? (Number(costs.post) + Number(costs.image)) : Number(costs.post)} PTS)`}
+                                                    {!postData.title && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
