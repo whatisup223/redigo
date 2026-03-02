@@ -5315,15 +5315,34 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       creditsRemaining: updatedUser.credits
     });
 
+    // ── SEMANTIC ANALYSIS ENHANCEMENT ────────────────────────────────────────
+    let finalPosts = [];
+    try {
+      const postsForAI = posts.slice(0, 15);
+      const remainingPosts = posts.slice(15);
+      const analyzed = await performSemanticAnalysis(postsForAI);
+
+      finalPosts = [...analyzed, ...remainingPosts].sort((a, b) => {
+        const aHasReason = !!a.analysisReason;
+        const bHasReason = !!b.analysisReason;
+        if (aHasReason && !bHasReason) return -1;
+        if (!aHasReason && bHasReason) return 1;
+        return (b.opportunityScore || 0) - (a.opportunityScore || 0);
+      });
+    } catch (aiErr) {
+      console.error('[Fetch] AI Error:', aiErr);
+      finalPosts = posts; // Fallback
+    }
+
     // ── PERSIST RESULTS TO USER RECORD ──────────────────────────────────────
     try {
-      await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: posts.slice(0, 50) } });
+      await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: finalPosts.slice(0, 50) } });
     } catch (dbErr) {
       console.error('[Fetch] Failed to persist leads:', dbErr);
     }
 
     return res.json({
-      posts: posts.slice(0, 50),
+      posts: finalPosts.slice(0, 50),
       credits: updatedUser.credits,
       dailyUsagePoints: updatedUser.dailyUsagePoints,
       dailyUsage: updatedUser.dailyUsage,
