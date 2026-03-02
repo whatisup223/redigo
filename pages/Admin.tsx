@@ -45,6 +45,7 @@ import {
     TrendingDown,
     UserMinus,
     Download,
+    Terminal,
     Link as LinkIcon
 } from 'lucide-react';
 
@@ -3405,63 +3406,74 @@ Return ONLY a valid JSON array. No conversational text.
 
                         {/* Logs Tab */}
                         {activeTab === 'logs' && (
-                            <div className="bg-slate-900 text-slate-300 p-8 rounded-[2.5rem] font-mono text-xs md:text-sm leading-relaxed shadow-2xl h-[600px] overflow-y-auto custom-scrollbar flex flex-col-reverse">
-
-                                <div>
-                                    {systemLogs.length === 0 ? (
-                                        <div className="text-center text-slate-500 py-10 italic">No system logs available yet...</div>
-                                    ) : (
-                                        systemLogs.map((log) => {
-                                            let colorClass = 'text-slate-300';
-                                            if (log.level === 'WARN') colorClass = 'text-orange-400';
-                                            if (log.level === 'ERROR') colorClass = 'text-red-400 font-bold';
-                                            if (log.level === 'SUCCESS') colorClass = 'text-emerald-400 font-bold';
-
-                                            // Feature-specific highlighting
-                                            const isExtension = log.message?.includes('Ext-Reddit') || log.message?.includes('Extension');
-                                            const isServer = log.message?.includes('via SERVER') || log.message?.includes('Mobile Server');
-
-                                            if (isExtension) colorClass = 'text-emerald-400 font-bold';
-                                            if (isServer) colorClass = 'text-red-400 font-bold';
-
-                                            return (
-                                                <div key={log.id} className="mb-1 hover:bg-slate-800/50 p-1 rounded -mx-1 px-2 transition-colors break-words flex items-start gap-2">
-                                                    <span className="text-slate-500 flex-shrink-0 whitespace-nowrap">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                                                    <span className={`uppercase w-16 inline-block font-bold text-[10px] tracking-wider flex-shrink-0 ${colorClass}`}>{log.level}</span>
-                                                    <div className="flex flex-col">
-                                                        <span className={colorClass}>{log.message}</span>
-                                                        {log.metadata && Object.keys(log.metadata).length > 0 && (
-                                                            <span className="text-slate-600 text-[10px] font-medium opacity-80 mt-0.5">
-                                                                {JSON.stringify(log.metadata)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })
-                                    )}
-                                    <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-800/50">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                                            <span className="text-xs font-bold uppercase tracking-widest text-green-400">Live System Logs</span>
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200/60 rounded-2xl shadow-sm">
+                                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-600">Live Infrastructure Node</span>
                                         </div>
-                                        <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter">Auto-refreshing (3s)</span>
-
+                                        <div className="hidden sm:flex items-center gap-2 text-slate-400">
+                                            <RefreshCw size={12} className="animate-spin" />
+                                            <span className="text-[10px] font-bold uppercase tracking-tighter">Polling Active (3s)</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
                                         <button
                                             onClick={handleExportLogs}
-                                            className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500 text-blue-500 hover:text-white border border-blue-500/20 rounded-xl transition-all duration-300 group"
+                                            className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200 shadow-sm rounded-2xl font-bold text-xs transition-all active:scale-95 group"
                                         >
-                                            <Download size={14} className="group-hover:scale-110 transition-transform" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Export Logs</span>
+                                            <Download size={16} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                                            Export Logs
                                         </button>
 
                                         <button
                                             onClick={handleClearLogs}
-                                            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-xl transition-all duration-300 group"
+                                            className="flex items-center gap-2 px-6 py-3 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 shadow-sm rounded-2xl font-bold text-xs transition-all active:scale-95 group"
                                         >
-                                            <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Clear All Logs</span>
+                                            <Trash2 size={16} className="text-rose-500 group-hover:scale-110 transition-transform" />
+                                            Clear All Logs
                                         </button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900 text-slate-300 p-8 rounded-[2.5rem] font-mono text-xs md:text-sm leading-relaxed shadow-2xl h-[600px] overflow-y-auto custom-scrollbar flex flex-col-reverse border border-slate-800">
+                                    <div>
+                                        {systemLogs.length === 0 ? (
+                                            <div className="text-center text-slate-500 py-20 italic flex flex-col items-center gap-4">
+                                                <Terminal size={40} className="opacity-10" />
+                                                <p className="font-bold uppercase tracking-widest text-[10px]">Awaiting system signals...</p>
+                                            </div>
+                                        ) : (
+                                            systemLogs.map((log) => {
+                                                let colorClass = 'text-slate-300';
+                                                if (log.level === 'WARN') colorClass = 'text-orange-400';
+                                                if (log.level === 'ERROR') colorClass = 'text-red-400 font-bold';
+                                                if (log.level === 'SUCCESS') colorClass = 'text-emerald-400 font-bold';
+
+                                                // Feature-specific highlighting
+                                                const isExtension = log.message?.includes('Ext-Reddit') || log.message?.includes('Extension');
+                                                const isServer = log.message?.includes('via SERVER') || log.message?.includes('Mobile Server');
+
+                                                if (isExtension) colorClass = 'text-emerald-400 font-bold';
+                                                if (isServer) colorClass = 'text-red-400 font-bold';
+
+                                                return (
+                                                    <div key={log.id} className="mb-1 hover:bg-slate-800/50 p-1.5 rounded -mx-1.5 px-3 transition-colors break-words flex items-start gap-4 group">
+                                                        <span className="text-slate-600 flex-shrink-0 whitespace-nowrap font-bold text-[10px]">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                                                        <span className={`uppercase w-16 inline-block font-black text-[10px] tracking-wider flex-shrink-0 ${colorClass}`}>{log.level}</span>
+                                                        <div className="flex flex-col flex-1">
+                                                            <span className={`${colorClass} leading-relaxed`}>{log.message}</span>
+                                                            {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                                                <span className="text-slate-600 text-[10px] font-medium opacity-60 mt-1 select-none pointer-events-none">
+                                                                    {JSON.stringify(log.metadata)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
                                     </div>
                                 </div>
                             </div>

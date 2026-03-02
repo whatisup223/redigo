@@ -882,9 +882,20 @@ export const Comments: React.FC = () => {
           if (redditSettings.useServerFallback) {
             console.log('[Hybrid] Falling back to Server Fetching');
             const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
+
+            if (response.status === 404 || response.status === 403) {
+              const errData = await response.json();
+              setSearchError(errData.message || 'Subreddit not found or inaccessible.');
+              showToast(errData.message || 'Subreddit not found or inaccessible.', 'error');
+              setIsFetching(false);
+              setReloadCooldown(0);
+              return;
+            }
+
             if (!response.ok) throw new Error('Server fallback failed');
             data = await response.json();
           } else {
+            setSearchError(extErr.message || 'Extension fetch failed');
             throw extErr;
           }
         }
