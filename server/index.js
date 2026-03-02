@@ -4836,8 +4836,11 @@ app.get('/api/subreddit/about', async (req, res) => {
       const errorText = await response.text();
       console.warn(`[Subreddit Check] Reddit API returned ${response.status} for r/${cleanName}: ${errorText.substring(0, 100)}`);
       // If 404 or 403, it's definitely not going to allow images we can post to
-      if (response.status === 404 || response.status === 403) {
-        return res.json({ data: { allow_images: false, allow_media: false, submission_type: 'self', error: 'Subreddit not accessible' } });
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'SUBREDDIT_NOT_FOUND', message: `Subreddit r/${cleanName} not found.` });
+      }
+      if (response.status === 403) {
+        return res.status(403).json({ error: 'SUBREDDIT_PRIVATE', message: `Subreddit r/${cleanName} is private or inaccessible.` });
       }
       return res.status(response.status).json({ error: 'Subreddit data inaccessible' });
     }

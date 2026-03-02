@@ -264,7 +264,7 @@ export const generateRedditPost = async (
   includeBrandName: boolean = true,
   includeLink: boolean = true,
   useTracking: boolean = false
-): Promise<{ title: string; content: string; imagePrompt: string; credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
+): Promise<{ id: string; title: string; content: string; imagePrompt: string; credits?: number; dailyUsagePoints?: number; dailyUsage?: number }> => {
   try {
     const savedProfile = userId ? await fetchBrandProfile(userId) : {};
 

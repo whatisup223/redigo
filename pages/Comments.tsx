@@ -98,6 +98,7 @@ export const Comments: React.FC = () => {
   const [searchKeywords, setSearchKeywords] = useState('');
   const [generatedReply, setGeneratedReply] = useState<GeneratedReply | null>(null);
   const [editedComment, setEditedComment] = useState('');
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [commentImagePrompt, setCommentImagePrompt] = useState('');
   const [commentImageUrl, setCommentImageUrl] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -787,6 +788,7 @@ export const Comments: React.FC = () => {
     // ────────────────────────────────────────────────────────────────────
 
     setIsFetching(true);
+    setSearchError(null); // Reset error state
     setPosts([]); // Clear previous results instantly
     setSelectedPost(null); // Clear selected post to avoid old post mixing
     setActiveIntentFilter('All'); // Reset AI filter to default
@@ -883,9 +885,10 @@ export const Comments: React.FC = () => {
           setShowNoCreditsModal(true);
           return;
         }
-        if (response.status === 403) {
+        if (response.status === 404 || response.status === 403) {
           const errData = await response.json();
-          showToast(errData.message || 'Server-side fetching is disabled.', 'error');
+          setSearchError(errData.message || 'Subreddit not found or inaccessible.');
+          showToast(errData.message || 'Subreddit not found or inaccessible.', 'error');
           setIsFetching(false);
           setReloadCooldown(0);
           return;
@@ -1330,7 +1333,19 @@ export const Comments: React.FC = () => {
               </div>
             )}
 
-            {posts.length === 0 && !isFetching && (
+            {searchError && !isFetching && (
+              <div className="flex flex-col items-center justify-center py-20 bg-red-50 rounded-[3rem] border border-red-100 shadow-sm space-y-4">
+                <div className="w-20 h-20 bg-red-100 text-red-600 rounded-3xl flex items-center justify-center">
+                  <AlertTriangle size={40} />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-red-900">Search Error</h3>
+                  <p className="text-red-700 text-sm font-medium">{searchError}</p>
+                </div>
+              </div>
+            )}
+            
+            {posts.length === 0 && !isFetching && !searchError && (
               <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
                 <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200">
                   <Search size={40} />

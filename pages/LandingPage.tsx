@@ -126,12 +126,11 @@ export const LandingPage: React.FC = () => {
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-bold text-slate-500">
-            <button onClick={() => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Home</button>
+            <button onClick={() => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors text-slate-900">Home</button>
             <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Features</button>
-            <button onClick={() => document.getElementById('extraction')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Extraction</button>
-            <button onClick={() => document.getElementById('replies')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Outreach</button>
-            <button onClick={() => document.getElementById('posts')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Content</button>
-            <button onClick={() => document.getElementById('analytics')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">ROI</button>
+            <button onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">How it Works</button>
+            <button onClick={() => document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Live Demo</button>
+            <button onClick={() => document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Testimonials</button>
             <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Pricing</button>
           </div>
 
@@ -156,10 +155,10 @@ export const LandingPage: React.FC = () => {
           <div className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-slate-200 p-6 space-y-4 animate-in slide-in-from-top-4 duration-300 shadow-xl">
             <div className="flex flex-col gap-4 text-base font-bold text-slate-600">
               <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Home</button>
-              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('extraction')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Extraction Engine</button>
-              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('replies')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">AI Outreach</button>
-              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('posts')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Content Architect</button>
-              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('analytics')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">ROI Analytics</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Features</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">How it Works</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Live Demo</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Testimonials</button>
               <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Pricing</button>
             </div>
 
@@ -234,7 +233,7 @@ export const LandingPage: React.FC = () => {
               Start Growing on Reddit
             </Link>
             <button
-              onClick={() => document.getElementById('approach')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={() => document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth' })}
               className="w-full sm:w-auto px-10 py-5 bg-white text-slate-700 border border-slate-200 rounded-[2rem] font-bold text-xl hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-1 transition-all shadow-sm flex items-center justify-center gap-3"
             >
               <Globe size={24} />
@@ -396,7 +395,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
 
-      <section id="extraction" className="py-32 bg-white relative overflow-hidden">
+      <section id="live-demo" className="py-32 bg-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
           <div className="space-y-8 order-1">
             <div className="inline-flex items-center gap-2 bg-orange-50 text-orange-600 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest">

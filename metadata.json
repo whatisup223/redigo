@@ -1,8 +1,0 @@
-{
-  "name": "RedditGo AI",
-  "description": "A comprehensive SaaS platform for Reddit marketing automation, featuring AI-powered value-add replies, subreddit tracking, and engagement analytics.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}

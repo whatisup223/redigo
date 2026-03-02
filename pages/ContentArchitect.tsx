@@ -306,6 +306,7 @@ export const ContentArchitect: React.FC = () => {
             content: '',
             imagePrompt: '',
             imageUrl: '',
+            id: '',
             productMention: '',
             productUrl: '',
             description: '',
@@ -417,9 +418,14 @@ export const ContentArchitect: React.FC = () => {
                         setIsGeneratingImage(false); // Stop progress spinner
                         return;
                     }
+                } else if (subRes.status === 404) {
+                    const errData = await subRes.json();
+                    showToast(errData.message || 'Subreddit not found.', 'error');
+                    setIncludeImage(false);
+                    return;
                 } else if (subRes.status === 429 || subRes.status === 403) {
                     // Reddit is blocking our server, safer to not charge for an image that might fail to post
-                    showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit). Skipping image for safety.`, 'error');
+                    showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit or Private). Skipping image for safety.`, 'error');
                     setIncludeImage(false);
                     return;
                 }
@@ -512,13 +518,15 @@ export const ContentArchitect: React.FC = () => {
             }
         }
 
-        // --- Subreddit Image Pre-flight Check ---
-        if (isImageRequested) {
-            try {
-                const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
-                if (subRes.ok) {
-                    const subData = await subRes.json();
-                    const data = subData.data || {};
+        // --- Subreddit Universal Pre-flight Check ---
+        try {
+            const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
+            if (subRes.ok) {
+                const subData = await subRes.json();
+                const data = subData.data || {};
+
+                // If user requested an image, specifically check if the subreddit allows it
+                if (isImageRequested) {
                     const isBlocked = data.allow_images === false ||
                         data.allow_images === 0 ||
                         data.allow_media === false ||
@@ -526,7 +534,7 @@ export const ContentArchitect: React.FC = () => {
                         data.submission_type === 'self';
 
                     if (isBlocked) {
-                        showToast(`r/${postData.subreddit} does not allow images. Skipped to save credits! 🛡️`, 'error');
+                        showToast(`r/${postData.subreddit} does not allow images. Switching to text-only mode to save credits! 🛡️`, 'error');
                         isImageRequested = false;
                         setIncludeImage(false);
                         if (mode === 'image') {
@@ -536,9 +544,18 @@ export const ContentArchitect: React.FC = () => {
                         }
                         mode = 'text'; // Fallback to text
                     }
-                } else if (subRes.status === 429 || subRes.status === 403 || subRes.status === 500) {
-                    // Fail-safe: if we can't check, we don't dare generate an image
-                    showToast(`Unable to verify r/${postData.subreddit} support. Image skipped to save credits.`, 'error');
+                }
+            } else if (subRes.status === 404 || subRes.status === 403) {
+                const errData = await subRes.json();
+                showToast(errData.message || 'Subreddit not found or inaccessible.', 'error');
+                setIsGenerating(false);
+                setIsGeneratingImage(false);
+                return;
+            } else if (subRes.status === 429 || subRes.status === 500) {
+                // Fail-safe: if we can't check, we skip image but maybe allow text? 
+                // Let's be safe and only allow text if we can't verify.
+                if (isImageRequested) {
+                    showToast(`Unable to verify r/${postData.subreddit} image support. Image skipped for safety.`, 'error');
                     isImageRequested = false;
                     setIncludeImage(false);
                     if (mode === 'image') {
@@ -547,9 +564,9 @@ export const ContentArchitect: React.FC = () => {
                     }
                     mode = 'text';
                 }
-            } catch (err) {
-                console.warn('Subreddit image support check failed (ignoring)', err);
             }
+        } catch (err) {
+            console.warn('Subreddit pre-flight check failed (ignoring)', err);
         }
 
         let totalCost = 0;
