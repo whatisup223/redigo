@@ -40,7 +40,7 @@ export const TermsOfService: React.FC = () => {
                     </ul>
 
                     <h3 className="text-2xl font-bold text-slate-900 mt-12 mb-4">3. Acceptable Use &amp; Reddit Compliance</h3>
-                    <p>You agree to use RedditGo in full compliance with Reddit's <strong>Content Policy</strong>, <strong>User Agreement</strong>, and <a href="https://support.reddithelp.com/hc/en-us/articles/42728983564564" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Responsible Builder Policy</a>. Prohibited activities include:</p>
+                    <p>You agree to use RedditGo in full compliance with Reddit's <a href="https://www.redditinc.com/policies/content-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Content Policy</a>, <a href="https://www.redditinc.com/policies/user-agreement" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">User Agreement</a>, and <a href="https://support.reddithelp.com/hc/en-us/articles/42728983564564" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Responsible Builder Policy</a>. Prohibited activities include:</p>
                     <ul className="list-disc pl-6 space-y-2 mb-6 text-slate-600">
                         <li>Generating or posting spam, deceptive content, or harmful material.</li>
                         <li>Using RedditGo to circumvent Reddit's safety mechanisms or subreddit rules.</li>
