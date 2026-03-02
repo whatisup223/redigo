@@ -5,7 +5,7 @@ import {
     User, CreditCard, Shield, Globe, Link as LinkIcon,
     LogOut, RefreshCw, CheckCircle2, Tag, Palette,
     Building2, Target, Zap, Save, Check, Pencil,
-    Upload, Trash2, Eye, X, Archive
+    Upload, Trash2, Eye, X, Archive, Search
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -1661,6 +1661,10 @@ export const Settings: React.FC = () => {
                                                 icon = <Globe size={18} />;
                                                 colorClass = 'bg-slate-100 text-slate-600';
                                                 label = 'Reddit Search (Server)';
+                                            } else if (item.type === 'empty_search') {
+                                                icon = <Search size={18} />;
+                                                colorClass = 'bg-blue-50 text-blue-500';
+                                                label = 'Search: No Results Found';
                                             }
 
                                             return (
@@ -1671,13 +1675,17 @@ export const Settings: React.FC = () => {
                                                         </div>
                                                         <div>
                                                             <p className="text-sm font-bold text-slate-900">{label}</p>
+                                                            {item.details && <p className="text-[10px] text-slate-500 font-bold mt-0.5">{item.details}</p>}
                                                             <p className="text-[10px] text-slate-400 font-medium">{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="text-sm font-black text-orange-600">
-                                                            -{item.cost} Credits
+                                                    <div className="text-right flex flex-col items-end gap-1">
+                                                        <p className={`text-sm font-black ${item.cost > 0 ? 'text-orange-600' : 'text-emerald-500'}`}>
+                                                            {item.cost > 0 ? `-${item.cost}` : '0'} Credits
                                                         </p>
+                                                        {item.cost === 0 && (
+                                                            <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100 shadow-sm shadow-emerald-50">Returned</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );

@@ -4674,7 +4674,89 @@ app.post('/api/reddit/analyze', async (req, res) => {
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // ── CREDIT CHECK & DEDUCTION ────────────────────────────────────────────
+    // ── DATA PRE-PROCESSING (BEFORE DEDUCTION) ──────────────────────────────
+    let posts = [];
+    let keywordList = [];
+    try {
+      keywordList = (keywords || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+      posts = rawJson.data.children.map(child => {
+        const post = child.data;
+        if (!post) return null;
+        let score = 0;
+        const content = ((post.title || '') + ' ' + (post.selftext || '')).toLowerCase();
+        keywordList.forEach(word => { if (content.includes(word)) score += 40; });
+
+        let intent = 'General';
+        const isSelfPromo = content.match(/launched|my tool|my app|my product|proud to share|check out my/i);
+
+        if (isSelfPromo) {
+          intent = 'Self Promotion';
+          score -= 60;
+        } else if (content.match(/alternative|instead of|replace|better than|unhappy with|too expensive/i)) {
+          intent = 'Seeking Alternative';
+          score += 40;
+        } else if (content.match(/how to|help|question|issue|problem|struggle/i)) {
+          intent = 'Problem Solving';
+          score += 20;
+        } else if (content.match(/recommend|best|any advice|suggestion|looking for|worth the money/i)) {
+          intent = 'Request Advice';
+          score += 35;
+        }
+
+        if (intent !== 'General' && intent !== 'Self Promotion') score += 20;
+        score += Math.min((post.ups || 0) / 5, 20);
+        score += Math.min((post.num_comments || 0) * 2, 20);
+        const opportunityScore = Math.max(0, Math.min(Math.round(score), 100));
+
+        return {
+          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
+          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
+          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
+          opportunityScore, intent, isHot: (post.ups || 0) > 100 || (post.num_comments || 0) > 50,
+          competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
+        };
+      }).filter(p => p !== null && p.id);
+
+      if (keywordList.length > 0) {
+        posts = posts.filter(post => {
+          const searchContent = ((post.title || '') + ' ' + (post.selftext || '')).toLowerCase();
+          return keywordList.some(kw => searchContent.includes(kw));
+        });
+      }
+    } catch (processErr) {
+      console.error('[Analyze] Process Error:', processErr);
+      return res.status(500).json({ error: 'Failed to process data.' });
+    }
+
+    // ── NO RESULTS: RETURN EARLY WITHOUT DEDUCTION ──────────────────────────────
+    if (posts.length === 0) {
+      addSystemLog('INFO', `Ext-Reddit Analysis: 0 results found (Keywords: ${keywords}). No credits deducted.`, { userId });
+
+      // Add record to user history for transparency
+      try {
+        await User.updateOne({ id: userId.toString() }, {
+          $push: {
+            'usageStats.history': {
+              date: new Date().toISOString(),
+              type: 'empty_search',
+              cost: 0,
+              details: `0 results found for: ${keywords}`
+            }
+          }
+        });
+      } catch (logErr) {
+        console.warn('[HistoryLog] Failed to log empty search:', logErr);
+      }
+
+      return res.json({
+        posts: [],
+        credits: user.credits,
+        dailyUsage: user.dailyUsage,
+        dailyUsagePoints: user.dailyUsagePoints
+      });
+    }
+
+    // ── CREDIT CHECK & DEDUCTION (ONLY IF RESULTS FOUND) ────────────────────────
     const cost = Number(aiSettings.creditCosts?.fetch) ?? 1;
     const today = new Date().toISOString().split('T')[0];
 
@@ -4701,7 +4783,6 @@ app.post('/api/reddit/analyze', async (req, res) => {
       }
     }
 
-    // Atomic credit deduction
     const updatedUser = await User.findOneAndUpdate(
       { id: userId.toString(), $or: [{ role: 'admin' }, { credits: { $gte: cost } }] },
       {
@@ -4720,67 +4801,13 @@ app.post('/api/reddit/analyze', async (req, res) => {
     if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
 
     const userIp = req.headers['x-forwarded-for'] || req.ip || '0.0.0.0';
-    addSystemLog('INFO', `Ext-Reddit Analysis (User: ${updatedUser.redditUsername || userId})`, {
+    addSystemLog('INFO', `Ext-Reddit Analysis (Results: ${posts.length})`, {
       userId,
       redditUsername: updatedUser.redditUsername,
-      userIp,
       cost,
       creditsRemaining: updatedUser.credits
     });
 
-    // ── PROCESS DATA ────────────────────────────────────────────────────────
-    let posts = [];
-    try {
-      const keywordList = (keywords || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
-      posts = rawJson.data.children.map(child => {
-        const post = child.data;
-        if (!post) return null;
-        let score = 0;
-        const content = ((post.title || '') + ' ' + (post.selftext || '')).toLowerCase();
-        keywordList.forEach(word => { if (content.includes(word)) score += 40; });
-
-        let intent = 'General';
-        const isSelfPromo = content.match(/launched|my tool|my app|my product|proud to share|check out my/i);
-
-        if (isSelfPromo) {
-          intent = 'Self Promotion';
-          score -= 60; // Heavy penalty for competitors/self-promoters
-        } else if (content.match(/alternative|instead of|replace|better than|unhappy with|too expensive/i)) {
-          intent = 'Seeking Alternative';
-          score += 40;
-        } else if (content.match(/how to|help|question|issue|problem|struggle/i)) {
-          intent = 'Problem Solving';
-          score += 20;
-        } else if (content.match(/recommend|best|any advice|suggestion|looking for|worth the money/i)) {
-          intent = 'Request Advice';
-          score += 35;
-        }
-
-        if (intent !== 'General' && intent !== 'Self Promotion') score += 20;
-        score += Math.min((post.ups || 0) / 5, 20);
-        score += Math.min((post.num_comments || 0) * 2, 20);
-        const opportunityScore = Math.max(0, Math.min(Math.round(score), 100));
-
-        return {
-          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
-          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
-          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
-          opportunityScore, intent, isHot: (post.ups || 0) > 100 || (post.num_comments || 0) > 50,
-          competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
-        };
-      }).filter(p => p !== null && p.id);
-
-      // Filtering by keywords
-      if (keywordList.length > 0) {
-        posts = posts.filter(post => {
-          const searchContent = ((post.title || '') + ' ' + (post.selftext || '')).toLowerCase();
-          return keywordList.some(kw => searchContent.includes(kw));
-        });
-      }
-    } catch (processErr) {
-      console.error('[Analyze] Process Error:', processErr);
-      throw new Error('Failed to process data: ' + processErr.message);
-    }
 
     // ── SEMANTIC ANALYSIS ENHANCEMENT ────────────────────────────────────────
     let finalPosts = [];
@@ -4883,177 +4910,140 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Subreddit and keywords are required for search.' });
     }
 
-    // ── CREDIT CHECK & DEDUCTION ────────────────────────────────────────────
+    // ── CONFIG & SORT ──────────────────────────────────────────────────────
     const cost = Number(aiSettings.creditCosts?.fetch) ?? 1;
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    if (cost > 0) {
-      const user = await User.findOne({ id: userId.toString() });
-      if (!user) return res.status(404).json({ error: 'User not found' });
+    const today = new Date().toISOString().split('T')[0];
+    const sortBy = req.query.sort || 'new';
 
-      const today = new Date().toISOString().split('T')[0];
-
-      // Reset daily usage if new day
-      if (user.lastUsageDate !== today) {
-        await User.updateOne({ id: userId.toString() }, {
-          $set: { dailyUsage: 0, dailyUsagePoints: 0, lastUsageDate: today }
-        });
-        user.dailyUsage = 0;
-        user.dailyUsagePoints = 0;
+    // ── PERFORM REDDIT API FETCH BEFORE DEDUCTION ──────────────────────────────
+    let searchQuery = '';
+    if (keywords) {
+      const kwList = keywords.split(',').map(k => k.trim()).filter(k => k);
+      if (kwList.length > 0) {
+        searchQuery = `(${kwList.map(k => `"${k}"`).join(' OR ')})`;
       }
-
-      // Daily limit check (skip for admin)
-      if (user.role !== 'admin') {
-        const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
-        const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
-        const dailyLimit = (Number(user.customDailyLimit) > 0) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
-
-        if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
-          addSystemLog('WARN', `Daily limit reached (Fetch) for user: ${user.email}`, { dailyLimit, usagePoints: user.dailyUsagePoints, cost });
-          return res.status(429).json({ error: 'DAILY_LIMIT_REACHED', used: user.dailyUsagePoints, limit: dailyLimit });
-        }
-
-        if ((user.credits || 0) < cost) {
-          return res.status(402).json({ error: 'OUT_OF_CREDITS' });
-        }
-      }
-
-      // Atomic credit deduction
-      const updatedUser = await User.findOneAndUpdate(
-        { id: userId.toString(), $or: [{ role: 'admin' }, { credits: { $gte: cost } }] },
-        {
-          $inc: {
-            credits: user.role === 'admin' ? 0 : -cost,
-            dailyUsage: 1,
-            dailyUsagePoints: cost,
-            'usageStats.totalSpent': cost
-          },
-          $set: { lastUsageDate: today },
-          $push: { 'usageStats.history': { date: new Date().toISOString(), type: 'fetch', cost } }
-        },
-        { new: true }
-      );
-
-      if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
-
-      const userIp = req.headers['x-forwarded-for'] || req.ip || '0.0.0.0';
-      addSystemLog('INFO', `Reddit Fetch via SERVER (User IP: ${userIp})`, {
-        subreddit,
-        cost,
-        creditsRemaining: updatedUser.credits,
-        redditUsername: updatedUser.redditUsername || 'unknown',
-        userAgent: getDynamicUserAgent(userId, updatedUser.redditUsername)
-      });
-
-      const sortBy = req.query.sort || 'new';
-
-      // ── PERFORM REDDIT API FETCH (PUBLIC JSON - EXTENSION PIVOT) ────────────────────────────────────────
-      let searchQuery = '';
-      if (keywords) {
-        const kwList = keywords.split(',').map(k => k.trim()).filter(k => k);
-        if (kwList.length > 0) {
-          searchQuery = `(${kwList.map(k => `"${k}"`).join(' OR ')})`;
-        }
-      }
-
-      let fetchUrl = '';
-      if (sortBy === 'rising' || sortBy === 'controversial') {
-        fetchUrl = `https://www.reddit.com/r/${subreddit}/${sortBy}.json?limit=100`;
-      } else {
-        fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=${sortBy}&restrict_sr=1&limit=100`;
-      }
-
-      const fetchHeaders = {
-        'User-Agent': getDynamicUserAgent(userId, updatedUser.redditUsername)
-      };
-
-      const response = await fetch(fetchUrl, { headers: fetchHeaders });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return res.status(404).json({ error: 'SUBREDDIT_NOT_FOUND', message: `Subreddit r/${subreddit} not found.` });
-        }
-        if (response.status === 403) {
-          return res.status(403).json({ error: 'SUBREDDIT_PRIVATE', message: `Subreddit r/${subreddit} is private or inaccessible.` });
-        }
-        throw new Error(`Reddit API Blocked (Status ${response.status}). Rate limit exceeded or Reddit is blocking our server IPs.`);
-      }
-
-      const data = await response.json();
-      const keywordList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
-
-      let posts = data.data.children.map(child => {
-        const post = child.data;
-        let score = 0;
-        const content = (post.title + ' ' + post.selftext).toLowerCase();
-        keywordList.forEach(word => { if (content.includes(word)) score += 40; });
-        let intent = 'General';
-        if (content.match(/alternative|instead of|replace|better than/i)) intent = 'Seeking Alternative';
-        else if (content.match(/how to|help|question|issue|problem/i)) intent = 'Problem Solving';
-        else if (content.match(/recommend|best|any advice|suggestion/i)) intent = 'Request Advice';
-        else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
-        if (intent !== 'General') score += 20;
-        score += Math.min(post.ups / 5, 20);
-        score += Math.min(post.num_comments * 2, 20);
-        const opportunityScore = Math.min(Math.round(score), 100);
-        return {
-          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
-          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
-          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
-          opportunityScore, intent, isHot: post.ups > 100 || post.num_comments > 50,
-          competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
-        };
-      }).filter(post => {
-        if (!keywords) return true;
-        const searchContent = (post.title + ' ' + post.selftext).toLowerCase();
-        return keywordList.some(kw => searchContent.includes(kw));
-      });
-
-      // ── SEMANTIC ANALYSIS ENHANCEMENT ────────────────────────────────────────
-      // Limit to top 15 posts to stay fast and cheap
-      const postsForAnalysis = posts.slice(0, 15);
-      const remainingPosts = posts.slice(15);
-
-      const analyzedPosts = await performSemanticAnalysis(postsForAnalysis);
-
-      // Sort: Analyzed posts first, then sort both groups by opportunityScore descending
-      posts = [...analyzedPosts, ...remainingPosts].sort((a, b) => {
-        // Priority 1: Has analysisReason (AI processed)
-        const aHasReason = !!a.analysisReason;
-        const bHasReason = !!b.analysisReason;
-        if (aHasReason && !bHasReason) return -1;
-        if (!aHasReason && bHasReason) return 1;
-
-        // Priority 2: Standard opportunityScore
-        return b.opportunityScore - a.opportunityScore;
-      });
-
-      return res.json({
-        posts: posts.slice(0, 50),
-        credits: updatedUser.credits,
-        dailyUsagePoints: updatedUser.dailyUsagePoints,
-        dailyUsage: updatedUser.dailyUsage,
-        cost
-      });
-
-    } else {
-      // cost = 0: Admin set fetch as free
-      const searchQuery = keywords ? `${keywords} subreddit:${subreddit}` : `subreddit:${subreddit}`;
-      const freeUrl = `https://oauth.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=new&limit=25`;
-      const response = await fetch(freeUrl, { headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': getDynamicUserAgent(userId) } });
-      if (!response.ok) throw new Error(`Reddit API Blocked (Status ${response.status}).`);
-      const data = await response.json();
-      const posts = data.data.children.map(child => {
-        const post = child.data;
-        return {
-          id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
-          ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
-          url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
-          opportunityScore: 50, intent: 'General', isHot: false, competitors: []
-        };
-      });
-      return res.json({ posts, credits: null, cost: 0 });
     }
 
+    let fetchUrl = '';
+    if (sortBy === 'rising' || sortBy === 'controversial') {
+      fetchUrl = `https://www.reddit.com/r/${subreddit}/${sortBy}.json?limit=100`;
+    } else {
+      fetchUrl = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(searchQuery)}&sort=${sortBy}&restrict_sr=1&limit=100`;
+    }
+
+    const fetchHeaders = {
+      'User-Agent': getDynamicUserAgent(userId, user.redditUsername)
+    };
+
+    const response = await fetch(fetchUrl, { headers: fetchHeaders });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'SUBREDDIT_NOT_FOUND', message: `Subreddit r/${subreddit} not found.` });
+      }
+      if (response.status === 403) {
+        return res.status(403).json({ error: 'SUBREDDIT_PRIVATE', message: `Subreddit r/${subreddit} is private or inaccessible.` });
+      }
+      throw new Error(`Reddit API Blocked (Status ${response.status}).`);
+    }
+
+    const data = await response.json();
+    const keywordList = (keywords || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+
+    let posts = data.data.children.map(child => {
+      const post = child.data;
+      if (!post) return null;
+      let score = 0;
+      const content = (post.title + ' ' + post.selftext).toLowerCase();
+      keywordList.forEach(word => { if (content.includes(word)) score += 40; });
+      let intent = 'General';
+      if (content.match(/alternative|instead of|replace|better than|unhappy with/i)) intent = 'Seeking Alternative';
+      else if (content.match(/how to|help|question|issue|problem|struggle/i)) intent = 'Problem Solving';
+      else if (content.match(/recommend|best|any advice|suggestion|looking for/i)) intent = 'Request Advice';
+      else if (content.match(/built|show|made|launched/i)) intent = 'Product Launch';
+      if (intent !== 'General') score += 20;
+      score += Math.min(post.ups / 5, 20);
+      score += Math.min(post.num_comments * 2, 20);
+      const opportunityScore = Math.min(Math.round(score), 100);
+      return {
+        id: post.id, title: post.title, author: post.author, subreddit: post.subreddit,
+        ups: post.ups, num_comments: post.num_comments, selftext: post.selftext,
+        url: `https://reddit.com${post.permalink}`, created_utc: post.created_utc,
+        opportunityScore, intent, isHot: post.ups > 100 || post.num_comments > 50,
+        competitors: ['hubspot', 'salesforce', 'buffer', 'hootsuite'].filter(c => content.includes(c))
+      };
+    }).filter(post => {
+      if (!post) return false;
+      if (!keywords) return true;
+      const searchContent = (post.title + ' ' + post.selftext).toLowerCase();
+      return keywordList.some(kw => searchContent.includes(kw));
+    });
+
+    // ── NO RESULTS: RETURN EARLY WITHOUT DEDUCTION ─────────────────────────
+    if (posts.length === 0) {
+      addSystemLog('INFO', `Server-Reddit Fetch: 0 results for r/${subreddit}. No credits deducted.`, { userId });
+
+      try {
+        await User.updateOne({ id: userId.toString() }, {
+          $push: {
+            'usageStats.history': {
+              date: new Date().toISOString(),
+              type: 'empty_search',
+              cost: 0,
+              details: `0 leads found in r/${subreddit} for: ${keywords}`
+            }
+          }
+        });
+      } catch (logErr) {
+        console.warn('[HistoryLog] Failed to log empty search:', logErr);
+      }
+
+      return res.json({ posts: [], credits: user.credits, dailyUsagePoints: user.dailyUsagePoints, dailyUsage: user.dailyUsage });
+    }
+
+    // ── CREDIT CHECK & DEDUCTION (NOW SAFE TO CHARGE) ───────────────────────
+    if (cost > 0 && user.role !== 'admin') {
+      const plan = await Plan.findOne({ $or: [{ id: user.plan }, { name: user.plan }] });
+      const planLimit = user.billingCycle === 'yearly' ? plan?.dailyLimitYearly : plan?.dailyLimitMonthly;
+      const dailyLimit = (Number(user.customDailyLimit) > 1) ? Number(user.customDailyLimit) : (Number(planLimit) || 0);
+
+      if (dailyLimit > 0 && ((user.dailyUsagePoints || 0) + cost) > dailyLimit) {
+        return res.status(429).json({ error: 'DAILY_LIMIT_REACHED', used: user.dailyUsagePoints, limit: dailyLimit });
+      }
+
+      if ((user.credits || 0) < cost) {
+        return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+      }
+    }
+
+    const updatedUser = await User.findOneAndUpdate(
+      { id: userId.toString(), $or: [{ role: 'admin' }, { credits: { $gte: cost } }] },
+      {
+        $inc: { credits: user.role === 'admin' ? 0 : -cost, dailyUsage: 1, dailyUsagePoints: cost, 'usageStats.totalSpent': cost },
+        $set: { lastUsageDate: today },
+        $push: { 'usageStats.history': { date: new Date().toISOString(), type: 'fetch', cost } }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
+
+    addSystemLog('INFO', `Server-Reddit Fetch Success (User: ${updatedUser.email}, Results: ${posts.length})`, {
+      userId,
+      cost,
+      creditsRemaining: updatedUser.credits
+    });
+
+    return res.json({
+      posts: posts.slice(0, 50),
+      credits: updatedUser.credits,
+      dailyUsagePoints: updatedUser.dailyUsagePoints,
+      dailyUsage: updatedUser.dailyUsage,
+      cost
+    });
   } catch (error) {
     console.error('Reddit Fetch Error:', error);
     res.status(500).json({ error: error.message });
