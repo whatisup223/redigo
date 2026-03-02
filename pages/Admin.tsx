@@ -101,6 +101,7 @@ interface AISettings {
         post: number;
         image: number;
         fetch?: number;
+        deepScan?: number;
     };
 }
 
@@ -239,17 +240,21 @@ STRICT NEUTRALIZATION (Score 0):
 IMPORTANT NUANCE: 
 If a user mentions a brand because they are UNHAPPY with it, that is a GOLD lead, NOT self-promotion. Be smart!
 
+CRITICAL INSTRUCTION:
+Even if no perfect leads are found, you MUST return at least the 1 or 2 most engaging comments where a helpful reply would build brand trust. Never return an empty array.
+
 OUTPUT FORMAT:
 Return ONLY a valid JSON array. No conversational text.
 [
-  { "id": "post_id", "score": number, "intent": "Buying Now / Switching / Pain Point", "reason": "Briefly explain the money opportunity" }
+  { "id": "comment_id", "opportunityScore": number, "reason": "Briefly explain the money opportunity" }
 ]`,
         analyzerApiKey: '',
         creditCosts: {
             comment: 1,
             post: 2,
             image: 5,
-            fetch: 1
+            fetch: 1,
+            deepScan: 0.5
         }
     });
     const [stripeSettings, setStripeSettings] = useState<StripeSettings>({

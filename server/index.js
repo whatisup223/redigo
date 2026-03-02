@@ -4945,11 +4945,20 @@ A lead is someone who:
 
 Instructions:
 - Return ONLY a valid JSON array.
-- Each object must have: "id" (the comment id), "opportunityScore" (0-100), and "reason" (a SHARP, professional reason why this is a lead).
-- If no leads found, return an empty array [].
+- Each object must have: "id" (the comment id), "opportunityScore" (0-100), and "reason" (a SHARP, professional reason why this is an opportunity).
+- CRITICAL: Even if no perfect leads are found, you MUST return at least the 1 or 2 most engaging comments where a helpful reply would build brand trust. Never return an empty array.
 - Do not include markdown formatting or explanations.`;
 
     let leads = [];
+
+    console.log('[Deep Scan] Starting AI Analysis:', {
+      provider,
+      modelName,
+      hasKey: !!keyToUse,
+      commentsCount: rawComments.length,
+      analyzerApiKey: !!aiSettings?.analyzerApiKey,
+      mainApiKey: !!aiSettings?.apiKey
+    });
 
     if (keyToUse) {
       try {
@@ -4963,10 +4972,15 @@ Instructions:
 
           const result = await model.generateContent([systemPrompt, userPrompt]);
           const text = result.response.text();
-          console.log('[Deep Scan AI Response]:', text);
+          console.log('[Deep Scan AI Raw Response]:', text);
 
           const jsonMatch = text.match(/\[[\s\S]*\]/);
-          if (jsonMatch) analysisResults = JSON.parse(jsonMatch[0]);
+          if (jsonMatch) {
+            analysisResults = JSON.parse(jsonMatch[0]);
+            console.log('[Deep Scan] Parsed Results Count:', analysisResults.length);
+          } else {
+            console.warn('[Deep Scan] AI response did not contain a JSON array.');
+          }
         } else {
           const url = provider === 'openai'
             ? 'https://api.openai.com/v1/chat/completions'
@@ -4997,7 +5011,7 @@ Instructions:
         if (analysisResults.length > 0) {
           leads = rawComments.map(c => {
             const scored = analysisResults.find(a => a.id === c.id);
-            if (scored) return { ...c, opportunityScore: scored.opportunityScore, reason: scored.reason };
+            if (scored) return { ...c, opportunityScore: scored.opportunityScore || scored.score || 50, reason: scored.reason || 'High engagement opportunity' };
             return null;
           }).filter(Boolean);
         }
@@ -5012,7 +5026,7 @@ Instructions:
       leads = rawComments
         .sort((a, b) => b.score - a.score)
         .slice(0, 3)
-        .map(c => ({ ...c, opportunityScore: 60, reason: 'High engagement comment (Manual Review Recommended)' }));
+        .map(c => ({ ...c, opportunityScore: 60, reason: 'High engagement comment (Top Voted)' }));
     }
 
     // Atomic update user credits and saved leads structure
