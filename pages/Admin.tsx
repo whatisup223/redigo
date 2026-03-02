@@ -502,7 +502,10 @@ Return ONLY a valid JSON array. No conversational text.
 
             if (statsRes.ok) setStats(await statsRes.json());
             if (usersRes.ok) setUsers(await usersRes.json());
-            if (aiRes.ok) setAiSettings(await aiRes.json());
+            if (aiRes.ok) {
+                const fetchedAiSettings = await aiRes.json();
+                setAiSettings(prev => ({ ...prev, ...fetchedAiSettings }));
+            }
             if (stripeRes.ok) setStripeSettings(await stripeRes.json());
             const paypalRes = await fetch('/api/admin/paypal-settings', { headers });
             if (paypalRes.ok) setPaypalSettings(await paypalRes.json());
