@@ -185,7 +185,8 @@ export const Dashboard: React.FC = () => {
 
       if (histRes.status === 'fulfilled' && histRes.value.ok) {
         const d = await histRes.value.json();
-        setHistory(Array.isArray(d) ? d : []);
+        const safeHistory = Array.isArray(d) ? d.filter(item => item && item.deployedAt && !isNaN(new Date(item.deployedAt).getTime())) : [];
+        setHistory(safeHistory);
       }
       if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
         const d = await profileRes.value.json();
@@ -312,10 +313,15 @@ export const Dashboard: React.FC = () => {
   const lastWeekEnd = new Date(thisWeekStart);
   lastWeekEnd.setMilliseconds(-1);
 
-  const thisWeek = history.filter(r => new Date(r.deployedAt) >= thisWeekStart);
-  const lastWeek = history.filter(r => {
+  const thisWeek = history.filter(r => {
+    if (!r.deployedAt) return false;
     const d = new Date(r.deployedAt);
-    return d >= lastWeekStart && d <= lastWeekEnd;
+    return !isNaN(d.getTime()) && d >= thisWeekStart;
+  });
+  const lastWeek = history.filter(r => {
+    if (!r.deployedAt) return false;
+    const d = new Date(r.deployedAt);
+    return !isNaN(d.getTime()) && d >= lastWeekStart && d <= lastWeekEnd;
   });
 
   const totalComments = history.length;
@@ -347,7 +353,11 @@ export const Dashboard: React.FC = () => {
   // Group history by date key
   const byDate: Record<string, { comments: number; upvotes: number }> = {};
   history.forEach(r => {
-    const key = toDateKey(new Date(r.deployedAt));
+    if (!r.deployedAt) return;
+    const d = new Date(r.deployedAt);
+    if (isNaN(d.getTime())) return;
+
+    const key = toDateKey(d);
     if (!byDate[key]) byDate[key] = { comments: 0, upvotes: 0 };
     byDate[key].comments += 1;
     byDate[key].upvotes += r.ups || 0;
