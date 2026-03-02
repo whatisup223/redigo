@@ -4580,6 +4580,7 @@ async function performSemanticAnalysis(posts) {
   const keyToUse = aiSettings.analyzerApiKey || aiSettings.apiKey || process.env.GEMINI_API_KEY;
   if (!keyToUse) {
     console.warn('[Semantic Analysis] Skipped: No API Key found for Lead Analyzer.');
+    try { addSystemLog('WARNING', `[Semantic AI Skipped] No analyzerApiKey or apiKey found in settings.`); } catch (e) { }
     return posts;
   }
 
@@ -4635,6 +4636,7 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
         }
       } catch (parseErr) {
         console.error('[Gemini Parse Error] Raw text:', text);
+        try { addSystemLog('ERROR', `[Semantic AI Parse Error] Failed to parse output`, { responseText: text }); } catch (e) { }
       }
     } else {
       const url = provider === 'openai'
@@ -4658,6 +4660,9 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
       });
 
       const data = await response.json();
+      if (!response.ok || !data.choices) {
+        throw new Error(`OpenAI API Error: ${JSON.stringify(data)}`);
+      }
       const content = data.choices[0].message.content;
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -4685,11 +4690,19 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
     });
 
   } catch (err) {
+    const errorDetails = err.response ? await err.response.text().catch(() => 'No text') : 'No response body';
     console.error('[Semantic Analysis ERROR Full Detail]:', {
       message: err.message,
       stack: err.stack,
-      response: err.response ? await err.response.text() : 'No response body'
+      response: errorDetails
     });
+    try {
+      addSystemLog('ERROR', `[Semantic AI Failed] Msg: ${err.message}`, {
+        provider: aiSettings.analyzerProvider || 'google',
+        model: aiSettings.analyzerModel || 'gemini-1.5-flash',
+        details: errorDetails
+      });
+    } catch (logErr) { }
     return posts; // Fallback to original posts if AI fails
   }
 }
@@ -4714,6 +4727,14 @@ app.get('/api/proxy-download', async (req, res) => {
     console.error('[Proxy Download Error]', err);
     res.status(500).json({ error: 'Failed to download image through proxy' });
   }
+});
+
+app.get('/api/debug-settings', (req, res) => {
+  res.json({
+    aiSettings: aiSettings,
+    analyzerKeyStart: (aiSettings.analyzerApiKey || '').substring(0, 4),
+    mainKeyStart: (aiSettings.apiKey || '').substring(0, 4)
+  });
 });
 
 app.post('/api/reddit/analyze', async (req, res) => {
