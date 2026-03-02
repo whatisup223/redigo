@@ -4897,6 +4897,30 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
       return res.status(402).json({ error: 'OUT_OF_CREDITS' });
     }
 
+    // --- Anti-Abuse / Cost-Saving Check ---
+    // If the user scanned this EXACT post recently (e.g. within 24 hours) and zero leads were found (cost = 0),
+    // instantly return an empty result without hitting Reddit or Gemini APIs again to prevent abuse of the zero-cost policy.
+    const recentEmptyScan = user.usageStats?.history?.find(h =>
+      h.type === 'deep_scan' &&
+      h.postId === postId &&
+      h.cost === 0 &&
+      (Date.now() - new Date(h.date).getTime()) < 24 * 60 * 60 * 1000
+    );
+
+    if (recentEmptyScan) {
+      // Gracefully persist empty state in user's leads so UI stays accurate
+      try {
+        await User.findOneAndUpdate(
+          { id: userId.toString() },
+          { $set: { "lastSearchLeads.$[elem].scannedComments": [] } },
+          { arrayFilters: [{ "elem.id": postId }] }
+        );
+      } catch (e) {
+        console.warn('Failed to update empty state on cached scan', e);
+      }
+      return res.json({ comments: [], credits: user.credits });
+    }
+
     // Convert URL to JSON
     const jsonUrl = postUrl.replace(/\/$/, '') + '/.json?limit=50&sort=top';
     const response = await fetch(jsonUrl, {
