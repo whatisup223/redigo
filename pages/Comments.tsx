@@ -113,7 +113,7 @@ export const Comments: React.FC = () => {
   // Wizard & Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
-  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1 });
+  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5 });
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [regenMode, setRegenMode] = useState<'text' | 'image' | 'both'>('text');
   const [refinePrompt, setRefinePrompt] = useState('');
@@ -158,6 +158,7 @@ export const Comments: React.FC = () => {
     useServerFallback: true,
     mobileServerFetching: true
   });
+  const [collapsedPosts, setCollapsedPosts] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     syncUser(); // Refresh user data (credits, daily limits) on mount
@@ -380,7 +381,7 @@ export const Comments: React.FC = () => {
 
   const handleDeepScan = async (post: any) => {
     if (!user?.id) return;
-    const scanCost = 0.5;
+    const scanCost = costs.deepScan || 0.5;
 
     if (user.role !== 'admin' && (user.credits || 0) < scanCost) {
       setShowNoCreditsModal(true);
@@ -401,9 +402,8 @@ export const Comments: React.FC = () => {
       });
 
       if (response.status === 402) { setShowNoCreditsModal(true); return; }
-      if (!response.ok) throw new Error('Deep Scan failed');
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Deep Scan failed');
 
       // Update local posts state to include the new comments
       setPosts(prev => prev.map(p =>
@@ -414,9 +414,9 @@ export const Comments: React.FC = () => {
         updateUser({ credits: data.credits });
       }
 
-      showToast(`Scan complete! Found ${data.comments?.length || 0} opportunity in comments.`, 'success');
-    } catch (err) {
-      showToast('Deep Scan failed. Please try again.', 'error');
+      showToast(`Scan complete! Found ${data.comments?.length || 0} high-intent leads. 🔍`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Deep Scan failed. Please try again.', 'error');
     } finally {
       setIsScanning(null);
     }
@@ -1508,6 +1508,18 @@ export const Comments: React.FC = () => {
                         <Clock size={14} />
                         {post.created_utc ? new Date(post.created_utc * 1000).toLocaleDateString() : 'Recent'}
                       </div>
+                      {post.scannedComments && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCollapsedPosts(prev => ({ ...prev, [post.id]: !prev[post.id] }));
+                          }}
+                          className="flex items-center gap-1.5 text-orange-600 text-[10px] font-black uppercase tracking-wider bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors ml-auto"
+                        >
+                          <ChevronDown size={14} className={`transition-transform duration-300 ${collapsedPosts[post.id] ? '' : 'rotate-180'}`} />
+                          {collapsedPosts[post.id] ? 'Show Scanned' : 'Hide Scanned'}
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 w-full md:w-auto mt-4 md:mt-0 md:shrink-0">
@@ -1529,14 +1541,17 @@ export const Comments: React.FC = () => {
                         className="w-full md:w-48 bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm border border-orange-100"
                       >
                         {isScanning === post.id ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
-                        {isScanning === post.id ? 'Scanning...' : 'Deep Scan'}
+                        <div className="flex flex-col items-center">
+                          <span>{isScanning === post.id ? 'Scanning...' : 'Deep Scan Comments'}</span>
+                          <span className="text-[8px] opacity-70">{costs.deepScan || 0.5} PTS</span>
+                        </div>
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Scanned Comments Results */}
-                {post.scannedComments && post.scannedComments.length > 0 && (
+                {post.scannedComments && post.scannedComments.length > 0 && !collapsedPosts[post.id] && (
                   <div className="mt-8 pt-6 border-t border-slate-50 space-y-4 animate-in slide-in-from-top-4 duration-500">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">

@@ -1817,7 +1817,8 @@ Return ONLY a valid JSON array. No conversational text.
     comment: 1,
     post: 2,
     image: 5,
-    fetch: 1
+    fetch: 1,
+    deepScan: 0.5
   },
   redditFetchCooldown: 30,
   redditPostCooldown: 300
@@ -1837,6 +1838,9 @@ aiSettings.creditCosts = {
   fetch: (aiSettings.creditCosts?.fetch !== undefined && aiSettings.creditCosts?.fetch !== null && !isNaN(Number(aiSettings.creditCosts?.fetch)))
     ? Number(aiSettings.creditCosts.fetch)
     : defaultAiSettings.creditCosts.fetch,
+  deepScan: (aiSettings.creditCosts?.deepScan !== undefined && aiSettings.creditCosts?.deepScan !== null && !isNaN(Number(aiSettings.creditCosts?.deepScan)))
+    ? Number(aiSettings.creditCosts.deepScan)
+    : (defaultAiSettings.creditCosts.deepScan || 0.5),
 };
 
 // Stripe Settings (In-memory storage for demo)
@@ -3619,7 +3623,10 @@ app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
       image: Number(newSettings.creditCosts.image) || (aiSettings.creditCosts?.image || 5),
       fetch: (newSettings.creditCosts.fetch !== undefined && newSettings.creditCosts.fetch !== null)
         ? Number(newSettings.creditCosts.fetch)
-        : (aiSettings.creditCosts?.fetch ?? 1)
+        : (aiSettings.creditCosts?.fetch ?? 1),
+      deepScan: (newSettings.creditCosts.deepScan !== undefined && newSettings.creditCosts.deepScan !== null)
+        ? Number(newSettings.creditCosts.deepScan)
+        : (aiSettings.creditCosts?.deepScan ?? 0.5)
     };
   }
 
@@ -4883,9 +4890,8 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Credit Check - Use default 1.0 if aiSettings is weirdly empty
-    const fetchCost = Number(aiSettings?.creditCosts?.fetch || 1.0);
-    const scanCost = fetchCost * 0.5;
+    // Credit Check - Use configured cost from aiSettings
+    const scanCost = Number(aiSettings?.creditCosts?.deepScan || 0.5);
 
     if (user.role !== 'admin' && (user.credits || 0) < scanCost) {
       return res.status(402).json({ error: 'OUT_OF_CREDITS' });
@@ -4926,16 +4932,10 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
     if (rawComments.length === 0) return res.json({ comments: [] });
 
     // AI Analysis to find "Thirsty Leads" in comments
+    const provider = aiSettings?.analyzerProvider || 'google';
+    const modelName = aiSettings?.analyzerModel || (provider === 'google' ? 'gemini-1.5-flash' : 'gpt-4o-mini');
     const keyToUse = aiSettings?.analyzerApiKey || aiSettings?.apiKey || process.env.GEMINI_API_KEY;
-    let leads = [];
-
-    if (keyToUse) {
-      try {
-        const { GoogleGenerativeAI } = await import('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(keyToUse);
-        const model = genAI.getGenerativeModel({ model: aiSettings?.analyzerModel || 'gemini-1.5-flash' });
-
-        const prompt = `You are a Lead Intelligence agent for a SaaS/Product growth tool. 
+    const systemPrompt = aiSettings?.analyzerSystemPrompt || `You are a Lead Intelligence agent for a SaaS/Product growth tool. 
 Analyze these 30 Reddit comments and identify HIGH-INTENT leads. 
 A lead is someone who:
 1. Is explicitly asking for help with a specific problem.
@@ -4943,57 +4943,83 @@ A lead is someone who:
 3. Is asking for recommendations for a tool or service.
 4. Expresses a strong desire for a solution to a repetitive task.
 
-Comments Data: ${JSON.stringify(rawComments)}
-
 Instructions:
 - Return ONLY a valid JSON array.
 - Each object must have: "id" (the comment id), "opportunityScore" (0-100), and "reason" (a SHARP, professional reason why this is a lead).
 - If no leads found, return an empty array [].
-- Do not include markdown formatting or explanations.
+- Do not include markdown formatting or explanations.`;
 
-Example Output Format:
-[ {"id": "k123", "opportunityScore": 85, "reason": "User is actively looking for an alternative to Slack for small teams."} ]`;
+    let leads = [];
 
-        const result = await model.generateContent(prompt);
-        if (!result.response) throw new Error('Empty response from Gemini');
-        const text = result.response.text();
-        console.log('[Deep Scan AI Response]:', text);
+    if (keyToUse) {
+      try {
+        let analysisResults = [];
+        const userPrompt = `Comments Data: ${JSON.stringify(rawComments)}`;
 
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const analysis = JSON.parse(jsonMatch[0]);
+        if (provider === 'google') {
+          const { GoogleGenerativeAI } = await import('@google/generative-ai');
+          const genAI = new GoogleGenerativeAI(keyToUse);
+          const model = genAI.getGenerativeModel({ model: modelName });
+
+          const result = await model.generateContent([systemPrompt, userPrompt]);
+          const text = result.response.text();
+          console.log('[Deep Scan AI Response]:', text);
+
+          const jsonMatch = text.match(/\[[\s\S]*\]/);
+          if (jsonMatch) analysisResults = JSON.parse(jsonMatch[0]);
+        } else {
+          const url = provider === 'openai'
+            ? 'https://api.openai.com/v1/chat/completions'
+            : `${aiSettings.baseUrl}/chat/completions`;
+
+          const apiResponse = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${keyToUse}`
+            },
+            body: JSON.stringify({
+              model: modelName,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              response_format: { type: "json_object" }
+            })
+          });
+
+          const apiData = await apiResponse.json();
+          const content = apiData.choices[0].message.content;
+          const jsonMatch = content.match(/\[[\s\S]*\]/);
+          if (jsonMatch) analysisResults = JSON.parse(jsonMatch[0]);
+        }
+
+        if (analysisResults.length > 0) {
           leads = rawComments.map(c => {
-            const scored = analysis.find(a => a.id === c.id);
+            const scored = analysisResults.find(a => a.id === c.id);
             if (scored) return { ...c, opportunityScore: scored.opportunityScore, reason: scored.reason };
             return null;
           }).filter(Boolean);
-        } else {
-          console.warn('[Deep Scan] No JSON array found in AI response');
-          throw new Error('Invalid AI response format');
         }
       } catch (aiErr) {
-        console.error('[Deep Scan] AI Analysis Error Detail:', {
-          message: aiErr.message,
-          stack: aiErr.stack,
-          aiSettings: { model: aiSettings?.analyzerModel, hasKey: !!keyToUse }
-        });
-        // Fallback: Pick top 3 by upvotes if AI fails
-        leads = rawComments
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 3)
-          .map(c => ({ ...c, opportunityScore: 60, reason: 'High engagement comment (AI Analyze Failed)' }));
+        console.error('[Deep Scan] AI Analysis Error Detail:', aiErr.message);
+        throw aiErr; // Rethrow to hit fallback below
       }
-    } else {
-      leads = rawComments.slice(0, 5).map(c => ({ ...c, opportunityScore: 50, reason: 'High engagement comment (Manual Scan)' }));
+    }
+
+    if (leads.length === 0) {
+      // Fallback: Pick top 3 by upvotes if AI fails or no leads
+      leads = rawComments
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map(c => ({ ...c, opportunityScore: 60, reason: 'High engagement comment (Manual Review Recommended)' }));
     }
 
     // Atomic update user credits and saved leads structure
-    // We use a safe update: first ensure the field is an array, then update.
     const updatedUser = await User.findOneAndUpdate(
       { id: userId.toString() },
       {
         $inc: { credits: user.role === 'admin' ? 0 : -scanCost },
-        // Update the specific post in lastSearchLeads to include these comments
         $set: { "lastSearchLeads.$[elem].scannedComments": leads },
         $push: { "usageStats.history": { date: new Date().toISOString(), type: 'deep_scan', cost: scanCost, postId } }
       },
