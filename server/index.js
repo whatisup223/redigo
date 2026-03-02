@@ -3604,6 +3604,16 @@ app.get('/api/admin/ai-settings', adminAuth, (req, res) => {
   res.json(safeSettings);
 });
 
+app.get('/api/admin/test-analysis', adminAuth, async (req, res) => {
+  try {
+    const fakePosts = [{ id: 'test1', title: 'Test post', selftext: 'I really hate my current CRM, it is too expensive. Looking for alternatives.', ups: 10, num_comments: 5 }];
+    const analyzed = await performSemanticAnalysis(fakePosts);
+    res.json({ success: true, aiSettings, input: fakePosts, output: analyzed });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
   const newSettings = { ...req.body };
   // Update main API Key only if it's not the masked placeholder
@@ -4604,11 +4614,11 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
       const genAI = new GoogleGenerativeAI(keyToUse);
       const model = genAI.getGenerativeModel({
         model: modelName,
+        systemInstruction: systemPrompt,
         generationConfig: { responseMimeType: "application/json" }
       });
 
       const result = await model.generateContent([
-        systemPrompt,
         `Posts to Analyze: ${JSON.stringify(simplifiedPosts)}`
       ]);
       const response = await result.response;
@@ -4661,13 +4671,14 @@ Return a JSON array of objects with: { "id": "post_id", "score": number, "intent
 
     // Map results back to posts
     return posts.map(post => {
-      const analysis = analysisResults.find(a => a.id === post.id);
+      const analysis = analysisResults.find(a => a && typeof a === 'object' && a.id && String(a.id).trim() === String(post.id).trim());
       if (analysis) {
+        const aiScore = analysis.opportunityScore !== undefined ? analysis.opportunityScore : analysis.score;
         return {
           ...post,
-          opportunityScore: analysis.score || post.opportunityScore,
+          opportunityScore: aiScore !== undefined ? aiScore : post.opportunityScore,
           intent: analysis.intent || post.intent,
-          analysisReason: analysis.reason || ''
+          analysisReason: analysis.reason || analysis.analysisReason || ''
         };
       }
       return post;
