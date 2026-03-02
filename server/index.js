@@ -5022,20 +5022,20 @@ Instructions:
     }
 
     if (leads.length === 0) {
-      // Fallback: Pick top 3 by upvotes if AI fails or no leads
-      leads = rawComments
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map(c => ({ ...c, opportunityScore: 60, reason: 'High engagement comment (Top Voted)' }));
+      // If AI legitimately returned empty (or failed), we respect it.
+      // We don't fall back to arbitrary Top Voted comments.
+      leads = [];
     }
+
+    const actualCost = leads.length > 0 ? scanCost : 0;
 
     // Atomic update user credits and saved leads structure
     const updatedUser = await User.findOneAndUpdate(
       { id: userId.toString() },
       {
-        $inc: { credits: user.role === 'admin' ? 0 : -scanCost },
+        $inc: { credits: user.role === 'admin' ? 0 : -actualCost },
         $set: { "lastSearchLeads.$[elem].scannedComments": leads },
-        $push: { "usageStats.history": { date: new Date().toISOString(), type: 'deep_scan', cost: scanCost, postId } }
+        $push: { "usageStats.history": { date: new Date().toISOString(), type: 'deep_scan', cost: actualCost, postId } }
       },
       {
         arrayFilters: [{ "elem.id": postId }],

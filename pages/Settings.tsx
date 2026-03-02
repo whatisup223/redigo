@@ -1665,6 +1665,10 @@ export const Settings: React.FC = () => {
                                                 icon = <Search size={18} />;
                                                 colorClass = 'bg-blue-50 text-blue-500';
                                                 label = 'Search: No Results Found';
+                                            } else if (item.type === 'deep_scan') {
+                                                icon = <Search size={18} />;
+                                                colorClass = 'bg-orange-100 text-orange-600';
+                                                label = 'AI Deep Scan';
                                             }
 
                                             return (
