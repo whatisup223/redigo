@@ -1229,7 +1229,7 @@ export const Comments: React.FC = () => {
                   <span>{reloadCooldown > 0 ? `${reloadCooldown}s` : 'Search'}</span>
                 </div>
                 {reloadCooldown === 0 && !isFetching && (
-                  <span className="hidden sm:block text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT</span>
+                  <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT</span>
                 )}
               </button>
             </div>
