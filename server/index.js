@@ -3593,6 +3593,24 @@ app.delete('/api/admin/users/:id', adminAuth, async (req, res) => {
 });
 
 // AI Settings
+app.get('/api/admin/system-settings', adminAuth, (req, res) => {
+  res.json(settingsCache.system || { googleAnalyticsId: '' });
+});
+
+app.post('/api/admin/system-settings', adminAuth, (req, res) => {
+  const data = req.body;
+  if (!settingsCache.system) settingsCache.system = {};
+  settingsCache.system = { ...settingsCache.system, ...data };
+  saveSettings({ system: settingsCache.system });
+  res.json({ success: true });
+});
+
+app.get('/api/public-settings', (req, res) => {
+  res.json({
+    googleAnalyticsId: settingsCache.system?.googleAnalyticsId || ''
+  });
+});
+
 app.get('/api/admin/ai-settings', adminAuth, (req, res) => {
   const safeSettings = { ...aiSettings };
   if (safeSettings.apiKey) {

@@ -177,7 +177,8 @@ export const Admin: React.FC = () => {
 
     const activeTab = getActiveTab();
     const [analyticsTab, setAnalyticsTab] = useState<'overview' | 'churn'>('overview');
-    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email'>('ai');
+    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email' | 'system'>('ai');
+    const [systemSettings, setSystemSettings] = useState({ googleAnalyticsId: '' });
     const [aiSubTab, setAiSubTab] = useState<'creative' | 'analyzer'>('creative');
 
     const [users, setUsers] = useState<User[]>([]);
@@ -488,7 +489,7 @@ Return ONLY a valid JSON array. No conversational text.
         const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
-            const [statsRes, usersRes, aiRes, stripeRes, redditRes, smtpRes, plansRes, logsRes, emailRes] = await Promise.all([
+            const [statsRes, usersRes, aiRes, stripeRes, redditRes, smtpRes, plansRes, logsRes, emailRes, systemRes] = await Promise.all([
                 fetch('/api/admin/stats', { headers }),
                 fetch('/api/admin/users', { headers }),
                 fetch('/api/admin/ai-settings', { headers }),
@@ -497,7 +498,8 @@ Return ONLY a valid JSON array. No conversational text.
                 fetch('/api/admin/smtp-settings', { headers }),
                 fetch('/api/plans', { headers }),
                 fetch('/api/admin/logs', { headers }),
-                fetch('/api/admin/email-templates', { headers })
+                fetch('/api/admin/email-templates', { headers }),
+                fetch('/api/admin/system-settings', { headers })
             ]);
 
             if (statsRes.ok) setStats(await statsRes.json());
@@ -514,6 +516,7 @@ Return ONLY a valid JSON array. No conversational text.
             if (emailRes.ok) setEmailTemplates(await emailRes.json());
             if (plansRes.ok) setPlans(await plansRes.json());
             if (logsRes.ok) setSystemLogs(await logsRes.json());
+            if (systemRes.ok) setSystemSettings(await systemRes.json());
         } catch (error) {
             console.error("Failed to fetch admin data", error);
         } finally {
@@ -683,6 +686,28 @@ Return ONLY a valid JSON array. No conversational text.
         } catch (e) {
             console.error(e);
             alert('Error saving settings.');
+        }
+    };
+
+    const handleSaveSystemSettings = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/system-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(systemSettings)
+            });
+            if (res.ok) {
+                alert('System settings saved successfully!');
+            } else {
+                alert('Failed to save system settings.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving system settings.');
         }
     };
 
@@ -2245,6 +2270,13 @@ Return ONLY a valid JSON array. No conversational text.
                                         <Bell size={18} />
                                         Email Automation
                                     </button>
+                                    <button
+                                        onClick={() => setSettingsTab('system')}
+                                        className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'system' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <Activity size={18} />
+                                        System
+                                    </button>
                                 </div>
 
                                 {/* Content Area */}
@@ -3425,6 +3457,49 @@ Return ONLY a valid JSON array. No conversational text.
                                                             </div>
                                                         </div>
                                                     )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {settingsTab === 'system' && (
+                                        <div className="space-y-8 animate-in fade-in duration-500">
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col h-full">
+                                                    <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                                                                <Activity size={24} />
+                                                            </div>
+                                                            <div>
+                                                                <h2 className="text-xl font-bold text-slate-900">Google Analytics</h2>
+                                                                <p className="text-slate-400 text-sm">Track your website traffic and user behavior.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex-grow space-y-6 flex flex-col">
+                                                        <label className="block">
+                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Tracking ID</span>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                value={systemSettings?.googleAnalyticsId || ''}
+                                                                onChange={(e) => setSystemSettings({ ...systemSettings, googleAnalyticsId: e.target.value })}
+                                                                placeholder="G-XXXXXXXXXX"
+                                                            />
+                                                            <p className="mt-2 text-xs text-slate-500 font-medium">This ID will be dynamically injected into your frontend to track user events, sessions, and conversions via Google Analytics 4.</p>
+                                                        </label>
+                                                    </div>
+                                                    <div className="pt-8 flex flex-col justify-end">
+                                                        <button
+                                                            onClick={handleSaveSystemSettings}
+                                                            className="w-full py-4 bg-slate-900 text-white rounded-[2rem] font-bold shadow-xl hover:bg-blue-600 hover:shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                                        >
+                                                            <Save size={20} />
+                                                            Save System Settings
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

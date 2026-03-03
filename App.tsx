@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
 import { AdminLayout } from './components/AdminLayout';
@@ -26,6 +26,29 @@ import { ErrorPage } from './pages/ErrorPage';
 import { ErrorBoundary } from 'react-error-boundary';
 
 const App: React.FC = () => {
+  useEffect(() => {
+    fetch('/api/public-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.googleAnalyticsId) {
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = `https://www.googletagmanager.com/gtag/js?id=${data.googleAnalyticsId}`;
+          document.head.appendChild(script);
+
+          const script2 = document.createElement('script');
+          script2.innerHTML = `
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${data.googleAnalyticsId}');
+          `;
+          document.head.appendChild(script2);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
   return (
     <AuthProvider>
       <Router>
