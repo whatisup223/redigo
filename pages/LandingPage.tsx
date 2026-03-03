@@ -857,16 +857,6 @@ export const LandingPage: React.FC = () => {
                       </li>
 
                       {/* Feature Toggles (Visual) */}
-                      {plan.maxAccounts > 1 && (
-                        <li className="flex items-center gap-3.5 text-sm font-medium text-slate-700">
-                          <div className={`w-6 h-6 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${plan.isPopular ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-600'}`}>
-                            <Check size={14} strokeWidth={3} />
-                          </div>
-                          <span>
-                            {plan.maxAccounts >= 100 ? 'Unlimited Accounts' : `Up to ${plan.maxAccounts} Accounts`}
-                          </span>
-                        </li>
-                      )}
 
                       {plan.allowImages && (
                         <li className="flex items-center gap-3.5 text-sm font-medium text-slate-700">
