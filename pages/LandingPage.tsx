@@ -20,7 +20,13 @@ import {
   Users,
   Users2,
   Image as LucideImage,
-  MousePointer2
+  MousePointer2,
+  LayoutDashboard,
+  CreditCard,
+  HelpCircle,
+  Settings,
+  ThumbsUp,
+  RefreshCw
 } from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
@@ -243,24 +249,220 @@ export const LandingPage: React.FC = () => {
 
 
 
-          {/* Dashboard Mockup - Floating Effect */}
-          <div className="pt-24 relative animate-fade-in-up delay-500">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-b from-orange-100/20 to-transparent rounded-full blur-3xl -z-10 pointer-events-none"></div>
+          {/* Dashboard Mockup - Premium Frame Effect */}
+          <div className="pt-24 relative animate-fade-in-up delay-500 pb-10">
+            {/* Glowing Backdrop */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-b from-orange-500/10 via-orange-300/10 to-transparent rounded-full blur-3xl -z-10 pointer-events-none"></div>
 
-            <div className="relative mx-auto max-w-5xl">
-              <div className="bg-slate-900 rounded-[2rem] overflow-hidden aspect-[16/9] relative shadow-2xl shadow-slate-300 transform hover:scale-[1.01] transition-transform duration-500">
-                <video
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="absolute inset-0 w-full h-full object-cover"
-                >
-                  <source src="https://cdn.pixabay.com/video/2020/05/11/38477-418833987_large.mp4" type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-                {/* Subtle overlay gradient for better text visibility if needed */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
+            <div className="relative mx-auto max-w-6xl px-4 perspective-1000">
+              {/* Main App Window */}
+              <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] overflow-hidden relative shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] hover:shadow-[0_25px_60px_-10px_rgba(234,88,12,0.15)] ring-1 ring-slate-200/50 transform hover:-translate-y-2 transition-all duration-700 mx-auto">
+
+                {/* Clean Modern Browser Header */}
+                <div className="h-12 bg-slate-50 border-b border-slate-100 flex items-center px-6 gap-2">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                    <div className="w-3 h-3 rounded-full bg-amber-400"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                  </div>
+                  <div className="mx-auto bg-white border border-slate-200 rounded-md px-4 py-1 text-[10px] text-slate-400 font-medium flex items-center gap-2">
+                    <Zap size={10} className="text-orange-500" />
+                    app.redditgo.online
+                  </div>
+                </div>
+
+                {/* The Code-Based Perfect Mockup */}
+                <div className="relative w-full overflow-hidden bg-slate-50 flex text-left" style={{ height: '700px' }}>
+                  {/* Sidebar */}
+                  <div className="w-64 bg-white border-r border-slate-100 flex flex-col pt-8 shrink-0 hidden md:flex z-10">
+                    <div className="flex items-center gap-3 px-8 mb-10">
+                      <div className="w-8 h-8 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-200"><Zap size={18} fill="currentColor" /></div>
+                      <span className="font-extrabold text-xl text-slate-900">RedditGo</span>
+                    </div>
+                    <div className="px-8 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">MAIN MENU</div>
+                    <div className="px-4 space-y-1">
+                      <div className="flex items-center gap-3 bg-orange-600 text-white px-4 py-3 rounded-2xl text-sm font-bold shadow-md shadow-orange-200"><LayoutDashboard size={18} /> Dashboard</div>
+                      <div className="flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold"><Bot size={18} /> Post Agent</div>
+                      <div className="flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold"><MessageSquare size={18} /> Comment Agent</div>
+                      <div className="flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold"><BarChart size={18} /> Analytics</div>
+                      <div className="flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold"><CreditCard size={18} /> Pricing</div>
+                      <div className="flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold"><HelpCircle size={18} /> Help & Support</div>
+                      <div className="flex items-center gap-3 text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer px-4 py-3 rounded-2xl text-sm font-bold"><Settings size={18} /> Settings</div>
+                    </div>
+                    <div className="mt-auto p-4">
+                      <div className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:bg-slate-50">
+                        <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0"><img src="https://ui-avatars.com/api/?name=Alex&background=random" alt="Avatar" /></div>
+                        <div className="truncate">
+                          <div className="text-xs font-bold text-slate-900 truncate">Alex Carter</div>
+                          <div className="text-[9px] font-black text-green-600 uppercase flex items-center gap-1 mt-0.5"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> AGENCY PLAN</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Area */}
+                  <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+                    {/* Topbar */}
+                    <div className="h-20 bg-white border-b border-slate-100 flex items-center justify-end px-8 gap-6 shrink-0 relative z-10">
+                      <div className="flex items-center gap-3 bg-orange-50 px-4 py-2 rounded-full border border-orange-100 text-orange-600 text-xs font-black shadow-sm">
+                        <Zap size={14} fill="currentColor" /> AVAILABLE CREDITS: <span className="text-slate-900 ml-1">871 pts</span>
+                      </div>
+                      <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
+                        <div className="text-right hidden sm:block">
+                          <div className="text-xs font-bold text-slate-900">Alex Carter</div>
+                          <div className="text-[10px] font-black text-orange-600 uppercase mt-0.5">AGENCY PLAN</div>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden relative border border-slate-200">
+                          <img src="https://ui-avatars.com/api/?name=Alex&background=random" alt="Avatar" />
+                          <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Content Area */}
+                    <div className="p-6 md:p-10 flex-1 overflow-y-auto">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-10">
+                        <div>
+                          <div className="text-sm text-slate-500 font-medium mb-1">Welcome back, Alex</div>
+                          <h2 className="text-3xl md:text-4xl font-black text-slate-900 flex items-center gap-3">
+                            <div className="w-1.5 md:w-2 h-6 md:h-8 bg-orange-600 rounded-full"></div> Overview
+                          </h2>
+                          <div className="text-sm text-slate-500 mt-2">Your Reddit growth at a glance.</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm"><RefreshCw size={14} /> Updated 06:08 AM</div>
+                          <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200 shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Extension Verified</div>
+                        </div>
+                      </div>
+
+                      {/* Banner */}
+                      <div className="bg-[#111827] rounded-[2rem] p-6 md:p-8 mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute right-0 top-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl -mr-10 -mt-20 pointer-events-none opacity-50" />
+                        <div className="flex items-center gap-5 relative z-10">
+                          <div className="w-12 h-12 md:w-14 md:h-14 bg-white/10 rounded-2xl flex items-center justify-center text-orange-500 backdrop-blur-md border border-white/10 shadow-inner"><Zap fill="currentColor" size={24} /></div>
+                          <div>
+                            <div className="text-lg md:text-xl font-black text-white mb-1">Agency Plan Active</div>
+                            <div className="text-sm md:text-base text-slate-400">You have <span className="text-white font-bold">871 AI credits</span> available.</div>
+                          </div>
+                        </div>
+                        <div className="relative z-10 flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-5 py-2.5 rounded-xl text-xs md:text-sm font-bold border border-emerald-400/20 w-fit">
+                          <Zap size={16} fill="currentColor" /> PRO FEATURES UNLOCKED
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
+                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md hover:border-slate-200">
+                          <div className="flex justify-between items-start mb-6">
+                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center"><MessageSquare size={20} /></div>
+                            <div className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 flex items-center gap-1 rounded-lg"><TrendingUp size={12} />+100.0%</div>
+                          </div>
+                          <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 line-clamp-1">TOTAL COMMENTS</div>
+                          <div className="text-3xl md:text-4xl font-black text-slate-900">2</div>
+                          <div className="text-[10px] md:text-xs text-slate-400 mt-2 font-medium">2 this week</div>
+                        </div>
+                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md hover:border-slate-200">
+                          <div className="flex justify-between items-start mb-6">
+                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center"><ThumbsUp size={20} /></div>
+                            <div className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 flex items-center gap-1 rounded-lg"><TrendingUp size={12} />+100.0%</div>
+                          </div>
+                          <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 line-clamp-1">TOTAL UPVOTES</div>
+                          <div className="text-3xl md:text-4xl font-black text-slate-900">2</div>
+                          <div className="text-[10px] md:text-xs text-slate-400 mt-2 font-medium">2 this week</div>
+                        </div>
+                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md hover:border-slate-200">
+                          <div className="flex justify-between items-start mb-6">
+                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center"><Users size={20} /></div>
+                          </div>
+                          <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 line-clamp-1">EST. REACH</div>
+                          <div className="text-3xl md:text-4xl font-black text-slate-900">36</div>
+                          <div className="text-[10px] md:text-xs text-slate-400 mt-2 font-medium">Based on upvotes</div>
+                        </div>
+                        <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md hover:border-slate-200">
+                          <div className="flex justify-between items-start mb-6">
+                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center"><Globe size={20} /></div>
+                            <div className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 flex items-center gap-1 rounded-lg"><TrendingUp size={12} />+100.0%</div>
+                          </div>
+                          <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 line-clamp-1">COMMUNITIES</div>
+                          <div className="text-3xl md:text-4xl font-black text-slate-900">1</div>
+                          <div className="text-[10px] md:text-xs text-slate-400 mt-2 font-medium">1 active this week</div>
+                        </div>
+                      </div>
+
+                      {/* Charts Zone */}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-6">
+                        <div className="col-span-1 lg:col-span-2 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                            <div>
+                              <div className="font-bold text-slate-900 text-lg">Engagement Trend</div>
+                              <div className="text-xs text-slate-500 mt-1 font-medium">Real upvotes & comments — last 7 days</div>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs font-bold text-slate-600">
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500" /> Upvotes</div>
+                              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500" /> Comments</div>
+                            </div>
+                          </div>
+                          {/* Fake curve chart */}
+                          <div className="h-48 flex items-end justify-between px-2 sm:px-4 pb-4 relative">
+                            {/* Y axis lines */}
+                            <div className="absolute inset-x-8 inset-y-4 flex flex-col justify-between hidden sm:flex">
+                              <div className="border-t border-slate-100 w-full h-0 flex items-center justify-start"><span className="absolute -left-6 text-[10px] text-slate-400 font-bold bg-white">4</span></div>
+                              <div className="border-t border-slate-100 w-full h-0 flex items-center justify-start"><span className="absolute -left-6 text-[10px] text-slate-400 font-bold bg-white">3</span></div>
+                              <div className="border-t border-slate-100 w-full h-0 flex items-center justify-start"><span className="absolute -left-6 text-[10px] text-slate-400 font-bold bg-white">2</span></div>
+                              <div className="border-t border-slate-100 w-full h-0 flex items-center justify-start"><span className="absolute -left-6 text-[10px] text-slate-400 font-bold bg-white">1</span></div>
+                              <div className="border-t border-slate-200 w-full h-0 flex items-center justify-start"><span className="absolute -left-6 text-[10px] text-slate-400 font-bold bg-white">0</span></div>
+                            </div>
+                            {/* Curve representation */}
+                            <div className="absolute inset-x-8 top-4 bottom-8 overflow-hidden z-10 pointer-events-none">
+                              <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 600 160">
+                                <path d="M0,160 C50,160 100,160 150,160 C200,160 250,160 300,140 C350,100 400,60 450,40 C500,20 550,60 600,160" stroke="#3b82f6" strokeWidth="3" fill="url(#gradientBlueDash)" />
+                                <path d="M0,160 C50,160 100,160 150,160 C200,160 250,160 350,120 C400,80 450,160 500,160 C550,160 600,160" stroke="#ea580c" strokeWidth="3" fill="none" className="opacity-0" />
+
+                                <defs>
+                                  <linearGradient id="gradientBlueDash" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="rgba(59, 130, 246, 0.15)" />
+                                    <stop offset="100%" stopColor="rgba(59, 130, 246, 0)" />
+                                  </linearGradient>
+                                </defs>
+                              </svg>
+                            </div>
+                            <div className="text-[10px] font-bold text-slate-400 z-10 w-full flex justify-between absolute -bottom-1 inset-x-8 w-[calc(100%-4rem)]">
+                              <span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span><span>Mon</span><span>Tue</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="col-span-1 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col">
+                          <div>
+                            <div className="font-bold text-slate-900 text-lg">Daily Reach</div>
+                            <div className="text-xs text-slate-500 mt-1 font-medium">Upvotes × 10 per day (real data)</div>
+                          </div>
+                          <div className="flex-1 flex items-end justify-between pb-6 mt-8 relative sm:px-4 pl-6 sm:pl-4">
+                            <div className="absolute inset-x-4 inset-y-0 flex flex-col justify-between mb-6">
+                              <div className="border-t border-slate-100 w-full flex items-center relative"><span className="absolute -left-6 sm:-left-8 text-[10px] text-slate-400 font-bold bg-white z-20 pr-1">36</span></div>
+                              <div className="border-t border-slate-100 w-full flex items-center relative"><span className="absolute -left-6 sm:-left-8 text-[10px] text-slate-400 font-bold bg-white z-20 pr-1">27</span></div>
+                              <div className="border-t border-slate-100 w-full flex items-center relative"><span className="absolute -left-6 sm:-left-8 text-[10px] text-slate-400 font-bold bg-white z-20 pr-1">18</span></div>
+                              <div className="border-t border-slate-100 w-full flex items-center relative"><span className="absolute -left-6 sm:-left-8 text-[10px] text-slate-400 font-bold bg-white z-20 pr-1">9</span></div>
+                              <div className="border-t border-slate-200 w-full flex items-center relative"><span className="absolute -left-6 sm:-left-8 text-[10px] text-slate-400 font-bold bg-white z-20 pr-1">0</span></div>
+                            </div>
+                            {/* Bars */}
+                            <div className="w-[10%] max-w-[12px] rounded-t-full bg-slate-100 h-0 z-10 relative" />
+                            <div className="w-[10%] max-w-[12px] rounded-t-full bg-slate-100 h-0 z-10 relative" />
+                            <div className="w-[10%] max-w-[12px] rounded-t-full bg-slate-100 h-0 z-10 relative" />
+                            <div className="w-[10%] max-w-[12px] rounded-t-full bg-slate-100 h-0 z-10 relative" />
+                            <div className="w-[10%] max-w-[12px] rounded-t-full bg-slate-100 h-0 z-10 relative" />
+                            <div className="w-[15%] max-w-[24px] rounded-t-md bg-orange-600 h-[100%] z-10 shadow-[0_0_15px_rgba(234,88,12,0.4)] relative" />
+                            <div className="w-[10%] max-w-[12px] rounded-t-full bg-slate-100 h-0 z-10 relative" />
+
+                            <div className="absolute -bottom-1 w-[calc(100%-2rem)] mx-4 flex justify-between text-[10px] text-slate-400 font-bold">
+                              <span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span><span className="text-orange-600">Mon</span><span>Tue</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
