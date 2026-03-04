@@ -930,7 +930,7 @@ export const Settings: React.FC = () => {
                         </div>
                     </section>
 
-                    <section className="space-y-4">
+                    <section className="space-y-4 hidden md:block">
                         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
                             <LinkIcon className="text-blue-600" size={20} /> Extension Verification
                         </h2>

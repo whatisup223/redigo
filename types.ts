@@ -8,6 +8,7 @@ export interface RedditPost {
   num_comments: number;
   selftext: string;
   url: string;
+  permalink?: string;
   created_utc: number;
 }
 

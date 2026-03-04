@@ -4047,30 +4047,58 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     // Check low credits (fire and forget)
     checkLowCredits(updatedUser).catch(e => console.error('Low credits check error:', e));
 
-    // ── NEW: Pre-save as Pending for Analytics ──────────────────────────────
+    // ── NEW: Pre-save as Pending for Analytics & Mobile Assistant ───────────
     let itemId = null;
     try {
       const id = Math.random().toString(36).substring(2, 15);
       itemId = id;
+
+      // Extract text content for preview or assistant (AI returns JSON)
+      let cleanComment = text;
+      let cleanPostTitle = context?.postTitle || 'Reddit Post';
+      let cleanPostContent = text;
+
+      try {
+        const startIndex = text.indexOf('{');
+        const endIndex = text.lastIndexOf('}');
+        if (startIndex !== -1 && endIndex !== -1) {
+          const jsonStr = text.substring(startIndex, endIndex + 1);
+          const parsed = JSON.parse(jsonStr);
+          if (type === 'comment' && parsed.comment) {
+            cleanComment = parsed.comment;
+          } else if (type === 'post') {
+            if (parsed.title) cleanPostTitle = parsed.title;
+            if (parsed.content) cleanPostContent = parsed.content;
+          }
+        }
+      } catch (parseErr) {
+        // Fallback to raw text if parsing fails
+      }
+
       if (type === 'comment') {
+        const finalUrl = context?.postUrl || context?.url || '#';
+        const formattedUrl = finalUrl.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com');
+
         await RedditReply.create({
           id,
           userId: userId.toString(),
           postId: context?.postId,
-          postTitle: context?.postTitle || 'Reddit Post',
-          postUrl: context?.postUrl || context?.url,
+          postTitle: cleanPostTitle,
+          postUrl: formattedUrl,
           subreddit: context?.subreddit,
-          comment: text,
+          comment: cleanComment,
           status: 'pending',
           createdAt: new Date()
         });
       } else if (type === 'post') {
+        const sub = context?.subreddit || 'saas';
         await RedditPost.create({
           id,
           userId: userId.toString(),
-          subreddit: context?.subreddit,
-          postTitle: context?.title || 'Reddit Post',
-          postContent: text,
+          subreddit: sub,
+          postTitle: cleanPostTitle,
+          postContent: cleanPostContent,
+          postUrl: `https://www.reddit.com/r/${sub}/submit`,
           status: 'pending',
           createdAt: new Date()
         });
@@ -4367,7 +4395,7 @@ app.get('/api/user/replies', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const history = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
+    const history = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1, createdAt: -1 });
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -4474,7 +4502,7 @@ app.get('/api/user/posts', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const history = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
+    const history = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1, createdAt: -1 });
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });

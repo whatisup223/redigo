@@ -20,7 +20,6 @@ import { RedditCallback } from './pages/RedditCallback';
 import { ContentArchitect } from './pages/ContentArchitect';
 import { Comments } from './pages/Comments';
 import { Support } from './pages/Support';
-import { MobileAssistant } from './pages/MobileAssistant';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ErrorPage } from './pages/ErrorPage';
@@ -70,7 +69,6 @@ const App: React.FC = () => {
             <Route path="/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
             <Route path="/comment-agent" element={<ProtectedRoute><AppLayout><Comments /></AppLayout></ProtectedRoute>} />
             <Route path="/post-agent" element={<ProtectedRoute><AppLayout><ContentArchitect /></AppLayout></ProtectedRoute>} />
-            <Route path="/assistant" element={<ProtectedRoute><AppLayout><MobileAssistant /></AppLayout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
             <Route path="/pricing" element={<ProtectedRoute><AppLayout><PricingPage /></AppLayout></ProtectedRoute>} />

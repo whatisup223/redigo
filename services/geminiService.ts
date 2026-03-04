@@ -223,7 +223,12 @@ Return STRICT JSON (no markdown code blocks, no extra text outside the JSON):
   "reddit_strategy": "brief note on why this approach works for this post",
   "imagePrompt": "a concise DALL-E image prompt for a visual that complements this reply (modern, clean, minimal style — no text in image)"
 }`,
-        context: { postId: post.id, subreddit: post.subreddit }
+        context: {
+          postId: post.id,
+          subreddit: post.subreddit,
+          postUrl: post.permalink ? `https://www.reddit.com${post.permalink}` : post.url,
+          postTitle: post.title
+        }
       })
     });
 
@@ -376,7 +381,11 @@ Return STRICT JSON (no markdown code blocks, no extra text):
   "content": "the full post body with Reddit markdown",
   "imagePrompt": "detailed DALL-E generation prompt"
 }`,
-        context: { subreddit }
+        context: {
+          subreddit,
+          // For a new post, we don't have a postUrl yet, but we can provide the submission URL as a hint
+          postUrl: `https://www.reddit.com/r/${subreddit}/submit`
+        }
       })
     });
 

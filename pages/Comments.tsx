@@ -37,7 +37,9 @@ import {
   ArrowUpCircle,
   Download,
   Image as ImageIcon,
-  PenTool
+  PenTool,
+  Smartphone,
+  ExternalLink
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { RedditPost, GeneratedReply } from '../types';
@@ -94,6 +96,7 @@ export const Comments: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  const [showMobileAssistant, setShowMobileAssistant] = useState(false);
   const [targetSubreddit, setTargetSubreddit] = useState('saas');
   const [searchKeywords, setSearchKeywords] = useState('');
   const [generatedReply, setGeneratedReply] = useState<GeneratedReply | null>(null);
@@ -745,7 +748,7 @@ export const Comments: React.FC = () => {
 
     // Fallback for missing extension
     if (document.documentElement.getAttribute('data-redigo-extension') !== 'installed') {
-      showToast('Extension not found! Please install the Redigo Security Engine to reply safely.', 'error');
+      setShowMobileAssistant(true);
       return;
     }
 
@@ -924,7 +927,7 @@ export const Comments: React.FC = () => {
                     subreddit: child.data?.subreddit,
                     ups: child.data?.ups,
                     num_comments: child.data?.num_comments,
-                    url: child.data?.url,
+                    url: child.data?.permalink ? `https://www.reddit.com${child.data.permalink}` : (child.data?.url || '#'),
                     permalink: child.data?.permalink,
                     author: child.data?.author,
                     created_utc: child.data?.created_utc
@@ -2341,6 +2344,68 @@ export const Comments: React.FC = () => {
               >
                 Cancel Action
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-Page Mobile Assistant Modal */}
+      {showMobileAssistant && selectedPost && (
+        <div className="fixed inset-0 z-[999999] bg-slate-950/80 backdrop-blur-md flex items-end md:items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 w-full max-w-lg shadow-2xl relative animate-in slide-in-from-bottom-5">
+            <button onClick={() => setShowMobileAssistant(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 hover:bg-red-50 p-2 rounded-full">
+              <X size={20} />
+            </button>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <Smartphone size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Mobile Assistant</h3>
+                <p className="text-xs font-bold text-slate-500">Copy reply and post manually</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 pb-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Reply Body</label>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                  <p className="text-sm font-medium text-slate-600 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar">{editedComment}</p>
+                  <button onClick={() => { navigator.clipboard.writeText(editedComment); showToast('Copied!', 'success'); }} className="w-full py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 transition-all">
+                    <Copy size={16} /> Copy Full Text
+                  </button>
+                </div>
+              </div>
+
+              {commentImageUrl && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Generated Image</label>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                    <img src={commentImageUrl} className="w-full h-32 object-cover rounded-xl border border-slate-200" alt="Generated visual" />
+                    <button onClick={handleDownloadImage} className="w-full py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 transition-all">
+                      <Download size={16} /> Save Image to Device
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-100">
+              <a
+                href={selectedPost.permalink ? `https://www.reddit.com${selectedPost.permalink}` : (selectedPost.url?.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com') || '#')}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => {
+                  setShowMobileAssistant(false);
+                  setIsPosting(false);
+                }}
+                className="w-full flex items-center justify-center gap-3 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-slate-200"
+              >
+                <Smartphone size={18} /> Open Target Post <ExternalLink size={16} />
+              </a>
+              <p className="text-center text-[10px] font-bold text-slate-400 mt-4 leading-relaxed">
+                Go to the Reddit thread, click "Reply", paste the text, upload the image, and hit Comment!
+              </p>
             </div>
           </div>
         </div>

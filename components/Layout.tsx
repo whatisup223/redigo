@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { OnboardingWizard } from './OnboardingWizard';
-import { AlertCircle, Download, Smartphone } from 'lucide-react'; // Added icons for banner
+import { AlertCircle, Download, Smartphone, RefreshCw, Copy, ExternalLink, Trash2, CheckCircle } from 'lucide-react'; // Added icons
 
 interface SidebarItemProps {
   icon: any;
@@ -51,6 +51,50 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, path, acti
 export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = React.useState(false);
+  const [loadingItems, setLoadingItems] = React.useState(false);
+  const [pendingItems, setPendingItems] = React.useState<any[]>([]);
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const fetchAssistantItems = async () => {
+    if (!user?.id) return;
+    setLoadingItems(true);
+    try {
+      const [postsRes, repliesRes] = await Promise.all([
+        fetch(`/api/user/posts/sync?userId=${user.id}`),
+        fetch(`/api/user/replies/sync?userId=${user.id}`)
+      ]);
+      const posts = await postsRes.json();
+      const replies = await repliesRes.json();
+      const combined = [
+        ...posts.filter((p: any) => p.status?.toLowerCase() === 'pending').map((p: any) => ({ ...p, type: 'post' })),
+        ...replies.filter((r: any) => r.status?.toLowerCase() === 'pending').map((r: any) => ({ ...r, type: 'reply' }))
+      ];
+      combined.sort((a, b) => new Date(b.deployedAt || b.createdAt).getTime() - new Date(a.deployedAt || a.createdAt).getTime());
+      setPendingItems(combined);
+      setPendingCount(combined.length);
+    } catch (err) { }
+    finally { setLoadingItems(false); }
+  };
+
+  const handleDismiss = async (id: string, type: 'post' | 'reply') => {
+    try {
+      await fetch('/api/reddit/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, id, type, redditId: 'deleted' })
+      });
+      setPendingItems(pendingItems.filter(i => (i.id || i._id) !== id));
+      setPendingCount(prev => prev - 1);
+    } catch (e) { }
+  };
+
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -103,7 +147,6 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: PenTool, label: 'Post Agent', path: '/post-agent' },
     { icon: MessageSquare, label: 'Comment Agent', path: '/comment-agent' },
-    { icon: Smartphone, label: 'Mobile Assistant', path: '/assistant' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing' },
     { icon: LifeBuoy, label: 'Help & Support', path: '/support' },
@@ -475,20 +518,111 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           {children}
 
           {/* Mobile Assistant Floating Button */}
-          {location.pathname !== '/assistant' && (
-            <Link
-              to="/assistant"
-              className="lg:hidden fixed bottom-8 right-8 p-4 bg-slate-900 border border-slate-800 text-white rounded-[1.5rem] shadow-2xl shadow-slate-900/40 hover:scale-105 active:scale-95 transition-all z-[100] flex items-center justify-center group"
-            >
-              <div className="relative">
-                <Smartphone size={28} className={pendingCount > 0 ? "text-indigo-400" : "text-slate-300"} />
-                {pendingCount > 0 && (
-                  <span className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow border-2 border-slate-900 animate-in zoom-in duration-300">
-                    {pendingCount > 9 ? '9+' : pendingCount}
-                  </span>
-                )}
+          <button
+            onClick={() => {
+              setIsAssistantOpen(true);
+              fetchAssistantItems();
+            }}
+            className="lg:hidden fixed bottom-8 right-8 p-4 bg-slate-900 border border-slate-800 text-white rounded-[1.5rem] shadow-2xl shadow-slate-900/40 hover:scale-105 active:scale-95 transition-all z-[100] flex items-center justify-center group"
+          >
+            <div className="relative">
+              <Smartphone size={28} className={pendingCount > 0 ? "text-indigo-400" : "text-slate-300"} />
+              {pendingCount > 0 && (
+                <span className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow border-2 border-slate-900 animate-in zoom-in duration-300">
+                  {pendingCount > 9 ? '9+' : pendingCount}
+                </span>
+              )}
+            </div>
+          </button>
+
+          {/* Global Assistant Drawer */}
+          {isAssistantOpen && (
+            <div className="fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-sm flex justify-end animate-in fade-in duration-300" onClick={() => setIsAssistantOpen(false)}>
+              <div
+                className="bg-white w-full max-w-lg h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center">
+                      <Smartphone size={20} />
+                    </div>
+                    <div>
+                      <h2 className="font-black text-slate-900">Mobile Assistant</h2>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Pending Posts</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsAssistantOpen(false)} className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-red-500 transition-all border border-transparent hover:border-slate-100">
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                  {loadingItems ? (
+                    <div className="flex flex-col items-center justify-center py-20 opacity-30">
+                      <RefreshCw size={40} className="animate-spin mb-4" />
+                      <p className="font-bold">Syncing content...</p>
+                    </div>
+                  ) : pendingItems.length === 0 ? (
+                    <div className="text-center py-20 px-8">
+                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle size={32} className="text-slate-200" />
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800">No Pending Content</h3>
+                      <p className="text-sm text-slate-400">Everything has been published or dismissed.</p>
+                    </div>
+                  ) : (
+                    pendingItems.map((item) => (
+                      <div key={item.id || item._id} className="bg-slate-50 rounded-[1.5rem] border border-slate-200 p-5 space-y-4 hover:border-indigo-200 transition-all group">
+                        <div className="flex items-center justify-between">
+                          <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg ${item.type === 'post' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                            {item.type}
+                          </span>
+                          <button onClick={() => handleDismiss(item.id || item._id, item.type)} className="text-slate-300 hover:text-red-500 p-1">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        {item.postTitle && <p className="text-xs font-black text-slate-900 line-clamp-1">{item.postTitle}</p>}
+
+                        <div className="bg-white p-4 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-medium whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto custom-scrollbar italic">
+                          {item.postContent || item.comment || "No text content"}
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => handleCopy(item.id || item._id, item.postContent || item.comment)}
+                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${copiedId === (item.id || item._id) ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-indigo-600'
+                              }`}
+                          >
+                            {copiedId === (item.id || item._id) ? <CheckCircle size={14} /> : <Copy size={14} />}
+                            {copiedId === (item.id || item._id) ? 'Copied' : 'Copy Text'}
+                          </button>
+                          <a
+                            href={item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit}/submit` : item.postUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-12 h-12 bg-white border border-slate-200 text-slate-900 rounded-xl flex items-center justify-center hover:border-indigo-500 transition-all"
+                          >
+                            <ExternalLink size={18} />
+                          </a>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="p-6 bg-slate-50 border-t border-slate-100">
+                  <button
+                    onClick={fetchAssistantItems}
+                    className="w-full py-4 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:border-indigo-300 hover:text-indigo-600 transition-all"
+                  >
+                    <RefreshCw size={14} /> Refresh List
+                  </button>
+                </div>
               </div>
-            </Link>
+            </div>
           )}
         </main>
       </div>

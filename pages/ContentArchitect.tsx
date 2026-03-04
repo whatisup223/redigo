@@ -28,7 +28,9 @@ import {
     AlertTriangle,
     Download,
     Copy,
-    Check
+    Check,
+    Smartphone,
+    ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
@@ -130,6 +132,7 @@ export const ContentArchitect: React.FC = () => {
     const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
     const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
     const [showExtensionWarning, setShowExtensionWarning] = useState(false);
+    const [showMobileAssistant, setShowMobileAssistant] = useState(false);
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
     const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
     const pingTimeoutRef = useRef<any>(null);
@@ -684,8 +687,7 @@ export const ContentArchitect: React.FC = () => {
 
         // Fallback for missing extension
         if (document.documentElement.getAttribute('data-redigo-extension') !== 'installed') {
-            // Optional: You could show a Modal instructing them to install
-            showToast('Extension not found! Please install the Redigo Security Engine to post safely.', 'error');
+            setShowMobileAssistant(true);
             return;
         }
 
@@ -1899,6 +1901,78 @@ export const ContentArchitect: React.FC = () => {
                             >
                                 Cancel Action
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* In-Page Mobile Assistant Modal */}
+            {showMobileAssistant && (
+                <div className="fixed inset-0 z-[999999] bg-slate-950/80 backdrop-blur-md flex items-end md:items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
+                    <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 w-full max-w-lg shadow-2xl relative animate-in slide-in-from-bottom-5">
+                        <button onClick={() => setShowMobileAssistant(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 hover:bg-red-50 p-2 rounded-full">
+                            <X size={20} />
+                        </button>
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                                <Smartphone size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-slate-900">Mobile Assistant</h3>
+                                <p className="text-xs font-bold text-slate-500">Copy content and post manually</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 pb-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Post Title</label>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between gap-4">
+                                    <p className="text-sm font-bold text-slate-700 truncate flex-1">{postData.title}</p>
+                                    <button onClick={() => handleCopy(postData.title, 'Title')} className="shrink-0 px-3 py-2 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center gap-2 transition-all">
+                                        <Copy size={14} /> Copy
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Post Body</label>
+                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                                    <p className="text-sm font-medium text-slate-600 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar">{postData.content}</p>
+                                    <button onClick={() => handleCopy(postData.content, 'Body')} className="w-full py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 transition-all">
+                                        <Copy size={16} /> Copy Full Text
+                                    </button>
+                                </div>
+                            </div>
+
+                            {postData.imageUrl && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Generated Image</label>
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                                        <img src={postData.imageUrl} className="w-full h-32 object-cover rounded-xl border border-slate-200" alt="Generated visual" />
+                                        <button onClick={handleDownloadImage} className="w-full py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 transition-all">
+                                            <Download size={16} /> Save Image to Device
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-6 pt-6 border-t border-slate-100">
+                            <a
+                                href={`https://www.reddit.com/r/${postData.subreddit}/submit`}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={() => {
+                                    setShowMobileAssistant(false);
+                                    setIsPosting(false); // Reset button state
+                                }}
+                                className="w-full flex items-center justify-center gap-3 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-slate-200"
+                            >
+                                <Smartphone size={18} /> Open Target Subreddit <ExternalLink size={16} />
+                            </a>
+                            <p className="text-center text-[10px] font-bold text-slate-400 mt-4 leading-relaxed">
+                                Go to Reddit, click "Create Post", paste the Title/Body, upload the image, and hit Post!
+                            </p>
                         </div>
                     </div>
                 </div>
