@@ -4587,6 +4587,64 @@ app.post('/api/item/status', async (req, res) => {
   }
 });
 
+app.post('/api/outreach/confirm', async (req, res) => {
+  try {
+    const { itemId, type } = req.body;
+    if (type === 'post') {
+      await RedditPost.updateOne({ id: itemId }, { $set: { status: 'Active' } });
+    } else {
+      await RedditReply.updateOne({ id: itemId }, { $set: { status: 'Active' } });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Confirm update failed' });
+  }
+});
+
+app.post('/api/outreach/update-stats', async (req, res) => {
+  try {
+    const { itemId, type, ups, replies } = req.body;
+    if (type === 'post') {
+      await RedditPost.updateOne({ id: itemId }, { $set: { ups: ups || 0, replies: replies || 0 } });
+    } else {
+      await RedditReply.updateOne({ id: itemId }, { $set: { ups: ups || 0, replies: replies || 0 } });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Stats update failed' });
+  }
+});
+
+app.post('/api/reddit/verify', async (req, res) => {
+  try {
+    const { itemId, url, type } = req.body;
+    if (!itemId || !url) return res.status(400).json({ error: 'Missing parameters' });
+
+    const jsonUrl = url.split('?')[0].replace(/\/$/, '') + '.json';
+    const response = await fetch(jsonUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+    if (!response.ok) throw new Error('Failed to fetch reddit data for verify: ' + response.statusText);
+    const data = await response.json();
+
+    let ups = 0, replies = 0;
+    if (Array.isArray(data) && data[0]?.data?.children?.[0]?.data) {
+      ups = data[0].data.children[0].data.ups || 0;
+      replies = data[0].data.children[0].data.num_comments || 0;
+    } else if (data?.data?.children?.[0]?.data) {
+      ups = data.data.children[0].data.ups || 0;
+      replies = data.data.children[0].data.num_comments || 0;
+    }
+
+    if (type === 'post') {
+      await RedditPost.updateOne({ id: itemId }, { $set: { status: 'Active', ups, replies } });
+    } else {
+      await RedditReply.updateOne({ id: itemId }, { $set: { status: 'Active', ups, replies } });
+    }
+    res.json({ success: true, ups, replies, status: 'Active' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Reddit Public JSON Syncing System ---
 
 // Fuzzy matching helper (Jaccard token similarity)

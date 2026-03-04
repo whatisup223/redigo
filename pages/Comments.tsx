@@ -778,9 +778,13 @@ export const Comments: React.FC = () => {
         parentId: (selectedPost as any).isComment ? (selectedPost as any).redditId : undefined
       }, '*');
 
-      // Explicitly open the Reddit thread so the extension can take over
-      if (targetUrl) {
+      const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+
+      // Explicitly open the Reddit thread if no extension is taking over
+      if (targetUrl && !hasExtension) {
         window.open(targetUrl, '_blank');
+        showToast('Opening Thread...', 'success');
+      } else {
         showToast('Sending to Extension... Thread opening.', 'success');
       }
 

@@ -131,7 +131,7 @@ export const Analytics: React.FC = () => {
     return () => window.removeEventListener('message', handleExtMessage);
   }, [user?.id]);
 
-  const handleVerify = (item: any) => {
+  const handleVerify = async (item: any) => {
     if (!item.postUrl) {
       showToast('No URL found.', 'error');
       return;
@@ -146,26 +146,60 @@ export const Analytics: React.FC = () => {
       return;
     }
 
-    // Trigger manual refresh via extension
     setVerifyingIds(prev => new Set(prev).add(item.id));
-    window.postMessage({
-      source: 'REDIGO_WEB_APP',
-      type: 'FETCH_STATS',
-      itemId: item.id,
-      url: item.postUrl,
-      redditType: activeTab === 'posts' ? 'post' : 'comment'
-    }, '*');
 
-    // Timeout fallback
-    setTimeout(() => {
-      setVerifyingIds(prev => {
-        const next = new Set(prev);
-        if (next.has(item.id)) {
-          next.delete(item.id);
+    const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+    const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+
+    if (hasExtension && !isMobile) {
+      // Trigger manual refresh via extension
+      window.postMessage({
+        source: 'REDIGO_WEB_APP',
+        type: 'FETCH_STATS',
+        itemId: item.id,
+        url: item.postUrl,
+        redditType: activeTab === 'posts' ? 'post' : 'comment'
+      }, '*');
+
+      // Timeout fallback
+      setTimeout(() => {
+        setVerifyingIds(prev => {
+          const next = new Set(prev);
+          if (next.has(item.id)) next.delete(item.id);
+          return next;
+        });
+      }, 8000);
+    } else {
+      // Server-side verification for Mobile or no extension
+      try {
+        const response = await fetch('/api/reddit/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itemId: item.id,
+            url: item.postUrl,
+            type: activeTab === 'posts' ? 'post' : 'comment'
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setHistory(prev => prev.map(h => h.id === item.id ? { ...h, ups: data.ups, replies: data.replies, status: 'Active' } : h));
+          setPostsHistory(prev => prev.map(p => p.id === item.id ? { ...p, ups: data.ups, replies: data.replies, status: 'Active' } : p));
+          showToast('Verified and updated! 🚀', 'success');
+        } else {
+          showToast('Could not verify post mechanically. It may be removed or unavailable.', 'error');
         }
-        return next;
-      });
-    }, 8000);
+      } catch (err) {
+        showToast('Failed to verify via server.', 'error');
+      } finally {
+        setVerifyingIds(prev => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      }
+    }
   };
 
   const handleResumeOutreach = (row: any) => {

@@ -719,9 +719,15 @@ export const ContentArchitect: React.FC = () => {
                 isPost: true // Tell Extension Content Script this is a Submit Page
             }, '*');
 
-            // Explicitly open the Reddit submit page so the extension can take over
-            window.open(targetUrl, '_blank');
-            showToast('Sending to Extension... Opening Submit Page.', 'success');
+            const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+
+            // Explicitly open the Reddit submit page if no extension is taking over
+            if (targetUrl && !hasExtension) {
+                window.open(targetUrl, '_blank');
+                showToast('Opening Submit Page...', 'success');
+            } else {
+                showToast('Sending to Extension...', 'success');
+            }
 
             // Prevent draft from sticking around
             localStorage.removeItem('redditgo_post_draft');

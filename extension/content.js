@@ -233,13 +233,8 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
       
       <div style="height: 1px; background: #f1f5f9; margin: 4px 0;"></div>
 
-      <button class="redigo-btn redigo-btn-confirm" id="redigo-confirm-sent" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        Confirm Publication
-      </button>
-
-      <div style="font-size: 10px; color:#94a3b8; text-align:center; font-weight:600;">
-         Confirm after posting to track in Analytics
+      <div id="redigo-auto-track-msg" style="font-size: 11px; color:#10b981; text-align:center; font-weight:700; background: #ecfdf5; padding: 10px; border-radius: 12px; border: 1px solid #d1fae5;">
+         ✓ Auto-tracking enabled. Just post on Reddit!
       </div>
     </div>
   `;
@@ -253,19 +248,10 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     setTimeout(() => t.classList.remove('show'), 2000);
   };
 
-  const activateConfirmButton = () => {
-    const btn = document.getElementById('redigo-confirm-sent');
-    if (btn && btn.disabled) {
-      btn.disabled = false;
-      btn.classList.add('redigo-glow-pulse');
-    }
-  };
-
   if (title) {
     document.getElementById('redigo-copy-title').addEventListener('click', () => {
       navigator.clipboard.writeText(title).then(() => {
         showToast();
-        activateConfirmButton();
       });
     });
   }
@@ -273,7 +259,6 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     document.getElementById('redigo-copy-text').addEventListener('click', () => {
       navigator.clipboard.writeText(text).then(() => {
         showToast();
-        activateConfirmButton();
       });
     });
   }
@@ -282,44 +267,32 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
       chrome.runtime.sendMessage({ type: 'DOWNLOAD_IMAGE', url: imageUrl }, (response) => {
         if (response?.success) {
           showToast("Downloading...");
-          activateConfirmButton();
         }
       });
     });
   }
-
-  document.getElementById('redigo-confirm-sent').addEventListener('click', () => {
-    const btn = document.getElementById('redigo-confirm-sent');
-    btn.classList.remove('redigo-glow-pulse');
-    btn.innerHTML = 'Confirmed ✓';
-    btn.style.background = '#10b981';
-    btn.style.color = 'white';
-    btn.disabled = true;
-
-    if (window.location.href.includes('/submit')) {
-      showToast('Please publish on Reddit first, then confirm on the live page!', 'warning');
-      return;
-    }
-
-    chrome.runtime.sendMessage({
-      type: 'OUTREACH_CONFIRM',
-      itemId: currentDraftId,
-      userId: currentDraftUserId,
-      itemType: currentDraftType,
-      url: window.location.href
-    });
-
-    setTimeout(() => {
-      document.getElementById('redigo-assistant-root').remove();
-      chrome.storage.local.remove('redigo_assistant_draft');
-    }, 1500);
-  });
 
   document.getElementById('redigo-close').addEventListener('click', () => {
     document.getElementById('redigo-assistant-root').remove();
     chrome.storage.local.remove('redigo_assistant_draft');
   });
 }
+
+// Listen for auto-confirm from background script webRequest listener
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'POST_AUTO_CONFIRMED') {
+    const msgEl = document.getElementById('redigo-auto-track-msg');
+    if (msgEl) {
+      msgEl.innerHTML = '✨ Post successfully tracked in Analytics!';
+      msgEl.style.background = '#10b981';
+      msgEl.style.color = 'white';
+      setTimeout(() => {
+        const root = document.getElementById('redigo-assistant-root');
+        if (root) root.remove();
+      }, 3000);
+    }
+  }
+});
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'PASTE_REPLY') {

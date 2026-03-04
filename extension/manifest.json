@@ -8,7 +8,8 @@
         "scripting",
         "storage",
         "tabs",
-        "downloads"
+        "downloads",
+        "webRequest"
     ],
     "host_permissions": [
         "https://*.reddit.com/*",
