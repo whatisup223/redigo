@@ -278,6 +278,24 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     document.getElementById('redigo-assistant-root').remove();
     chrome.storage.local.remove('redigo_assistant_draft');
   });
+
+  // Listen for background script detecting successful publication
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'POST_AUTO_CONFIRMED') {
+      const msgBox = document.getElementById('redigo-auto-track-msg');
+      if (msgBox) {
+        msgBox.innerHTML = 'Successfully Published! 🚀';
+        msgBox.style.background = '#e0f2fe';
+        msgBox.style.color = '#0284c7';
+        msgBox.style.borderColor = '#bae6fd';
+      }
+      setTimeout(() => {
+        const root = document.getElementById('redigo-assistant-root');
+        if (root) root.remove();
+      }, 1500);
+    }
+  });
+
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

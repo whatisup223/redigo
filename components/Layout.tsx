@@ -139,6 +139,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         const response = event.data.payload;
         if (response?.status === 'DEPLOYING') {
           showToast('Success! Thread opened in Reddit.', 'success');
+          if (response.itemId) {
+            fetch('/api/item/status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: response.itemId, status: 'Pending' })
+            }).catch(console.error);
+
+            setPendingItems(prev => prev.map(i => (i.id || i._id) === response.itemId ? { ...i, status: 'Pending' } : i));
+          }
         }
       }
     };
@@ -752,7 +761,16 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                 } else {
                                   // Mobile or manual fallback
                                   window.open(item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl, '_blank');
-                                  showToast('Opened Reddit! Verify your link later in the Library.', 'success');
+
+                                  if (item.status?.toLowerCase() === 'draft') {
+                                    fetch('/api/item/status', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: item.id || item._id, status: 'Pending' })
+                                    }).catch(console.error);
+                                    setPendingItems(prev => prev.map(i => (i.id || i._id) === (item.id || item._id) ? { ...i, status: 'Pending' } : i));
+                                  }
+                                  showToast('Opened Reddit! Auto-sync is tracking this item.', 'success');
                                 }
                               }}
                               className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.1em] flex items-center justify-center gap-2 hover:bg-orange-600 shadow-xl transition-all hover:scale-[1.02] active:scale-95 group-hover:shadow-orange-100"
