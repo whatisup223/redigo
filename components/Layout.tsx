@@ -745,6 +745,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
                                 // PC direct deploy
                                 if (!isMobile && !isExtensionMissing) {
+                                  const targetUrl = item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : (item.postUrl || '#');
                                   window.postMessage({
                                     type: 'DEPLOY_CONTENT',
                                     content: item.postContent || item.comment,
@@ -752,9 +753,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                     subreddit: item.subreddit,
                                     imageUrl: item.imageUrl,
                                     itemId: item.id || item._id,
-                                    itemType: item.type
+                                    itemType: item.type,
+                                    targetUrl: targetUrl
                                   }, '*');
-                                  showToast('Sending to Extension...', 'success');
+
+                                  // Open Reddit page
+                                  if (targetUrl !== '#') {
+                                    window.open(targetUrl, '_blank');
+                                    showToast('Sending to Extension... Thread opening.', 'success');
+                                  }
                                 } else {
                                   // Mobile or manual fallback
                                   window.open(item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl, '_blank');

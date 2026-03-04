@@ -778,6 +778,12 @@ export const Comments: React.FC = () => {
         parentId: (selectedPost as any).isComment ? (selectedPost as any).redditId : undefined
       }, '*');
 
+      // Explicitly open the Reddit thread so the extension can take over
+      if (targetUrl) {
+        window.open(targetUrl, '_blank');
+        showToast('Sending to Extension... Thread opening.', 'success');
+      }
+
       // Loading state will be handled by the useEffect listener when the extension responds
     } catch (err: any) {
       showToast(err.message || 'Failed to communicate with extension', 'error');
