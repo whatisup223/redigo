@@ -58,14 +58,14 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const profileRef = useRef<HTMLDivElement>(null);
   const [isExtensionMissing, setIsExtensionMissing] = React.useState(false);
 
+  const [pendingCount, setPendingCount] = React.useState(0);
+
   useEffect(() => {
     const checkExtension = () => {
-      // Check if mobile (extensions don't work on mobile natively for Chrome, but we'll show it generally or hide on mobile if you prefer)
-      // Let's just check the attribute.
+      const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
       const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-      setIsExtensionMissing(!isInstalled);
+      setIsExtensionMissing(!isInstalled && !isMobile);
 
-      // Sync User ID with Extension for background tasks (Karma, Stats, etc.)
       if (isInstalled && user?.id) {
         window.postMessage({
           source: 'REDIGO_WEB_APP',
@@ -75,8 +75,27 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       }
     };
     checkExtension();
-    // Re-check periodically in case they install it while page is open.
     const interval = setInterval(checkExtension, 5000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchPendingCount = async () => {
+      try {
+        const [postsRes, repliesRes] = await Promise.all([
+          fetch(`/api/user/posts?userId=${user.id}`),
+          fetch(`/api/user/replies?userId=${user.id}`)
+        ]);
+        const posts = await postsRes.json();
+        const replies = await repliesRes.json();
+        const pendingPosts = posts.filter((p: any) => p.status?.toLowerCase() === 'pending').length;
+        const pendingReplies = replies.filter((r: any) => r.status?.toLowerCase() === 'pending').length;
+        setPendingCount(pendingPosts + pendingReplies);
+      } catch (err) { }
+    };
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 15000); // Check every 15s locally
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -454,6 +473,23 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
             </div>
           )}
           {children}
+
+          {/* Mobile Assistant Floating Button */}
+          {location.pathname !== '/assistant' && (
+            <Link
+              to="/assistant"
+              className="lg:hidden fixed bottom-8 right-8 p-4 bg-slate-900 border border-slate-800 text-white rounded-[1.5rem] shadow-2xl shadow-slate-900/40 hover:scale-105 active:scale-95 transition-all z-[100] flex items-center justify-center group"
+            >
+              <div className="relative">
+                <Smartphone size={28} className={pendingCount > 0 ? "text-indigo-400" : "text-slate-300"} />
+                {pendingCount > 0 && (
+                  <span className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow border-2 border-slate-900 animate-in zoom-in duration-300">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </div>
+            </Link>
+          )}
         </main>
       </div>
     </div>
