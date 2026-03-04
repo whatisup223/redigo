@@ -741,20 +741,16 @@ export const Comments: React.FC = () => {
   const handlePost = async () => {
     const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
 
-    // Fallback for missing extension on PC
-    if (!isMobile && document.documentElement.getAttribute('data-redigo-extension') !== 'installed' && user.role !== 'admin') {
-      setShowExtensionWarning(true);
-      return;
-    }
-
-    // On Mobile, we just guide them to the assistant
+    // On Mobile, guide them to the assistant drawer
     if (isMobile) {
-      // No warning modal, just open the assistant drawer
       const assistantButton = document.getElementById('redigo-assistant-button');
       if (assistantButton) assistantButton.click();
       showToast('Ready in Assistant! Copy & Reply on Reddit.', 'success');
       return;
     }
+
+    // No extension warning here — posting is FREE and always works by opening Reddit directly.
+    // The extension just makes it smoother (auto-paste). Without it, we open Reddit manually below.
 
     setIsPosting(true);
     try {
@@ -2325,10 +2321,10 @@ export const Comments: React.FC = () => {
             <div className="space-y-2">
               <h3 className="text-2xl font-black text-slate-900 leading-tight">Extension Inactive! ⚠️</h3>
               <p className="text-slate-500 text-sm font-medium leading-relaxed">
-                We couldn't detect the <span className="text-orange-600 font-bold">Redigo Extension</span>. Without it, you will have to manually copy and paste replies on Reddit.
+                We couldn't detect the <span className="text-orange-600 font-bold">Redigo Extension</span>. Without it, AI generation runs on our servers and will consume <span className="font-bold text-slate-600">Credits</span>.
               </p>
               <p className="text-xs text-slate-400 italic">
-                Proceeding will still consume <span className="font-bold text-slate-600">Points</span>.
+                The extension is only required for AI generation — not for posting.
               </p>
             </div>
 
@@ -2347,7 +2343,7 @@ export const Comments: React.FC = () => {
                 }}
                 className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black hover:bg-orange-700 transition-all text-xs uppercase tracking-widest shadow-lg shadow-orange-100"
               >
-                Continue anyway (Spend Points)
+                Continue anyway (Use Credits)
               </button>
               <button
                 onClick={() => {
