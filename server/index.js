@@ -3916,7 +3916,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
     if (redditSettings.antiSpam && type === 'comment') {
       const postId = context?.postId || (typeof context === 'string' && context.match(/post_id: (\w+)/)?.[1]);
       if (postId) {
-        const alreadyReplied = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
+        const alreadyReplied = await RedditReply.findOne({ userId: userId.toString(), postId: postId, status: 'Posted' });
         if (alreadyReplied) {
           return res.status(409).json({
             error: 'DOUBLE_POST_PREVENTION',
@@ -4233,6 +4233,26 @@ app.post('/api/generate-image', async (req, res) => {
     const imageUrl = responseData.data?.[0]?.url;
     if (!imageUrl) throw new Error('No image URL returned from AI');
 
+    // PERSIST IMAGE LOCALLY: OpenAI URLs expire in 1 hour
+    let finalUrl = imageUrl;
+    try {
+      const imgRes = await fetch(imageUrl);
+      if (imgRes.ok) {
+        const buffer = await imgRes.arrayBuffer();
+        const fname = `ai_${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+        const fpath = path.join(__dirname, '../public/uploads', fname);
+
+        // Ensure uploads directory exists
+        const udir = path.dirname(fpath);
+        if (!fs.existsSync(udir)) fs.mkdirSync(udir, { recursive: true });
+
+        fs.writeFileSync(fpath, Buffer.from(buffer));
+        finalUrl = `/uploads/${fname}`;
+      }
+    } catch (saveErr) {
+      console.warn('[Image Save Warning] Failed to save locally, falling back to temp OpenAI URL:', saveErr.message);
+    }
+
     // ATOMIC UPDATE: Deduct credits and update usage atomically
     const updatedUser = await User.findOneAndUpdate(
       {
@@ -4254,7 +4274,7 @@ app.post('/api/generate-image', async (req, res) => {
         $set: {
           lastUsageDate: today,
           latestImage: {
-            url: imageUrl,
+            url: finalUrl,
             prompt: prompt,
             date: new Date().toISOString()
           }
@@ -4277,8 +4297,8 @@ app.post('/api/generate-image', async (req, res) => {
     if (itemId) {
       try {
         await Promise.all([
-          RedditPost.updateOne({ id: itemId.toString(), userId: userId.toString() }, { $set: { imageUrl } }),
-          RedditReply.updateOne({ id: itemId.toString(), userId: userId.toString() }, { $set: { imageUrl } })
+          RedditPost.updateOne({ id: itemId.toString(), userId: userId.toString() }, { $set: { imageUrl: finalUrl } }),
+          RedditReply.updateOne({ id: itemId.toString(), userId: userId.toString() }, { $set: { imageUrl: finalUrl } })
         ]);
       } catch (e) {
         console.error('[/api/generate-image] Item update error:', e);
@@ -4286,7 +4306,7 @@ app.post('/api/generate-image', async (req, res) => {
     }
 
     res.json({
-      url: imageUrl,
+      url: finalUrl,
       credits: updatedUser.credits,
       dailyUsage: updatedUser.dailyUsage,
       dailyUsagePoints: updatedUser.dailyUsagePoints
@@ -4638,8 +4658,12 @@ const syncUserRedditActivity = async (userId) => {
           if ((reply.subreddit || '').toLowerCase() === cleanSubreddit) {
             const similarity = calculateSimilarity(t.body, reply.comment);
 
-            // 70% threshold is good for minor edits before users hit "post"
-            if (similarity >= 0.7 || (reply.comment && t.body && t.body.includes(reply.comment))) {
+            // Stricter matching: 
+            // 1. Check if the parent_id on Reddit matches what we intended to reply to
+            // 2. Use a higher similarity threshold (0.8) and remove the loose '.includes()' check
+            const isParentMatch = reply.postId && t.parent_id && t.parent_id.endsWith(reply.postId);
+
+            if (similarity >= 0.8 || (isParentMatch && similarity >= 0.5)) {
               reply.status = 'Live';
               reply.ups = t.ups;
               reply.postUrl = `https://reddit.com${t.permalink}`;
@@ -4658,7 +4682,8 @@ const syncUserRedditActivity = async (userId) => {
               bodySim = calculateSimilarity(t.selftext, post.postContent);
             }
 
-            if (titleSim >= 0.7 || bodySim >= 0.7 || (t.title && post.postTitle && t.title.includes(post.postTitle))) {
+            // Stricter post matching: Title must match well (0.8) or both title and body must match significantly
+            if (titleSim >= 0.8 || (titleSim >= 0.6 && bodySim >= 0.6)) {
               post.status = 'Live';
               post.ups = t.ups;
               post.postUrl = `https://reddit.com${t.permalink}`;
@@ -4937,7 +4962,16 @@ app.get('/api/proxy-download', async (req, res) => {
     const { url, filename } = req.query;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
-    const response = await fetch(url);
+    // Handle locally persisted images
+    if (url.startsWith('/uploads/')) {
+      const localPath = path.join(__dirname, '../public', url);
+      if (fs.existsSync(localPath)) {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename || 'download.png'}"`);
+        return res.sendFile(localPath);
+      }
+    }
+
+    const response = await fetch(url.startsWith('//') ? `https:${url}` : url);
     if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
 
     const contentType = response.headers.get('content-type') || 'image/png';

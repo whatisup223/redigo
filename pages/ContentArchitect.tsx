@@ -393,12 +393,12 @@ export const ContentArchitect: React.FC = () => {
         }
     };
 
-    const triggerImageGeneration = async (prompt: string, skipExtensionCheck = false) => {
+    const triggerImageGeneration = async (prompt: string, skipExtensionCheck = false, itemId?: string) => {
         // --- Extension Check ---
         // Skip this check if already confirmed by the parent flow (e.g. handleGenerateContent)
         const needsCheck = !skipExtensionCheck && !isExtensionActive();
         if (needsCheck && !isForcedRef.current) {
-            setPendingAction(() => () => triggerImageGeneration(prompt));
+            setPendingAction(() => () => triggerImageGeneration(prompt, false, itemId));
             setShowExtensionWarning(true);
             return;
         }
@@ -463,7 +463,7 @@ export const ContentArchitect: React.FC = () => {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, userId: user.id, subreddit: postData.subreddit, itemId: postData.id })
+                body: JSON.stringify({ prompt, userId: user!.id, subreddit: postData.subreddit, itemId: itemId || postData.id })
             });
 
             if (response.status === 402) {
@@ -478,6 +478,7 @@ export const ContentArchitect: React.FC = () => {
 
             const data = await response.json();
             setPostData(prev => ({ ...prev, imageUrl: data.url }));
+            showToast('Image generated! 🎨', 'success');
 
             // Sync credits for image too
             if (data.credits !== undefined) {
@@ -487,9 +488,9 @@ export const ContentArchitect: React.FC = () => {
                     dailyUsage: data.dailyUsage
                 });
             }
-        } catch (err) {
-            console.error('Image gen failed:', err);
-            // Image generation is optional, but we still log failed attempts
+        } catch (err: any) {
+            console.error(err);
+            showToast(err.message || 'Image generation failed.', 'error');
         } finally {
             setIsGeneratingImage(false);
         }
@@ -663,7 +664,7 @@ export const ContentArchitect: React.FC = () => {
             // Non-blocking call: trigger image generation but don't AWAIT it.
             // Pass skipExtensionCheck=true because the user already confirmed in this same flow.
             if (mode === 'both' && isImageRequested) {
-                triggerImageGeneration(generated.imagePrompt, true);
+                triggerImageGeneration(generated.imagePrompt, true, generated.id);
             }
 
             showToast('Content updated!', 'success');

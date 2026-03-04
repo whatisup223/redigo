@@ -345,6 +345,11 @@ export const Library: React.FC = () => {
                                             <span className="text-xs font-bold text-slate-900">r/{item.subreddit}</span>
                                         </div>
                                     </div>
+                                    {item.imageUrl && viewMode === 'list' && (
+                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-100 shadow-sm shrink-0">
+                                            <img src={item.imageUrl} alt="AI Preview" className="w-full h-full object-cover" />
+                                        </div>
+                                    )}
                                     {viewMode === 'list' ? (
                                         <div className="flex items-center gap-4">
                                             <StatusBadge status={item.status || 'Draft'} />

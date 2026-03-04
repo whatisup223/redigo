@@ -467,7 +467,7 @@ export const Comments: React.FC = () => {
   const triggerCommentImageGeneration = async (prompt: string, subreddit: string, skipExtensionCheck = false, itemId?: string) => {
     const needsCheck = !skipExtensionCheck && !isExtensionActive();
     if (needsCheck && !isForcedRef.current) {
-      setPendingAction(() => () => triggerCommentImageGeneration(prompt, subreddit));
+      setPendingAction(() => () => triggerCommentImageGeneration(prompt, subreddit, false, itemId));
       setShowExtensionWarning(true);
       return;
     }
@@ -1144,7 +1144,7 @@ export const Comments: React.FC = () => {
                   } else if (regenMode === 'text') {
                     handleGenerate(selectedPost!, { tone: activeTone }, 'text');
                   } else if (regenMode === 'image' && commentImagePrompt) {
-                    triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '');
+                    triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '', true, generatedReply?.id);
                   }
                 }}
                 className="flex-1 py-4 bg-orange-600 text-white rounded-2xl font-black shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
@@ -1802,7 +1802,7 @@ export const Comments: React.FC = () => {
                                       <div className="flex-1">
                                         <p className="text-[10px] font-black text-slate-600">Prompt ready — click to generate</p>
                                         <button
-                                          onClick={() => triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '')}
+                                          onClick={() => triggerCommentImageGeneration(commentImagePrompt, selectedPost?.subreddit || '', false, generatedReply?.id)}
                                           className="mt-1.5 w-full py-2 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center justify-center gap-1.5"
                                         >
                                           <ImageIcon size={11} /> Generate · {costs.image} PTS
