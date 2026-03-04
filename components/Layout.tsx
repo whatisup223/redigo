@@ -747,21 +747,18 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                 if (!isMobile && !isExtensionMissing) {
                                   const targetUrl = item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : (item.postUrl || '#');
                                   window.postMessage({
-                                    type: 'DEPLOY_CONTENT',
-                                    content: item.postContent || item.comment,
+                                    source: 'REDIGO_WEB_APP',
+                                    type: 'REDIGO_DEPLOY',
+                                    text: item.postContent || item.comment || item.content,
                                     title: item.postTitle || item.title,
                                     subreddit: item.subreddit,
                                     imageUrl: item.imageUrl,
                                     itemId: item.id || item._id,
-                                    itemType: item.type,
+                                    isPost: item.type === 'post',
                                     targetUrl: targetUrl
                                   }, '*');
 
-                                  // Open Reddit page
-                                  if (targetUrl !== '#') {
-                                    window.open(targetUrl, '_blank');
-                                    showToast('Sending to Extension... Thread opening.', 'success');
-                                  }
+                                  showToast('Sending to Extension...', 'success');
                                 } else {
                                   // Mobile or manual fallback
                                   window.open(item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl, '_blank');
