@@ -96,7 +96,6 @@ export const Comments: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
-  const [showMobileAssistant, setShowMobileAssistant] = useState(false);
   const [targetSubreddit, setTargetSubreddit] = useState('saas');
   const [searchKeywords, setSearchKeywords] = useState('');
   const [generatedReply, setGeneratedReply] = useState<GeneratedReply | null>(null);
@@ -135,6 +134,17 @@ export const Comments: React.FC = () => {
   const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
   const [isScanning, setIsScanning] = useState<string | null>(null);
   const pingTimeoutRef = useRef<any>(null);
+
+  const isExtensionActive = () => {
+    const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+    if (user?.role === 'admin' || isMobile) return true;
+
+    if (extensionDetected === true) return true;
+    const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+    if (isInstalledInDOM) return true;
+
+    return false;
+  };
 
   const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
   const canTrack = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowTracking));
@@ -454,19 +464,6 @@ export const Comments: React.FC = () => {
     setTimeout(cycle, PROGRESS_STEPS[0].duration);
   }, [isGenerating]);
 
-  const isExtensionActive = () => {
-    if (user?.role === 'admin') return true; // Admin skip
-
-    // 1. Live detected state (Most reliable)
-    if (extensionDetected === true) return true;
-
-    // 2. Instant DOM detection (Fallback)
-    const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-    if (isInstalledInDOM) return true;
-
-    return false;
-  };
-
   const triggerCommentImageGeneration = async (prompt: string, subreddit: string, skipExtensionCheck = false, itemId?: string) => {
     const needsCheck = !skipExtensionCheck && !isExtensionActive();
     if (needsCheck && !isForcedRef.current) {
@@ -742,11 +739,20 @@ export const Comments: React.FC = () => {
   };
 
   const handlePost = async () => {
-    if (!selectedPost || !editedComment || !user?.id) return;
+    const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
 
-    // Fallback for missing extension
-    if (document.documentElement.getAttribute('data-redigo-extension') !== 'installed') {
-      setShowMobileAssistant(true);
+    // Fallback for missing extension on PC
+    if (!isMobile && document.documentElement.getAttribute('data-redigo-extension') !== 'installed' && user.role !== 'admin') {
+      setShowExtensionWarning(true);
+      return;
+    }
+
+    // On Mobile, we just guide them to the assistant
+    if (isMobile) {
+      // No warning modal, just open the assistant drawer
+      const assistantButton = document.getElementById('redigo-assistant-button');
+      if (assistantButton) assistantButton.click();
+      showToast('Ready in Assistant! Copy & Reply on Reddit.', 'success');
       return;
     }
 
@@ -2347,67 +2353,6 @@ export const Comments: React.FC = () => {
         </div>
       )}
 
-      {/* In-Page Mobile Assistant Modal */}
-      {showMobileAssistant && selectedPost && (
-        <div className="fixed inset-0 z-[999999] bg-slate-950/80 backdrop-blur-md flex items-end md:items-center justify-center p-4 sm:p-6 animate-in fade-in duration-300">
-          <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 w-full max-w-lg shadow-2xl relative animate-in slide-in-from-bottom-5">
-            <button onClick={() => setShowMobileAssistant(false)} className="absolute top-6 right-6 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 hover:bg-red-50 p-2 rounded-full">
-              <X size={20} />
-            </button>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
-                <Smartphone size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900">Mobile Assistant</h3>
-                <p className="text-xs font-bold text-slate-500">Copy reply and post manually</p>
-              </div>
-            </div>
-
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 pb-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Reply Body</label>
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
-                  <p className="text-sm font-medium text-slate-600 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto custom-scrollbar">{editedComment}</p>
-                  <button onClick={() => { navigator.clipboard.writeText(editedComment); showToast('Copied!', 'success'); }} className="w-full py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 transition-all">
-                    <Copy size={16} /> Copy Full Text
-                  </button>
-                </div>
-              </div>
-
-              {commentImageUrl && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Generated Image</label>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col gap-3">
-                    <img src={commentImageUrl} className="w-full h-32 object-cover rounded-xl border border-slate-200" alt="Generated visual" />
-                    <button onClick={handleDownloadImage} className="w-full py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-xl text-xs font-black shadow-sm flex items-center justify-center gap-2 transition-all">
-                      <Download size={16} /> Save Image to Device
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-100">
-              <a
-                href={selectedPost.permalink ? `https://www.reddit.com${selectedPost.permalink}` : (selectedPost.url?.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com') || '#')}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => {
-                  setShowMobileAssistant(false);
-                  setIsPosting(false);
-                }}
-                className="w-full flex items-center justify-center gap-3 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-slate-200"
-              >
-                <Smartphone size={18} /> Open Target Post <ExternalLink size={16} />
-              </a>
-              <p className="text-center text-[10px] font-bold text-slate-400 mt-4 leading-relaxed">
-                Go to the Reddit thread, click "Reply", paste the text, upload the image, and hit Comment!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

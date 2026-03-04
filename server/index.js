@@ -1063,6 +1063,19 @@ app.post('/api/tracking/archive', async (req, res) => {
   }
 });
 
+app.post('/api/tracking/delete', async (req, res) => {
+  try {
+    const { userId, id } = req.body;
+    if (!userId || !id) return res.status(400).json({ error: 'Missing required fields' });
+
+    await TrackingLink.deleteOne({ id, userId: userId.toString() });
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[TRACKING DELETE] Error: ', e);
+    res.status(500).json({ error: 'Failed to delete tracking link' });
+  }
+});
+
 
 // Superuser enforcement
 const setupAdmin = async () => {
@@ -4087,7 +4100,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
           postUrl: formattedUrl,
           subreddit: context?.subreddit,
           comment: cleanComment,
-          status: 'pending',
+          status: 'Draft',
           createdAt: new Date()
         });
       } else if (type === 'post') {
@@ -4099,7 +4112,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
           postTitle: cleanPostTitle,
           postContent: cleanPostContent,
           postUrl: `https://www.reddit.com/r/${sub}/submit`,
-          status: 'pending',
+          status: 'Draft',
           createdAt: new Date()
         });
       }
@@ -4379,7 +4392,7 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
       productMention,
       redditUsername: redditUsername || 'unknown',
       deployedAt: new Date().toISOString(),
-      status: 'Sent',
+      status: 'Posted',
       ups: 0,
       replies: 0,
       sentiment: 'Neutral'
@@ -4407,10 +4420,20 @@ app.get('/api/user/replies', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const history = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1, createdAt: -1 });
+    const history = await RedditReply.find({ userId: userId.toString(), status: { $ne: 'Deleted' } }).sort({ createdAt: -1 });
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/user/replies', async (req, res) => {
+  try {
+    const { id } = req.query;
+    await RedditReply.updateOne({ id: id.toString() }, { $set: { status: 'Deleted' } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
@@ -4514,10 +4537,33 @@ app.get('/api/user/posts', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    const history = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1, createdAt: -1 });
+    const history = await RedditPost.find({ userId: userId.toString(), status: { $ne: 'Deleted' } }).sort({ createdAt: -1 });
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/user/posts', async (req, res) => {
+  try {
+    const { id } = req.query;
+    await RedditPost.updateOne({ id: id.toString() }, { $set: { status: 'Deleted' } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+app.post('/api/item/status', async (req, res) => {
+  try {
+    const { id, status } = req.body;
+    await Promise.all([
+      RedditPost.updateOne({ id: id.toString() }, { $set: { status: status, deployedAt: new Date() } }),
+      RedditReply.updateOne({ id: id.toString() }, { $set: { status: status, deployedAt: new Date() } })
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Status update failed' });
   }
 });
 

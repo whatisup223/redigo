@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { OnboardingWizard } from './OnboardingWizard';
-import { AlertCircle, Download, Smartphone, RefreshCw, Copy, ExternalLink, Trash2, CheckCircle } from 'lucide-react'; // Added icons
+import { AlertCircle, Download, Smartphone, RefreshCw, Copy, ExternalLink, Trash2, CheckCircle, LayoutList } from 'lucide-react'; // Added icons
 
 interface SidebarItemProps {
   icon: any;
@@ -55,22 +55,34 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const [loadingItems, setLoadingItems] = React.useState(false);
   const [pendingItems, setPendingItems] = React.useState<any[]>([]);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [toast, setToast] = React.useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchAssistantItems = async () => {
     if (!user?.id) return;
     setLoadingItems(true);
     try {
       const [postsRes, repliesRes] = await Promise.all([
-        fetch(`/api/user/posts/sync?userId=${user.id}`),
-        fetch(`/api/user/replies/sync?userId=${user.id}`)
+        fetch(`/api/user/posts?userId=${user.id}`), // Use standard posts endpoint
+        fetch(`/api/user/replies?userId=${user.id}`) // Use standard replies endpoint
       ]);
       const posts = await postsRes.json();
       const replies = await repliesRes.json();
+
       const combined = [
-        ...posts.filter((p: any) => p.status?.toLowerCase() === 'pending').map((p: any) => ({ ...p, type: 'post' })),
-        ...replies.filter((r: any) => r.status?.toLowerCase() === 'pending').map((r: any) => ({ ...r, type: 'reply' }))
+        ...(Array.isArray(posts) ? posts : [])
+          .filter((p: any) => p.status?.toLowerCase() === 'draft' || p.status?.toLowerCase() === 'pending')
+          .map((p: any) => ({ ...p, type: 'post' })),
+        ...(Array.isArray(replies) ? replies : [])
+          .filter((r: any) => r.status?.toLowerCase() === 'draft' || r.status?.toLowerCase() === 'pending')
+          .map((r: any) => ({ ...r, type: 'reply' }))
       ];
-      combined.sort((a, b) => new Date(b.deployedAt || b.createdAt).getTime() - new Date(a.deployedAt || a.createdAt).getTime());
+
+      combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setPendingItems(combined);
       setPendingCount(combined.length);
     } catch (err) { }
@@ -122,6 +134,29 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const [pendingCount, setPendingCount] = React.useState(0);
 
   useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'DEPLOY_RESPONSE') {
+        const response = event.data.payload;
+        if (response?.status === 'DEPLOYING') {
+          showToast('Success! Thread opened in Reddit.', 'success');
+          if (response.itemId) {
+            fetch('/api/item/status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: response.itemId, status: 'Posted' })
+            }).catch(console.error);
+
+            setPendingItems(prev => prev.filter(i => (i.id || i._id) !== response.itemId));
+            setPendingCount(prev => Math.max(0, prev - 1));
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  useEffect(() => {
     const checkExtension = () => {
       const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
       const isInstalled = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
@@ -150,8 +185,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         ]);
         const posts = await postsRes.json();
         const replies = await repliesRes.json();
-        const pendingPosts = posts.filter((p: any) => p.status?.toLowerCase() === 'pending').length;
-        const pendingReplies = replies.filter((r: any) => r.status?.toLowerCase() === 'pending').length;
+        const pendingPosts = (Array.isArray(posts) ? posts : []).filter((p: any) => p.status?.toLowerCase() === 'pending' || p.status?.toLowerCase() === 'draft').length;
+        const pendingReplies = (Array.isArray(replies) ? replies : []).filter((r: any) => r.status?.toLowerCase() === 'pending' || r.status?.toLowerCase() === 'draft').length;
         setPendingCount(pendingPosts + pendingReplies);
       } catch (err) { }
     };
@@ -164,6 +199,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: PenTool, label: 'Post Agent', path: '/post-agent' },
     { icon: MessageSquare, label: 'Comment Agent', path: '/comment-agent' },
+    { icon: LayoutList, label: 'Content Library', path: '/library' }, // New Library link
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing' },
     { icon: LifeBuoy, label: 'Help & Support', path: '/support' },
@@ -605,6 +641,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                   ) : (
                     pendingItems.map((rawItem) => {
                       const item = { ...rawItem };
+                      const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+
                       // Handle JSON in postContent
                       if (item.type === 'post' && item.postContent?.startsWith('{')) {
                         try {
@@ -627,7 +665,12 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                 }`}>
                                 {item.type}
                               </span>
-                              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                              <div className={`px-2 py-0.5 text-[8px] font-black uppercase rounded-md tracking-widest flex items-center gap-1 ${item.status?.toLowerCase() === 'draft' || !item.status ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                }`}>
+                                <span className={`w-1 h-1 rounded-full ${item.status?.toLowerCase() === 'draft' || !item.status ? 'bg-orange-400' : 'bg-emerald-400'}`} />
+                                {item.status || 'Draft'}
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 ml-auto">
                                 <ExternalLink size={10} /> r/{item.subreddit || 'reddit'}
                               </span>
                             </div>
@@ -695,15 +738,44 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                             )}
                           </div>
 
-                          <div className="pt-2 relative z-10">
-                            <a
-                              href={item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.1em] flex items-center justify-center gap-2 hover:bg-orange-600 shadow-xl transition-all hover:scale-[1.02] active:scale-95 group-hover:shadow-orange-100"
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+
+                                // PC direct deploy
+                                if (!isMobile && !isExtensionMissing) {
+                                  window.postMessage({
+                                    type: 'DEPLOY_CONTENT',
+                                    content: item.postContent || item.comment,
+                                    title: item.postTitle || item.title,
+                                    subreddit: item.subreddit,
+                                    imageUrl: item.imageUrl,
+                                    itemId: item.id || item._id,
+                                    itemType: item.type
+                                  }, '*');
+                                  showToast('Sending to Extension...', 'success');
+                                } else {
+                                  // Mobile or manual fallback
+                                  window.open(item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl, '_blank');
+
+                                  // Mark as posted immediately if it's draft
+                                  if (item.status?.toLowerCase() === 'draft' || item.status?.toLowerCase() === 'pending') {
+                                    await fetch('/api/item/status', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: item.id || item._id, status: 'Posted' })
+                                    });
+                                    setPendingItems(prev => prev.filter(i => (i.id || i._id) !== (item.id || item._id)));
+                                    setPendingCount(prev => Math.max(0, prev - 1));
+                                    showToast('Marked as Published! 🚀', 'success');
+                                  }
+                                }
+                              }}
+                              className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.1em] flex items-center justify-center gap-2 hover:bg-orange-600 shadow-xl transition-all hover:scale-[1.02] active:scale-95 group-hover:shadow-orange-100"
                             >
-                              Open on Reddit <ExternalLink size={14} />
-                            </a>
+                              {!isMobile && !isExtensionMissing ? <><Zap size={14} fill="currentColor" /> Deploy</> : <><ExternalLink size={14} /> Open Reddit</>}
+                            </button>
                           </div>
                         </div>
                       );
@@ -723,6 +795,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           )}
         </main>
       </div>
+
+      {/* Global Toast */}
+      {toast && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[2000] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-300 ${toast.type === 'success' ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'
+          }`}>
+          {toast.type === 'success' ? <CheckCircle size={18} className="text-emerald-400" /> : <AlertCircle size={18} />}
+          <span className="text-sm font-bold">{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 };

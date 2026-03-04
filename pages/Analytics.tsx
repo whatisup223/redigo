@@ -258,6 +258,26 @@ export const Analytics: React.FC = () => {
     }
   };
 
+  const handleDeleteLink = async (id: string) => {
+    if (!confirm('Are you sure you want to permanently delete this tracking link? This action cannot be undone.')) return;
+    try {
+      const ts = Date.now();
+      const res = await fetch(`/api/tracking/delete?_=${ts}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, id })
+      });
+      if (res.ok) {
+        showToast('Link deleted successfully');
+        fetchData();
+      } else {
+        showToast('Failed to delete link', 'error');
+      }
+    } catch (e) {
+      showToast('Error deleting link', 'error');
+    }
+  };
+
   const handleDeleteReddit = async (id: string, redditId: string, type: 'post' | 'reply') => {
     if (!confirm(`Are you sure you want to delete this ${type} from Reddit? This will remove it from Reddit and hide it from your history.`)) return;
     try {
@@ -1268,6 +1288,7 @@ export const Analytics: React.FC = () => {
                             <span className="hidden sm:inline">Details</span>
                             <span className="sm:hidden"><MousePointer2 size={14} /></span>
                           </button>
+                          <button onClick={() => handleDeleteLink(row.id)} className="p-2.5 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all active:scale-95 title" title="Delete Link"><Trash2 size={16} /></button>
                           <button onClick={() => handleArchiveLink(row.id)} className="p-2.5 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95 title" title="Archive Link"><Archive size={16} /></button>
                           <button onClick={() => { const url = `${window.location.origin}/t/${row.id}`; navigator.clipboard.writeText(url); showToast('Link copied!'); }} className="px-3 py-2 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl transition-all active:scale-95"><Copy size={16} /></button>
                           <a href={row.originalUrl} target="_blank" rel="noreferrer" className="p-2.5 bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><ExternalLink size={16} /></a>
