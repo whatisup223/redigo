@@ -123,8 +123,6 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
 
   const style = document.createElement('style');
   style.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
-
     #redigo-assistant-root {
       position: fixed; bottom: 24px; right: 24px; z-index: 999999;
       background: rgba(255, 255, 255, 0.95);
@@ -132,7 +130,7 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
       -webkit-backdrop-filter: blur(12px);
       border-radius: 24px;
       box-shadow: 0 20px 50px rgba(30, 41, 59, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5);
-      width: 340px; font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+      width: 340px; font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
       border: 1px solid rgba(226, 232, 240, 0.8);
       overflow: hidden;
       animation: redigoSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
@@ -266,10 +264,26 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
   }
   if (imageUrl) {
     document.getElementById('redigo-download-img').addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'DOWNLOAD_IMAGE', url: imageUrl }, (response) => {
-        if (response?.success) {
-          showToast("Downloading...");
+      // Build absolute URL — chrome.downloads requires a full URL
+      let absoluteUrl = imageUrl;
+      try {
+        // If it's already absolute this is a no-op; if relative, resolve it
+        absoluteUrl = new URL(imageUrl, 'https://redditgo.online').href;
+      } catch (_) { /* keep original */ }
+
+      const btn = document.getElementById('redigo-download-img');
+      if (btn) { btn.innerText = 'Downloading...'; btn.disabled = true; }
+
+      chrome.runtime.sendMessage({ type: 'DOWNLOAD_IMAGE', url: absoluteUrl }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Redigo download error:', chrome.runtime.lastError.message);
+          showToast('Download failed!');
+        } else if (response?.success) {
+          showToast('Downloading! ✅');
+        } else {
+          showToast('Download failed!');
         }
+        if (btn) { btn.innerText = 'Download Image'; btn.disabled = false; }
       });
     });
   }
