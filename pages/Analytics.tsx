@@ -132,17 +132,38 @@ export const Analytics: React.FC = () => {
   }, [user?.id]);
 
   const handleVerify = async (item: any) => {
-    if (!item.postUrl) {
-      showToast('No URL found.', 'error');
-      return;
-    }
-
-    if (item.postUrl.includes('/submit')) {
+    if (!item.postUrl || item.postUrl.includes('/submit')) {
       if (item.status === 'Sent' || item.status === 'Active') {
-        showToast('Live URL not captured correctly. Please verify manually.', 'warning');
+        showToast('Already tracked as active.', 'warning');
         return;
       }
-      window.open(item.postUrl, '_blank');
+      if (!user?.redditUsername) {
+        showToast('Please set your Reddit Username in Settings to allow auto-verification.', 'error');
+        return;
+      }
+
+      setVerifyingIds(prev => new Set(prev).add(item.id));
+      showToast('Checking your Reddit profile...', 'success');
+      try {
+        const syncUrl = activeTab === 'posts' ? `/api/user/posts/sync?userId=${user.id}` : `/api/user/replies/sync?userId=${user.id}`;
+        await fetch(syncUrl);
+        showToast('Finished checking profile!', 'success');
+
+        // This causes the table to update
+        setActiveTab(prev => prev);
+      } catch (e) {
+        showToast('Failed to check. Make sure Reddit username is correct.', 'error');
+      } finally {
+        setVerifyingIds(prev => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+
+        // Let the parent component refresh the UI if fetchData was passed, otherwise we rely on user manually refreshing
+        // Actually, we can just reload the window or wait for interval since fetchData isn't straightforward
+        window.location.reload();
+      }
       return;
     }
 
