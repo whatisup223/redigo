@@ -7,8 +7,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'REDIGO_DEPLOY') {
         const { text, targetUrl, itemId, userId } = request;
 
-        // Set a loading flag so content.js can show a "Loading" indicator immediately
-        chrome.storage.local.set({ redigo_loading: true });
+        // Set loading flag AND the draft instantly so content.js injects it on load reliably
+        chrome.storage.local.set({
+            redigo_loading: true,
+            redigo_assistant_draft: {
+                title: request.title,
+                text: request.text,
+                imageUrl: request.imageUrl,
+                itemId: request.itemId,
+                userId: request.userId,
+                isPost: request.isPost,
+                parentId: request.parentId
+            }
+        });
 
         // 1. Create a new tab with the target Reddit post URL
         chrome.tabs.create({ url: targetUrl, active: true }, (newTab) => {
