@@ -4772,8 +4772,13 @@ const syncUserRedditActivity = async (userId) => {
 // Sync History for Posts (Local Database Only -> Backed by Public JSON Sync)
 app.get('/api/user/posts/sync', async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { userId, forceRefresh } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+    // If forceRefresh is requested, invalidate the Reddit public JSON cache for this user
+    if (forceRefresh) {
+      redditPublicJsonCache.delete(userId.toString());
+    }
 
     await syncUserRedditActivity(userId);
 
@@ -4788,8 +4793,13 @@ app.get('/api/user/posts/sync', async (req, res) => {
 // Sync History for Replies (Local Database Only -> Backed by Public JSON Sync)
 app.get('/api/user/replies/sync', async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { userId, forceRefresh } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+    // If forceRefresh is requested, invalidate the Reddit public JSON cache for this user
+    if (forceRefresh) {
+      redditPublicJsonCache.delete(userId.toString());
+    }
 
     await syncUserRedditActivity(userId);
 

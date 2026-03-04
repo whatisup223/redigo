@@ -146,12 +146,13 @@ export const Analytics: React.FC = () => {
       showToast('Checking your Reddit profile...', 'success');
       try {
         const userId = user.id || user._id;
-        const syncUrl = activeTab === 'posts' ? `/api/user/posts/sync?userId=${userId}` : `/api/user/replies/sync?userId=${userId}`;
+        // Invalidate cache by adding timestamp — forces fresh Reddit fetch
+        const ts = Date.now();
+        const syncUrl = activeTab === 'posts'
+          ? `/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`
+          : `/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`;
         await fetch(syncUrl);
-        showToast('Finished checking profile!', 'success');
-
-        // This causes the table to update
-        setActiveTab(prev => prev);
+        showToast('Finished! Refreshing data...', 'success');
       } catch (e) {
         showToast('Failed to check. Make sure Reddit username is correct.', 'error');
       } finally {
@@ -160,10 +161,8 @@ export const Analytics: React.FC = () => {
           next.delete(item.id);
           return next;
         });
-
-        // Let the parent component refresh the UI if fetchData was passed, otherwise we rely on user manually refreshing
-        // Actually, we can just reload the window or wait for interval since fetchData isn't straightforward
-        window.location.reload();
+        // Refresh the data in-place — no reload needed
+        await fetchData();
       }
       return;
     }
@@ -210,7 +209,13 @@ export const Analytics: React.FC = () => {
           setPostsHistory(prev => prev.map(p => p.id === item.id ? { ...p, ups: data.ups, replies: data.replies, status: 'Active' } : p));
           showToast('Verified and updated! 🚀', 'success');
         } else {
-          showToast('Could not verify post mechanically. It may be removed or unavailable.', 'error');
+          // Fallback: try profile sync
+          const userId = user?.id || user?._id;
+          const ts = Date.now();
+          await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`);
+          await fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`);
+          showToast('Could not verify directly. Tried profile sync instead.', 'error');
+          await fetchData();
         }
       } catch (err) {
         showToast('Failed to verify via server.', 'error');
@@ -220,6 +225,8 @@ export const Analytics: React.FC = () => {
           next.delete(item.id);
           return next;
         });
+        // Always refresh state after verify attempt
+        await fetchData();
       }
     }
   };

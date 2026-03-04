@@ -101,6 +101,50 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     } catch (e) { }
   };
 
+  const [isSyncing, setIsSyncing] = React.useState(false);
+
+  const handleSyncItems = async () => {
+    const userId = user?.id || (user as any)?._id;
+    if (!userId || isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const ts = Date.now();
+      const [postsRes, repliesRes] = await Promise.all([
+        fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`),
+        fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`)
+      ]);
+      const posts = postsRes.ok ? await postsRes.json() : [];
+      const replies = repliesRes.ok ? await repliesRes.json() : [];
+      const all: any[] = [
+        ...(Array.isArray(posts) ? posts : []),
+        ...(Array.isArray(replies) ? replies : [])
+      ];
+
+      // Find confirmed items (no longer Draft/Pending)
+      const confirmedIds = new Set<string>();
+      for (const item of pendingItems) {
+        const itemId = item.id || item._id;
+        const synced = all.find(r =>
+          (r.id || r._id) === itemId &&
+          ['live', 'sent', 'active'].includes((r.status || '').toLowerCase())
+        );
+        if (synced) confirmedIds.add(itemId);
+      }
+
+      if (confirmedIds.size > 0) {
+        setPendingItems(prev => prev.filter(i => !confirmedIds.has(i.id || i._id)));
+        setPendingCount(prev => Math.max(0, prev - confirmedIds.size));
+        showToast(`✅ ${confirmedIds.size} item(s) confirmed published!`, 'success');
+      } else {
+        showToast('No new confirmations yet. Try again after posting.', 'success');
+      }
+    } catch (e) {
+      showToast('Sync failed. Check your connection.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -726,9 +770,19 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => setIsAssistantOpen(false)} className="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-400 hover:text-red-500 transition-all flex items-center justify-center border border-slate-100">
-                    <X size={20} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSyncItems}
+                      disabled={isSyncing}
+                      title="Sync & check publish status"
+                      className="w-10 h-10 bg-orange-50 hover:bg-orange-100 disabled:opacity-50 rounded-2xl text-orange-500 hover:text-orange-700 transition-all flex items-center justify-center border border-orange-100"
+                    >
+                      <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+                    </button>
+                    <button onClick={() => setIsAssistantOpen(false)} className="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-400 hover:text-red-500 transition-all flex items-center justify-center border border-slate-100">
+                      <X size={20} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-[#f8fafc]">
