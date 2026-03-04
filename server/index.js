@@ -4587,33 +4587,7 @@ app.post('/api/item/status', async (req, res) => {
   }
 });
 
-app.post('/api/outreach/confirm', async (req, res) => {
-  try {
-    const { itemId, type } = req.body;
-    if (type === 'post') {
-      await RedditPost.updateOne({ id: itemId }, { $set: { status: 'Active' } });
-    } else {
-      await RedditReply.updateOne({ id: itemId }, { $set: { status: 'Active' } });
-    }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Confirm update failed' });
-  }
-});
-
-app.post('/api/outreach/update-stats', async (req, res) => {
-  try {
-    const { itemId, type, ups, replies } = req.body;
-    if (type === 'post') {
-      await RedditPost.updateOne({ id: itemId }, { $set: { ups: ups || 0, replies: replies || 0 } });
-    } else {
-      await RedditReply.updateOne({ id: itemId }, { $set: { ups: ups || 0, replies: replies || 0 } });
-    }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Stats update failed' });
-  }
-});
+// NOTE: /api/outreach/confirm and /api/outreach/update-stats are defined above (with proper userId validation)
 
 app.post('/api/reddit/verify', async (req, res) => {
   try {
