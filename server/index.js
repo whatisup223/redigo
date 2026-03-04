@@ -40,6 +40,23 @@ if (process.env.MONGO_URI) {
 let settingsCache = {};
 const savedData = {};
 
+// ── Reddit Public JSON Cache ──────────────────────────────────────────────────
+// Caches the public JSON response per userId for 90 seconds
+// This prevents hammering Reddit with too many requests when multiple users poll
+const redditPublicJsonCache = new Map(); // { userId: { data, fetchedAt } }
+const REDDIT_CACHE_TTL_MS = 90_000; // 90 seconds
+
+// Clean up stale cache entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, entry] of redditPublicJsonCache.entries()) {
+    if (now - entry.fetchedAt > REDDIT_CACHE_TTL_MS * 2) {
+      redditPublicJsonCache.delete(uid);
+    }
+  }
+}, 5 * 60 * 1000);
+// ─────────────────────────────────────────────────────────────────────────────
+
 const initSettings = async () => {
   try {
     if (mongoose.connection.readyState === 1) {
@@ -4646,20 +4663,34 @@ const syncUserRedditActivity = async (userId) => {
     const cleanUsername = user.redditUsername.replace(/^u\//i, '').trim();
     if (!cleanUsername) return;
 
-    // We use dynamic user agent to fetch his public JSON. 
+    // We use dynamic user agent to fetch his public JSON.
     // This is 100% public data and doesn't require OAuth keys.
-    const userAgent = getDynamicUserAgent(userId, cleanUsername);
-    const response = await fetch(`https://www.reddit.com/user/${cleanUsername}.json?limit=50`, {
-      method: 'GET',
-      headers: { 'User-Agent': userAgent }
-    });
+    // We check the in-memory cache first to avoid hammering Reddit.
+    let data;
+    const cacheKey = userId.toString();
+    const cached = redditPublicJsonCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < REDDIT_CACHE_TTL_MS) {
+      // Cache hit — use stored data
+      data = cached.data;
+    } else {
+      // Cache miss — fetch from Reddit and store
+      const userAgent = getDynamicUserAgent(userId, cleanUsername);
+      const response = await fetch(`https://www.reddit.com/user/${cleanUsername}.json?limit=50`, {
+        method: 'GET',
+        headers: { 'User-Agent': userAgent }
+      });
 
-    if (!response.ok) {
-      console.warn(`[Reddit Sync] Failed to fetch data for ${cleanUsername}: ${response.status}`);
-      return;
+      if (!response.ok) {
+        console.warn(`[Reddit Sync] Failed to fetch data for ${cleanUsername}: ${response.status}`);
+        return;
+      }
+
+      data = await response.json();
+      if (data?.data?.children) {
+        redditPublicJsonCache.set(cacheKey, { data, fetchedAt: Date.now() });
+      }
     }
 
-    const data = await response.json();
     if (!data?.data?.children) return;
 
     const activeDate = new Date();

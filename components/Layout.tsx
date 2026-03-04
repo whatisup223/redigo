@@ -133,10 +133,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const [pendingCount, setPendingCount] = React.useState(0);
 
+  // Effect 1: Listen for messages from the extension
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      if (event.data?.source === 'REDIGO_EXT' && event.data?.type === 'DEPLOY_RESPONSE') {
-        const response = event.data.payload;
+      const { source, type, payload } = event.data || {};
+      if (source !== 'REDIGO_EXT') return;
+
+      // (A) Extension opened Reddit tab for deployment
+      if (type === 'DEPLOY_RESPONSE') {
+        const response = payload;
         if (response?.status === 'DEPLOYING') {
           showToast('Success! Thread opened in Reddit.', 'success');
           if (response.itemId) {
@@ -145,15 +150,120 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ id: response.itemId, status: 'Pending' })
             }).catch(console.error);
-
             setPendingItems(prev => prev.map(i => (i.id || i._id) === response.itemId ? { ...i, status: 'Pending' } : i));
           }
+        }
+      }
+
+      // (B) Extension detected successful Reddit publish → remove item immediately
+      if (type === 'REDIGO_POST_CONFIRMED') {
+        const { itemId } = event.data;
+        if (itemId) {
+          setPendingItems(prev => prev.filter(i => (i.id || i._id) !== itemId));
+          setPendingCount(prev => Math.max(0, prev - 1));
+          showToast('✅ تم التأكيد! تم كشف نشرك على Reddit تلقائياً.', 'success');
         }
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  // Effect 2: Exponential Backoff Polling when there are pending items
+  // Works on mobile and browser without extension (fallback)
+  useEffect(() => {
+    const userId = user?.id || (user as any)?._id;
+    // Only start polling if there are pending/sent items and we have a user
+    const hasPending = pendingItems.some(i =>
+      ['pending', 'sent', 'draft'].includes((i.status || '').toLowerCase())
+    );
+    if (!hasPending || !userId) return;
+
+    const delays = [30_000, 60_000, 120_000, 240_000, 480_000]; // 30s, 1m, 2m, 4m, 8m
+    let attempt = 0;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+
+      try {
+        const ts = Date.now();
+        const [postsRes, repliesRes] = await Promise.all([
+          fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}`),
+          fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}`)
+        ]);
+
+        const posts = postsRes.ok ? await postsRes.json() : [];
+        const replies = repliesRes.ok ? await repliesRes.json() : [];
+        const all: any[] = [...(Array.isArray(posts) ? posts : []), ...(Array.isArray(replies) ? replies : [])];
+
+        // Find any pending items that are now confirmed on Reddit
+        const confirmedIds = new Set<string>();
+        setPendingItems(prev => {
+          for (const item of prev) {
+            const itemId = item.id || item._id;
+            const synced = all.find(r =>
+              (r.id || r._id) === itemId &&
+              ['live', 'sent', 'active'].includes((r.status || '').toLowerCase())
+            );
+            if (synced) confirmedIds.add(itemId);
+          }
+
+          if (confirmedIds.size > 0) {
+            showToast(`✅ تم التأكيد! تم كشف نشرك على Reddit.`, 'success');
+            setPendingCount(prev2 => Math.max(0, prev2 - confirmedIds.size));
+            return prev.filter(i => !confirmedIds.has(i.id || i._id));
+          }
+          return prev;
+        });
+
+      } catch (_) { /* Network error — continue polling */ }
+
+      attempt++;
+
+      if (cancelled) return;
+
+      if (attempt >= delays.length) {
+        // All attempts exhausted — revert still-pending items back to Draft
+        setPendingItems(prev => {
+          const stillPending = prev.filter(i =>
+            ['pending', 'sent'].includes((i.status || '').toLowerCase())
+          );
+          if (stillPending.length > 0) {
+            stillPending.forEach(item => {
+              fetch('/api/item/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: item.id || item._id, status: 'Draft' })
+              }).catch(() => { });
+            });
+            showToast('⚠️ لم نتأكد من النشر. تحقق من Analytics لو نشرته.', 'error');
+            return prev.map(i =>
+              ['pending', 'sent'].includes((i.status || '').toLowerCase())
+                ? { ...i, status: 'Draft' }
+                : i
+            );
+          }
+          return prev;
+        });
+        return; // Stop polling
+      }
+
+      // Schedule next attempt with exponential backoff
+      timeoutId = setTimeout(poll, delays[attempt]);
+    };
+
+    // Start first poll after 30 seconds
+    timeoutId = setTimeout(poll, delays[0]);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [pendingItems.filter(i => ['pending', 'sent'].includes((i.status || '').toLowerCase())).length, user?.id]);
+
+
 
   useEffect(() => {
     const checkExtension = () => {

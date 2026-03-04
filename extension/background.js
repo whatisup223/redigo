@@ -196,8 +196,20 @@ chrome.webRequest.onCompleted.addListener((details) => {
                         }).catch(() => { });
                     });
 
-                    // Instruct active tab to hide extension UI gently
+                    // Instruct active (Reddit) tab to hide extension UI gently
                     chrome.tabs.sendMessage(details.tabId, { type: 'POST_AUTO_CONFIRMED' }).catch(() => { });
+
+                    // Notify the Dashboard tab so it can remove the item from pending list immediately
+                    const draftSnapshot = res.redigo_assistant_draft;
+                    chrome.tabs.query({ url: ['*://redditgo.online/*', '*://localhost:*/*'] }, (tabs) => {
+                        for (const tab of tabs) {
+                            chrome.tabs.sendMessage(tab.id, {
+                                type: 'REDIGO_POST_CONFIRMED',
+                                itemId: draftSnapshot.itemId,
+                                itemType: draftSnapshot.isPost ? 'post' : 'comment'
+                            }).catch(() => { });
+                        }
+                    });
 
                     // Clean up draft
                     chrome.storage.local.remove('redigo_assistant_draft');
