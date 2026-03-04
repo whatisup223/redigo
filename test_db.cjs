@@ -1,0 +1,1 @@
+const mongoose=require('mongoose'); require('dotenv').config(); mongoose.connect(process.env.MONGO_URI).then(async ()=>{ const Setting=require('./server/models.js').Setting; const sets=await Setting.find({}); console.log(sets.map(s => ({ key: s.key, val: s.value }))); process.exit(0); }).catch(console.error);

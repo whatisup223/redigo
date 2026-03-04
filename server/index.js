@@ -1319,7 +1319,9 @@ app.post('/api/auth/resend-2fa', async (req, res) => {
 
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, redditUsername } = req.body;
+
+    if (!redditUsername) return res.status(400).json({ error: 'Reddit username is required' });
 
     const existingUser = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
     if (existingUser) {
@@ -1345,6 +1347,7 @@ app.post('/api/auth/signup', async (req, res) => {
       id: tempId,
       name,
       email,
+      redditUsername: redditUsername.replace(/^u\//i, '').trim(),
       password: hashedPassword,
       role: 'user',
       plan: 'Starter',
@@ -1672,7 +1675,7 @@ app.post('/api/user/complete-onboarding', async (req, res) => {
 
       // Handle Reddit Username
       if (redditUsername) {
-        user.redditUsername = redditUsername.replace('/u/', '').replace('u/', '').trim();
+        user.redditUsername = redditUsername.replace(/^u\//i, '').trim();
       }
 
       // 🎁 Dynamic Bonus Awarding
@@ -4478,11 +4481,125 @@ app.get('/api/user/posts', async (req, res) => {
   }
 });
 
-// Sync History for Posts (Local Database Only)
+// --- Reddit Public JSON Syncing System ---
+
+// Fuzzy matching helper (Jaccard token similarity)
+const calculateSimilarity = (str1, str2) => {
+  if (!str1 || !str2) return 0;
+  const s1 = str1.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const s2 = str2.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  if (!s1 || !s2) return 0;
+  const set1 = new Set(s1.split(/\s+/));
+  const set2 = new Set(s2.split(/\s+/));
+  let intersectionCount = 0;
+  for (const word of set1) {
+    if (set2.has(word)) intersectionCount++;
+  }
+  const unionSize = set1.size + set2.size - intersectionCount;
+  return intersectionCount / unionSize;
+};
+
+// Background Sync Task
+const syncUserRedditActivity = async (userId) => {
+  try {
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user || !user.redditUsername) return;
+
+    const cleanUsername = user.redditUsername.replace(/^u\//i, '').trim();
+    if (!cleanUsername) return;
+
+    // We use dynamic user agent to fetch his public JSON. 
+    // This is 100% public data and doesn't require OAuth keys.
+    const userAgent = getDynamicUserAgent(userId, cleanUsername);
+    const response = await fetch(`https://www.reddit.com/user/${cleanUsername}.json?limit=50`, {
+      method: 'GET',
+      headers: { 'User-Agent': userAgent }
+    });
+
+    if (!response.ok) {
+      console.warn(`[Reddit Sync] Failed to fetch data for ${cleanUsername}: ${response.status}`);
+      return;
+    }
+
+    const data = await response.json();
+    if (!data?.data?.children) return;
+
+    const activeDate = new Date();
+    activeDate.setDate(activeDate.getDate() - 14);
+
+    // Fetch pending (or unlinked) items
+    const recentReplies = await RedditReply.find({
+      userId: userId.toString(),
+      isDeleted: { $ne: true },
+      deployedAt: { $gte: activeDate }
+    });
+
+    const recentPosts = await RedditPost.find({
+      userId: userId.toString(),
+      isDeleted: { $ne: true },
+      deployedAt: { $gte: activeDate }
+    });
+
+    const updatesPromises = [];
+
+    for (const item of data.data.children) {
+      const kind = item.kind;
+      const t = item.data;
+      const cleanSubreddit = (t.subreddit || '').toLowerCase();
+
+      if (kind === 't1') { // Comment
+        for (const reply of recentReplies) {
+          if ((reply.subreddit || '').toLowerCase() === cleanSubreddit) {
+            const similarity = calculateSimilarity(t.body, reply.comment);
+
+            // 70% threshold is good for minor edits before users hit "post"
+            if (similarity >= 0.7 || (reply.comment && t.body && t.body.includes(reply.comment))) {
+              reply.status = 'Live';
+              reply.ups = t.ups;
+              reply.postUrl = `https://reddit.com${t.permalink}`;
+              reply.redditCommentId = `t1_${t.id}`;
+              updatesPromises.push(reply.save());
+              break;
+            }
+          }
+        }
+      } else if (kind === 't3') { // Post
+        for (const post of recentPosts) {
+          if ((post.subreddit || '').toLowerCase() === cleanSubreddit) {
+            const titleSim = calculateSimilarity(t.title, post.postTitle);
+            let bodySim = 0;
+            if (t.selftext && post.postContent) {
+              bodySim = calculateSimilarity(t.selftext, post.postContent);
+            }
+
+            if (titleSim >= 0.7 || bodySim >= 0.7 || (t.title && post.postTitle && t.title.includes(post.postTitle))) {
+              post.status = 'Live';
+              post.ups = t.ups;
+              post.postUrl = `https://reddit.com${t.permalink}`;
+              post.redditCommentId = `t3_${t.id}`;
+              updatesPromises.push(post.save());
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (updatesPromises.length > 0) {
+      await Promise.all(updatesPromises);
+    }
+  } catch (error) {
+    console.error(`[Reddit Sync Error] UserId ${userId}:`, error.message);
+  }
+};
+
+// Sync History for Posts (Local Database Only -> Backed by Public JSON Sync)
 app.get('/api/user/posts/sync', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+    await syncUserRedditActivity(userId);
 
     const updatedHistory = await RedditPost.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(updatedHistory);
@@ -4492,11 +4609,13 @@ app.get('/api/user/posts/sync', async (req, res) => {
   }
 });
 
-// Sync History for Replies (Local Database Only)
+// Sync History for Replies (Local Database Only -> Backed by Public JSON Sync)
 app.get('/api/user/replies/sync', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+    await syncUserRedditActivity(userId);
 
     const updatedHistory = await RedditReply.find({ userId: userId.toString(), isDeleted: { $ne: true } }).sort({ deployedAt: -1 });
     res.json(updatedHistory);

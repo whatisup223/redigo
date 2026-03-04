@@ -789,18 +789,18 @@ export const Settings: React.FC = () => {
                                     <p className="text-[10px] text-slate-400 font-medium px-1">Max 800KB (JPG, PNG)</p>
                                 </label>
                                 <label className="space-y-2 md:col-span-2">
-                                    <span className="text-sm font-bold text-slate-700">Reddit Username (Optional)</span>
+                                    <span className="text-sm font-bold text-slate-700">Reddit Username <span className="text-orange-600 ml-1 text-[10px] font-black uppercase tracking-widest">(Required)</span></span>
                                     <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">/u/</span>
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">u/</span>
                                         <input
                                             type="text"
                                             placeholder="Username"
                                             value={redditUsername}
-                                            onChange={(e) => setRedditUsername(e.target.value.replace('/u/', '').replace('u/', '').trim())}
+                                            onChange={(e) => setRedditUsername(e.target.value.replace(/^u\//i, '').trim())}
                                             className="w-full p-4 pl-10 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none font-bold text-slate-900 focus:border-orange-500 transition-colors"
                                         />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-medium px-1">Used for identifying your requests to Reddit API for compliance.</p>
+                                    <p className="text-[10px] text-slate-400 font-medium px-1">Critical for tracking your replies and live links in analytics. Do not change unless necessary.</p>
                                 </label>
                                 <label className="space-y-2 md:col-span-2">
                                     <span className="text-sm font-bold text-slate-700">Email Address</span>

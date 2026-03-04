@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { OnboardingWizard } from './OnboardingWizard';
-import { AlertCircle, Download } from 'lucide-react'; // Added icons for banner
+import { AlertCircle, Download, Smartphone } from 'lucide-react'; // Added icons for banner
 
 interface SidebarItemProps {
   icon: any;
@@ -84,6 +84,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
     { icon: PenTool, label: 'Post Agent', path: '/post-agent' },
     { icon: MessageSquare, label: 'Comment Agent', path: '/comment-agent' },
+    { icon: Smartphone, label: 'Mobile Assistant', path: '/assistant' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing' },
     { icon: LifeBuoy, label: 'Help & Support', path: '/support' },

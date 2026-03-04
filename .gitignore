@@ -29,3 +29,8 @@ node_modules
 settings.json
 settings.storage.json
 *.storage.json
+ 
+mongodb.zip
+mongodb_temp/
+ 
+data_new/

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 export const SignupPage: React.FC = () => {
     const [name, setName] = useState('');
+    const [redditUsername, setRedditUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export const SignupPage: React.FC = () => {
             const response = await fetch('/api/auth/signup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, password }),
+                body: JSON.stringify({ name, redditUsername, email, password }),
             });
 
             const data = await response.json();
@@ -213,6 +214,23 @@ export const SignupPage: React.FC = () => {
                                         placeholder="John Doe"
                                         required
                                     />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-bold text-slate-700" htmlFor="redditUsername">Reddit Username <span className="text-orange-600 ml-1 text-xs font-black uppercase tracking-widest">(Required)</span></label>
+                                    <div className="relative">
+                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">u/</span>
+                                        <input
+                                            type="text"
+                                            id="redditUsername"
+                                            value={redditUsername}
+                                            onChange={(e) => setRedditUsername(e.target.value.replace(/^u\//i, ''))}
+                                            className="w-full pl-10 pr-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-bold text-slate-900 placeholder:text-slate-400"
+                                            placeholder="marketing_pro"
+                                            required
+                                        />
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium ml-1">Needed to track your replies & live links in analytics.</p>
                                 </div>
 
                                 <div className="space-y-1.5">

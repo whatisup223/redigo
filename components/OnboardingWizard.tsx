@@ -75,7 +75,7 @@ export const OnboardingWizard: React.FC = () => {
         customTone: ''
     });
 
-    const [redditUsername, setRedditUsername] = useState('');
+    const [redditUsername, setRedditUsername] = useState(user?.redditUsername || '');
 
     const totalSteps = 7;
 
@@ -475,18 +475,18 @@ export const OnboardingWizard: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-1.5 pt-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Reddit Username (Optional)</label>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Reddit Username <span className="text-orange-600 normal-case tracking-normal">(Required)</span></label>
                                         <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">/u/</span>
+                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">u/</span>
                                             <input
                                                 type="text"
                                                 className="w-full p-4 pl-10 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-orange-50 focus:border-orange-500 focus:outline-none transition-all font-bold text-sm"
                                                 placeholder="username"
                                                 value={redditUsername}
-                                                onChange={(e) => setRedditUsername(e.target.value.replace('/u/', '').replace('u/', '').trim())}
+                                                onChange={(e) => setRedditUsername(e.target.value.replace(/^u\//i, '').trim())}
                                             />
                                         </div>
-                                        <p className="text-[10px] text-slate-400 font-medium ml-1">Don't worry, we never ask for your Reddit password.</p>
+                                        <p className="text-[10px] text-slate-400 font-medium ml-1">Critical for tracking your replies and live links in analytics.</p>
                                     </div>
                                 </div>
                             </div>
