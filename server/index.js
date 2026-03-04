@@ -733,7 +733,7 @@ const rateLimitKeyGen = (req) => {
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 5000,
   keyGenerator: rateLimitKeyGen,
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,

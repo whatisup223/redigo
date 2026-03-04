@@ -23,8 +23,15 @@ window.postMessage({ source: 'REDIGO_EXT', type: 'EXTENSION_PONG' }, '*');
 
 function sendHeartbeat(userId) {
     if (!userId) return;
+    const now = Date.now();
+    const lastPing = parseInt(localStorage.getItem('redigo_last_ping') || '0', 10);
+
+    // Only send actual API request every 60 seconds to avoid 429 Too Many Requests
+    if (now - lastPing < 60000) return;
+
     const token = localStorage.getItem('token');
     if (token) {
+        localStorage.setItem('redigo_last_ping', now.toString());
         fetch('/api/user/extension-ping', {
             method: 'POST',
             headers: {

@@ -171,7 +171,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       }
     };
     checkExtension();
-    const interval = setInterval(checkExtension, 5000);
+    const interval = setInterval(checkExtension, 10000);
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -191,7 +191,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
       } catch (err) { }
     };
     fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 15000); // Check every 15s locally
+    const interval = setInterval(fetchPendingCount, 60000); // Check every 60s locally to save rate limits
     return () => clearInterval(interval);
   }, [user?.id]);
 
