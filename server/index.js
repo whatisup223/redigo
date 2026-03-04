@@ -4695,12 +4695,14 @@ const syncUserRedditActivity = async (userId) => {
     const recentReplies = await RedditReply.find({
       userId: userId.toString(),
       isDeleted: { $ne: true },
+      status: { $in: ['Draft', 'Pending', 'Sent'] },
       deployedAt: { $gte: activeDate }
     });
 
     const recentPosts = await RedditPost.find({
       userId: userId.toString(),
       isDeleted: { $ne: true },
+      status: { $in: ['Draft', 'Pending', 'Sent'] },
       deployedAt: { $gte: activeDate }
     });
 
