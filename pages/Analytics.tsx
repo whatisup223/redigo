@@ -145,7 +145,8 @@ export const Analytics: React.FC = () => {
       setVerifyingIds(prev => new Set(prev).add(item.id));
       showToast('Checking your Reddit profile...', 'success');
       try {
-        const syncUrl = activeTab === 'posts' ? `/api/user/posts/sync?userId=${user.id}` : `/api/user/replies/sync?userId=${user.id}`;
+        const userId = user.id || user._id;
+        const syncUrl = activeTab === 'posts' ? `/api/user/posts/sync?userId=${userId}` : `/api/user/replies/sync?userId=${userId}`;
         await fetch(syncUrl);
         showToast('Finished checking profile!', 'success');
 
@@ -264,22 +265,23 @@ export const Analytics: React.FC = () => {
   };
 
   const fetchData = async () => {
-    if (!user?.id) return;
+    const userId = user?.id || user?._id;
+    if (!userId) return;
     try {
       const ts = Date.now(); // Cache busting
-      const historyRes = await fetch(`/api/user/replies/sync?userId=${user.id}&_=${ts}`);
+      const historyRes = await fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}`);
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(Array.isArray(historyData) ? historyData : []);
       }
 
-      const postsRes = await fetch(`/api/user/posts/sync?userId=${user.id}&_=${ts}`);
+      const postsRes = await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}`);
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         setPostsHistory(Array.isArray(postsData) ? postsData : []);
       }
 
-      const tracksRes = await fetch(`/api/tracking/user/${user.id}?_=${ts}`);
+      const tracksRes = await fetch(`/api/tracking/user/${userId}?_=${ts}`);
       if (tracksRes.ok) {
         const tracksData = await tracksRes.json();
         setTrackingLinks(Array.isArray(tracksData) ? tracksData : []);
