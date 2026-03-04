@@ -467,7 +467,7 @@ export const Comments: React.FC = () => {
     return false;
   };
 
-  const triggerCommentImageGeneration = async (prompt: string, subreddit: string, skipExtensionCheck = false) => {
+  const triggerCommentImageGeneration = async (prompt: string, subreddit: string, skipExtensionCheck = false, itemId?: string) => {
     const needsCheck = !skipExtensionCheck && !isExtensionActive();
     if (needsCheck && !isForcedRef.current) {
       setPendingAction(() => () => triggerCommentImageGeneration(prompt, subreddit));
@@ -529,7 +529,7 @@ export const Comments: React.FC = () => {
       const response = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, userId: user!.id, subreddit })
+        body: JSON.stringify({ prompt, userId: user!.id, subreddit, itemId })
       });
 
       if (response.status === 402) { setShowNoCreditsModal(true); return; }
@@ -663,9 +663,7 @@ export const Comments: React.FC = () => {
       }
 
       // Trigger image generation non-blocking if enabled
-      if (isImageRequested && (reply as any).imagePrompt) {
-        triggerCommentImageGeneration((reply as any).imagePrompt, post.subreddit, true);
-      }
+      if (isImageRequested && (reply as any).imagePrompt) triggerCommentImageGeneration((reply as any).imagePrompt, post.subreddit, true, reply.id);
 
       setTimeout(() => {
         replyCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

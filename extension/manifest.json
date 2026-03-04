@@ -17,9 +17,15 @@
         "https://redditgo.online/*",
         "https://*.redditgo.online/*"
     ],
+    "icons": {
+        "16": "logo.png",
+        "48": "logo.png",
+        "128": "logo.png"
+    },
     "action": {
         "default_popup": "popup.html",
-        "default_title": "RedditGo Security Engine"
+        "default_title": "RedditGo Security Engine",
+        "default_icon": "logo.png"
     },
     "background": {
         "service_worker": "background.js"

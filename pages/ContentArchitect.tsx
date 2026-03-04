@@ -463,7 +463,7 @@ export const ContentArchitect: React.FC = () => {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, userId: user.id, subreddit: postData.subreddit })
+                body: JSON.stringify({ prompt, userId: user.id, subreddit: postData.subreddit, itemId: postData.id })
             });
 
             if (response.status === 402) {

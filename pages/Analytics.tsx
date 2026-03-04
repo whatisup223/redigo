@@ -727,17 +727,47 @@ export const Analytics: React.FC = () => {
 
                     {activeTab === 'comments' && (
                       <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
-                          <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
+                            <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
+                          </div>
+                          {selectedEntry.imageUrl && (
+                            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                              <Zap size={10} fill="currentColor" /> Visual Generated
+                            </span>
+                          )}
                         </div>
-                        <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative">
+                        <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative space-y-6">
                           {selectedEntry.productMention && (
                             <div className="absolute top-0 right-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest shadow-lg shadow-orange-200">
                               {selectedEntry.productMention} Mentioned
                             </div>
                           )}
                           <p className="text-slate-800 text-base leading-relaxed whitespace-pre-wrap italic font-medium">"{selectedEntry.comment}"</p>
+
+                          {selectedEntry.imageUrl && (
+                            <div className="pt-6 border-t border-orange-100/50">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Associated Visual</p>
+                              <div className="group/visual relative bg-white p-3 rounded-2xl border border-orange-50 shadow-inner overflow-hidden max-w-sm mx-auto">
+                                <img
+                                  src={selectedEntry.imageUrl}
+                                  alt="AI Visual"
+                                  className="w-full aspect-square object-cover rounded-xl shadow-lg group-hover/visual:scale-105 transition-transform duration-700"
+                                />
+                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/visual:opacity-100 transition-opacity flex items-center justify-center">
+                                  <a
+                                    href={selectedEntry.imageUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-6 py-2.5 bg-white text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-2xl hover:scale-105 transition-all"
+                                  >
+                                    <ExternalLink size={14} /> Open
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1212,7 +1242,20 @@ export const Analytics: React.FC = () => {
                             <span className="ml-1.5 text-[10px] text-slate-300 font-normal">({row.clicks} total)</span>
                           )}
                         </span>
-                        {activeTab !== 'links' && <><MessageSquare size={14} className="text-slate-300 ml-2" /><span className="text-slate-500 font-bold">{row.replies}</span></>}
+                        {activeTab !== 'links' && (
+                          <>
+                            <MessageSquare size={14} className="text-slate-300 ml-2" />
+                            <span className="text-slate-500 font-bold">{row.replies}</span>
+                            {row.imageUrl && (
+                              <div className="group relative">
+                                <ImageIcon size={14} className="text-emerald-500 ml-3 cursor-help hover:scale-110 transition-transform" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-2 bg-slate-900 text-white text-[9px] font-black uppercase rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                                  AI Image Attached
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </td>
                     <td className="hidden md:table-cell px-10 py-6 text-xs text-slate-400 font-bold">

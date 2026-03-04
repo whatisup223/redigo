@@ -22,6 +22,7 @@ import {
   CreditCard,
   Archive,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CreditsBanner from '../components/CreditsBanner';
@@ -431,22 +432,63 @@ export const Dashboard: React.FC = () => {
                   </a>
                 </div>
                 <div className="bg-slate-50 rounded-3xl p-8 border border-slate-100">
-                  <h4 className="text-lg font-bold text-slate-900 mb-4">{selectedEntry.postTitle}</h4>
-                  <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{selectedEntry.postContent || "No body content available."}</p>
+                  {(() => {
+                    let displayTitle = selectedEntry.postTitle;
+                    let displayContent = selectedEntry.postContent;
+                    if (displayContent?.trim().startsWith('{')) {
+                      try {
+                        const parsed = JSON.parse(displayContent);
+                        displayTitle = parsed.title || displayTitle;
+                        displayContent = parsed.content || displayContent;
+                      } catch (e) { }
+                    }
+                    return (
+                      <>
+                        <h4 className="text-lg font-bold text-slate-900 mb-4">{displayTitle}</h4>
+                        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{displayContent || "No body content available."}</p>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* Our AI Reply */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-6 bg-orange-600 rounded-full"></span>
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-widest">Our AI Reply</h3>
+                  </div>
+                  {selectedEntry.imageUrl && (
+                    <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <Zap size={10} fill="currentColor" /> Visual Generated
+                    </span>
+                  )}
                 </div>
-                <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative">
+                <div className="bg-orange-50/30 rounded-3xl p-8 border border-orange-100 relative space-y-6">
                   <div className="absolute top-0 right-10 -translate-y-1/2 bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest shadow-lg shadow-orange-200">
                     {selectedEntry.productMention || 'Redditgo'} Mentioned
                   </div>
                   <p className="text-slate-800 text-base leading-relaxed whitespace-pre-wrap italic font-medium">"{selectedEntry.comment}"</p>
+
+                  {selectedEntry.imageUrl && (
+                    <div className="pt-4 border-t border-orange-100/50">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Associated Visual</p>
+                      <div className="relative group rounded-2xl overflow-hidden shadow-xl border-4 border-white max-w-sm mx-auto">
+                        <img src={selectedEntry.imageUrl} alt="AI Visual" className="w-full aspect-square object-cover" />
+                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <a
+                            href={selectedEntry.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-6 py-2.5 bg-white text-slate-900 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-2xl hover:scale-105 transition-all"
+                          >
+                            <ExternalLink size={14} /> View Original
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

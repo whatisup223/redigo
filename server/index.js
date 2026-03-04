@@ -4123,7 +4123,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
 
 app.post('/api/generate-image', async (req, res) => {
   try {
-    const { prompt, userId, subreddit } = req.body;
+    const { prompt, userId, subreddit, itemId } = req.body;
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     // --- SUBREDDIT IMAGE SUPPORT CHECK (BACKEND PROTECTION) ---
@@ -4259,6 +4259,18 @@ app.post('/api/generate-image', async (req, res) => {
 
     // Check low credits (fire and forget)
     checkLowCredits(updatedUser).catch(e => console.error('Low credits check error:', e));
+
+    // UPDATE PENDING ITEMS IF ITEMID PROVIDED
+    if (itemId) {
+      try {
+        await Promise.all([
+          RedditPost.updateOne({ id: itemId.toString(), userId: userId.toString() }, { $set: { imageUrl } }),
+          RedditReply.updateOne({ id: itemId.toString(), userId: userId.toString() }, { $set: { imageUrl } })
+        ]);
+      } catch (e) {
+        console.error('[/api/generate-image] Item update error:', e);
+      }
+    }
 
     res.json({
       url: imageUrl,

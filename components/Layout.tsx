@@ -97,10 +97,27 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth(); // Added updateUser
   const sidebarRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const [isExtensionMissing, setIsExtensionMissing] = React.useState(false);
+
+  // Helper for downloading images in Assistant
+  const handleDownloadImage = async (imageUrl: string, title?: string) => {
+    if (!imageUrl) return;
+    try {
+      const filename = `redigo-${title?.replace(/\s+/g, '-').toLowerCase() || 'image'}-${Date.now()}.png`;
+      const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(filename)}`;
+      const a = document.createElement('a');
+      a.href = proxyUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Download failed:', err);
+    }
+  };
 
   const [pendingCount, setPendingCount] = React.useState(0);
 
@@ -517,19 +534,27 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           )}
           {children}
 
-          {/* Mobile Assistant Floating Button */}
+          {/* Mobile & Desktop Assistant/Extension Floating Button */}
           <button
             onClick={() => {
               setIsAssistantOpen(true);
               fetchAssistantItems();
             }}
-            className="lg:hidden fixed bottom-8 right-8 p-4 bg-slate-900 border border-slate-800 text-white rounded-[1.5rem] shadow-2xl shadow-slate-900/40 hover:scale-105 active:scale-95 transition-all z-[100] flex items-center justify-center group"
+            id="redigo-assistant-button"
+            className={`fixed bottom-8 right-8 w-14 h-14 rounded-2xl shadow-2xl flex items-center justify-center z-[100] transition-all hover:scale-110 active:scale-95 animate-in zoom-in-50 duration-500 ${isExtensionMissing ? 'bg-red-600 shadow-red-200' : 'bg-orange-600 shadow-orange-200'
+              }`}
+            title={isExtensionMissing ? "Extension Missing!" : "Redigo Assistant"}
           >
             <div className="relative">
-              <Smartphone size={28} className={pendingCount > 0 ? "text-indigo-400" : "text-slate-300"} />
-              {pendingCount > 0 && (
-                <span className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow border-2 border-slate-900 animate-in zoom-in duration-300">
+              <Zap size={28} fill="currentColor" className="text-white" />
+              {(pendingCount > 0) && (
+                <span className="absolute -top-3 -right-3 min-w-[24px] h-6 bg-slate-900 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg border-2 border-white px-1">
                   {pendingCount > 9 ? '9+' : pendingCount}
+                </span>
+              )}
+              {isExtensionMissing && (
+                <span className="absolute -bottom-1 -left-1 w-5 h-5 bg-white text-red-600 rounded-full flex items-center justify-center shadow border-2 border-red-600">
+                  <X size={10} strokeWidth={4} />
                 </span>
               )}
             </div>
@@ -539,78 +564,150 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           {isAssistantOpen && (
             <div className="fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-sm flex justify-end animate-in fade-in duration-300" onClick={() => setIsAssistantOpen(false)}>
               <div
-                className="bg-white w-full max-w-lg h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500"
+                className="bg-white w-full max-w-lg h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 relative"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center">
-                      <Smartphone size={20} />
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-orange-600 opacity-20"></div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-orange-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-orange-100 rotate-3 animate-pulse-soft">
+                      <Zap size={24} fill="currentColor" />
                     </div>
                     <div>
-                      <h2 className="font-black text-slate-900">Mobile Assistant</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Global Pending Posts</p>
+                      <h2 className="font-black text-slate-900 text-lg">Assistant</h2>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{pendingCount} Items Ready</p>
+                      </div>
                     </div>
                   </div>
-                  <button onClick={() => setIsAssistantOpen(false)} className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-red-500 transition-all border border-transparent hover:border-slate-100">
-                    <X size={24} />
+                  <button onClick={() => setIsAssistantOpen(false)} className="w-10 h-10 bg-slate-50 hover:bg-slate-100 rounded-2xl text-slate-400 hover:text-red-500 transition-all flex items-center justify-center border border-slate-100">
+                    <X size={20} />
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-[#f8fafc]">
                   {loadingItems ? (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-30">
-                      <RefreshCw size={40} className="animate-spin mb-4" />
-                      <p className="font-bold">Syncing content...</p>
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <div className="w-16 h-16 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-4 animate-bounce">
+                        <RefreshCw size={28} className="animate-spin text-orange-600" />
+                      </div>
+                      <p className="font-black text-slate-900 uppercase tracking-[0.2em] text-[11px]">Syncing Database...</p>
                     </div>
                   ) : pendingItems.length === 0 ? (
-                    <div className="text-center py-20 px-8">
-                      <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle size={32} className="text-slate-200" />
+                    <div className="text-center py-24 px-8">
+                      <div className="w-24 h-24 bg-white shadow-xl rounded-[2rem] flex items-center justify-center mx-auto mb-6 transform -rotate-6">
+                        <CheckCircle size={40} className="text-emerald-500" />
                       </div>
-                      <h3 className="text-lg font-bold text-slate-800">No Pending Content</h3>
-                      <p className="text-sm text-slate-400">Everything has been published or dismissed.</p>
+                      <h3 className="text-xl font-black text-slate-900 mb-2">Workspace Clear</h3>
+                      <p className="text-sm text-slate-500 font-medium">All generated items have been successfully published. Head to the Post Agent to create more!</p>
                     </div>
                   ) : (
-                    pendingItems.map((item) => (
-                      <div key={item.id || item._id} className="bg-slate-50 rounded-[1.5rem] border border-slate-200 p-5 space-y-4 hover:border-indigo-200 transition-all group">
-                        <div className="flex items-center justify-between">
-                          <span className={`px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-lg ${item.type === 'post' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
-                            }`}>
-                            {item.type}
-                          </span>
-                          <button onClick={() => handleDismiss(item.id || item._id, item.type)} className="text-slate-300 hover:text-red-500 p-1">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                    pendingItems.map((rawItem) => {
+                      const item = { ...rawItem };
+                      // Handle JSON in postContent
+                      if (item.type === 'post' && item.postContent?.startsWith('{')) {
+                        try {
+                          const parsed = JSON.parse(item.postContent);
+                          item.postTitle = parsed.title || item.postTitle;
+                          item.postContent = parsed.content || item.postContent;
+                        } catch (e) { }
+                      }
 
-                        {item.postTitle && <p className="text-xs font-black text-slate-900 line-clamp-1">{item.postTitle}</p>}
+                      return (
+                        <div key={item.id || item._id} className="bg-white rounded-[2rem] border border-slate-100 p-6 space-y-5 shadow-sm hover:shadow-xl hover:border-orange-100 transition-all group overflow-hidden relative">
+                          {/* Decorative Background Icon */}
+                          <div className="absolute -top-4 -right-4 opacity-[0.03] transform rotate-12 transition-all group-hover:scale-150 duration-700">
+                            <Zap size={120} fill="currentColor" className="text-orange-600" />
+                          </div>
 
-                        <div className="bg-white p-4 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-medium whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto custom-scrollbar italic">
-                          {item.postContent || item.comment || "No text content"}
-                        </div>
+                          <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-xl shadow-sm ${item.type === 'post' ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'
+                                }`}>
+                                {item.type}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                                <ExternalLink size={10} /> r/{item.subreddit || 'reddit'}
+                              </span>
+                            </div>
+                            <button onClick={() => handleDismiss(item.id || item._id, item.type)} className="w-8 h-8 bg-slate-50 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex items-center justify-center border border-slate-100">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
 
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => handleCopy(item.id || item._id, item.postContent || item.comment)}
-                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${copiedId === (item.id || item._id) ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-indigo-600'
-                              }`}
-                          >
-                            {copiedId === (item.id || item._id) ? <CheckCircle size={14} /> : <Copy size={14} />}
-                            {copiedId === (item.id || item._id) ? 'Copied' : 'Copy Text'}
-                          </button>
-                          <a
-                            href={item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit}/submit` : item.postUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="w-12 h-12 bg-white border border-slate-200 text-slate-900 rounded-xl flex items-center justify-center hover:border-indigo-500 transition-all"
-                          >
-                            <ExternalLink size={18} />
-                          </a>
+                          {/* Item Content Section */}
+                          <div className="space-y-4 relative z-10">
+                            {(item.postTitle || item.title) && (
+                              <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Title</label>
+                                <div className="bg-slate-50/50 p-3 rounded-2xl border border-dotted border-slate-200 text-xs font-black text-slate-900 leading-snug flex justify-between items-start gap-3">
+                                  <span className="flex-1">{item.postTitle || item.title}</span>
+                                  <button
+                                    onClick={() => handleCopy(`${item.id}_title`, item.postTitle || item.title)}
+                                    className={`shrink-0 p-1.5 rounded-lg transition-all ${copiedId === `${item.id}_title` ? 'bg-emerald-500 text-white' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-900'}`}
+                                  >
+                                    {copiedId === `${item.id}_title` ? <CheckCircle size={14} /> : <Copy size={14} />}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Content Preview</label>
+                              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-[11px] text-slate-600 leading-relaxed font-medium relative group/text">
+                                <div className="max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                                  {item.postContent || item.comment || item.content}
+                                </div>
+                                <button
+                                  onClick={() => handleCopy(item.id || item._id, item.postContent || item.comment || item.content)}
+                                  className={`absolute top-2 right-2 p-2 rounded-xl border shadow-sm transition-all ${copiedId === (item.id || item._id) ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-slate-100 text-slate-400 hover:text-orange-600 hover:border-orange-200'}`}
+                                >
+                                  {copiedId === (item.id || item._id) ? <CheckCircle size={14} /> : <Copy size={14} />}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Image Display & Download */}
+                            {item.imageUrl && (
+                              <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Generated Image</label>
+                                <div className="relative group/img rounded-2xl overflow-hidden shadow-md border-2 border-white">
+                                  <img src={item.imageUrl} alt="AI Visual" className="w-full aspect-video object-cover group-hover/img:scale-105 transition-transform duration-700" />
+                                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                    <button
+                                      onClick={() => handleDownloadImage(item.imageUrl, `redigo_${item.id}.jpg`)}
+                                      className="p-3 bg-white text-slate-900 rounded-2xl shadow-2xl hover:bg-orange-600 hover:text-white transition-all transform hover:-translate-y-1"
+                                    >
+                                      <Download size={18} />
+                                    </button>
+                                    <a
+                                      href={item.imageUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-3 bg-white text-slate-900 rounded-2xl shadow-2xl hover:bg-blue-600 hover:text-white transition-all transform hover:-translate-y-1"
+                                    >
+                                      <ExternalLink size={18} />
+                                    </a>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-2 relative z-10">
+                            <a
+                              href={item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.1em] flex items-center justify-center gap-2 hover:bg-orange-600 shadow-xl transition-all hover:scale-[1.02] active:scale-95 group-hover:shadow-orange-100"
+                            >
+                              Open on Reddit <ExternalLink size={14} />
+                            </a>
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      );
+                    }))}
                 </div>
 
                 <div className="p-6 bg-slate-50 border-t border-slate-100">
