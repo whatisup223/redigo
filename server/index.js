@@ -454,6 +454,31 @@ const sendEmail = async (templateId, to, variables = {}) => {
 
 const app = express();
 app.set('trust proxy', 1); // Trust first proxy (EasyPanel/Nginx)
+
+// --- Authorization Middleware & Helpers ---
+const adminAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(403).json({ error: 'Unauthorized access to admin API' });
+  const token = authHeader.replace('Bearer ', '');
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role === 'admin') {
+      next();
+    } else {
+      res.status(403).json({ error: 'Unauthorized access to admin API' });
+    }
+  } catch (err) {
+    res.status(403).json({ error: 'Unauthorized access to admin API' });
+  }
+};
+
+const isOwnerOrAdmin = (req, targetUserId) => {
+  if (!req.user) return false;
+  if (req.user.role === 'admin') return true;
+  return String(req.user.id) === String(targetUserId);
+};
+
+// --- REST OF THE APP ---
 const PORT = process.env.PORT || 3001;
 
 // --- Multer Configuration ---
@@ -769,26 +794,22 @@ app.use((req, res, next) => {
 });
 
 // --- 4. Rate Limiting ---
-const rateLimitKeyGen = (req) => {
-  return (req.headers && req.headers['x-forwarded-for']) || req.socket.remoteAddress || '127.0.0.1';
-};
-
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5000,
-  keyGenerator: rateLimitKeyGen,
   message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  keyGenerator: rateLimitKeyGen,
   message: { error: 'Too many auth attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false }
 });
 
 app.use('/api/', apiLimiter);
@@ -2727,33 +2748,8 @@ const getStripe = () => {
   return new Stripe(stripeSettings.secretKey);
 };
 
-// Auth Middleware for Admin Routes
-const adminAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(403).json({ error: 'Unauthorized access to admin API' });
+// Moved up to middleware section
 
-  const token = authHeader.replace('Bearer ', '');
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.role === 'admin') {
-      next();
-    } else {
-      res.status(403).json({ error: 'Unauthorized access to admin API' });
-    }
-  } catch (err) {
-    res.status(403).json({ error: 'Unauthorized access to admin API' });
-  }
-};
-
-// ─── Authorization Helper ─────────────────────────────────────────────
-// Returns true if the requester is the owner of the resource OR an admin.
-// targetUserId: the userId that owns the resource (string or number)
-const isOwnerOrAdmin = (req, targetUserId) => {
-  if (!req.user) return false;
-  if (req.user.role === 'admin') return true;
-  return String(req.user.id) === String(targetUserId);
-};
 
 // ─── Extension Download Tracking ──────────────────────────────────────
 app.get('/api/download-extension', async (req, res) => {
