@@ -177,7 +177,7 @@ export const Dashboard: React.FC = () => {
 
     try {
       const activeToken = token || localStorage.getItem('token');
-      const authHeaders: HeadersInit = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
+      const authHeaders: HeadersInit = { 'Authorization': `Bearer ${activeToken}` };
 
       const [histRes, profileRes] = await Promise.allSettled([
         fetch(`/api/user/replies/sync?userId=${user.id}`, { headers: authHeaders }),
@@ -218,7 +218,7 @@ export const Dashboard: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          'Authorization': `Bearer ${token || localStorage.getItem('token')}`
         },
         body: JSON.stringify({ userId: user.id, announcementId: announcement.id })
       });
@@ -236,7 +236,7 @@ export const Dashboard: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token || localStorage.getItem('token')}`
         },
         body: JSON.stringify({ userId: user.id || (user as any)._id })
       });
