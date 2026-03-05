@@ -109,50 +109,40 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     setIsSyncing(true);
     try {
       const ts = Date.now();
-      const [postsRes, repliesRes] = await Promise.all([
+      // Force fresh Reddit fetch — invalidates cache
+      await Promise.all([
         fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`),
         fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`)
       ]);
-      const posts = postsRes.ok ? await postsRes.json() : [];
-      const replies = repliesRes.ok ? await repliesRes.json() : [];
-      const all: any[] = [
-        ...(Array.isArray(posts) ? posts : []),
-        ...(Array.isArray(replies) ? replies : [])
-      ];
 
-      // Find confirmed items (no longer Draft/Pending)
-      const confirmedIds = new Set<string>();
-      // Find possibly deleted items: Pending for more than 48h and not found on Reddit
-      const possiblyDeletedCount = { count: 0 };
-      const now = Date.now();
-      const HOURS_48 = 48 * 60 * 60 * 1000;
+      // Snapshot count before refresh
+      const prevCount = pendingItems.length;
 
-      for (const item of pendingItems) {
-        const itemId = item.id || item._id;
-        const synced = all.find(r =>
-          (r.id || r._id) === itemId &&
-          ['live', 'sent', 'active'].includes((r.status || '').toLowerCase())
-        );
-        if (synced) {
-          confirmedIds.add(itemId);
-        } else if (
-          ['pending', 'sent'].includes((item.status || '').toLowerCase()) &&
-          item.deployedAt && (now - new Date(item.deployedAt).getTime()) > HOURS_48
-        ) {
-          // Old pending item not found — possibly deleted or shadowbanned
-          possiblyDeletedCount.count++;
-        }
-      }
+      // Reload assistant items from DB — items now Live won't pass Draft/Pending filter
+      await fetchAssistantItems();
 
-      if (confirmedIds.size > 0) {
-        setPendingItems(prev => prev.filter(i => !confirmedIds.has(i.id || i._id)));
-        setPendingCount(prev => Math.max(0, prev - confirmedIds.size));
-        showToast(`✅ ${confirmedIds.size} item(s) confirmed published!`, 'success');
-      } else if (possiblyDeletedCount.count > 0) {
-        showToast(`⚠️ ${possiblyDeletedCount.count} item(s) not found — may have been deleted or removed by Reddit.`, 'error');
-      } else {
-        showToast('No new confirmations yet. Try again after posting.', 'success');
-      }
+      // After fetchAssistantItems updates state, compute diff via a short delay
+      setTimeout(() => {
+        setPendingItems(current => {
+          const newCount = current.length;
+          const confirmed = prevCount - newCount;
+          const HOURS_48 = 48 * 60 * 60 * 1000;
+          const possiblyDeletedCount = current.filter(i =>
+            ['pending', 'sent'].includes((i.status || '').toLowerCase()) &&
+            i.deployedAt && (Date.now() - new Date(i.deployedAt).getTime()) > HOURS_48
+          ).length;
+
+          if (confirmed > 0) {
+            showToast(`✅ ${confirmed} item(s) confirmed published!`, 'success');
+          } else if (possiblyDeletedCount > 0) {
+            showToast(`⚠️ ${possiblyDeletedCount} item(s) not found — may have been deleted by Reddit.`, 'error');
+          } else {
+            showToast('No new confirmations yet. Try again after posting.', 'success');
+          }
+          return current;
+        });
+      }, 500);
+
     } catch (e) {
       showToast('Sync failed. Check your connection.', 'error');
     } finally {
