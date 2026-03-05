@@ -176,7 +176,8 @@ export const Dashboard: React.FC = () => {
     if (isInitial) setIsLoading(true);
 
     try {
-      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const activeToken = token || localStorage.getItem('token');
+      const authHeaders: HeadersInit = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
 
       const [histRes, profileRes] = await Promise.allSettled([
         fetch(`/api/user/replies/sync?userId=${user.id}`, { headers: authHeaders }),

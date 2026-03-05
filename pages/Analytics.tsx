@@ -204,13 +204,18 @@ export const Analytics: React.FC = () => {
     } else {
       // Server-side verification for Mobile or no extension
       try {
+        const activeToken = localStorage.getItem('token');
+        const authHeaders: HeadersInit = { 'Content-Type': 'application/json' };
+        if (activeToken) authHeaders['Authorization'] = `Bearer ${activeToken}`;
+
         const response = await fetch('/api/reddit/verify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             itemId: item.id,
             url: item.postUrl,
-            type: activeTab === 'posts' ? 'post' : 'comment'
+            type: activeTab === 'posts' ? 'post' : 'comment',
+            userId: user?.id || user?._id
           })
         });
 
