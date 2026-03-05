@@ -456,7 +456,8 @@ const app = express();
 app.set('trust proxy', 1); // Trust first proxy (EasyPanel/Nginx)
 
 // --- Authorization Middleware & Helpers ---
-const adminAuth = (req, res, next) => {
+// --- Authorization Middleware & Helpers ---
+function adminAuth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(403).json({ error: 'Unauthorized access to admin API' });
   const token = authHeader.replace('Bearer ', '');
@@ -470,13 +471,13 @@ const adminAuth = (req, res, next) => {
   } catch (err) {
     res.status(403).json({ error: 'Unauthorized access to admin API' });
   }
-};
+}
 
-const isOwnerOrAdmin = (req, targetUserId) => {
+function isOwnerOrAdmin(req, targetUserId) {
   if (!req.user) return false;
   if (req.user.role === 'admin') return true;
   return String(req.user.id) === String(targetUserId);
-};
+}
 
 // --- REST OF THE APP ---
 const PORT = process.env.PORT || 3001;
@@ -533,7 +534,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(mongoSanitize());
+// app.use(mongoSanitize()); // Removed redundant call causing Express 5 errors. Custom sanitization happens below.
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // --- Reddit API Rate Limiters (Compliance) ---
@@ -585,14 +586,10 @@ const redditPostLimiter = (req, res, next) => {
 const generateLimiter = rateLimit({
   windowMs: 60 * 1000,       // 1 minute
   max: 20,                   // 20 AI generation requests per user per minute
-  keyGenerator: (req) => {
-    // Correctly handle IPv6 and userId to prevent ERR_ERL_KEY_GEN_IPV6
-    if (req.body && req.body.userId) return String(req.body.userId);
-    return req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-  },
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many generation requests. Please slow down.' }
+  message: { error: 'Too many generation requests. Please slow down.' },
+  validate: { xForwardedForHeader: false }
 });
 
 // --- 2. Webhook (Needs Raw Body) ---
