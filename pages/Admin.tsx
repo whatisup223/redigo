@@ -688,6 +688,8 @@ Return ONLY a valid JSON array. No conversational text.
 
     const handleToggleKillSwitch = async (active: boolean) => {
         const token = localStorage.getItem('token');
+        // Optimistic update: update UI immediately so button responds instantly
+        setSafeguardConfig((prev: any) => ({ ...prev, isGlobalKillSwitchManual: active }));
         try {
             const res = await fetch('/api/admin/safeguard/killswitch', {
                 method: 'POST',
@@ -695,9 +697,16 @@ Return ONLY a valid JSON array. No conversational text.
                 body: JSON.stringify({ active })
             });
             if (res.ok) {
-                fetchSafeguard();
+                // Force-refresh config from server to confirm the state is persisted
+                fetchSafeguard(true);
+            } else {
+                // Revert optimistic update on failure
+                setSafeguardConfig((prev: any) => ({ ...prev, isGlobalKillSwitchManual: !active }));
             }
-        } catch (err) { }
+        } catch (err) {
+            // Revert optimistic update on error
+            setSafeguardConfig((prev: any) => ({ ...prev, isGlobalKillSwitchManual: !active }));
+        }
     };
 
     // Poll safeguard when tab is active
