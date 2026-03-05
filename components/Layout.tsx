@@ -904,12 +904,14 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                             <button
                               onClick={async () => {
                                 const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
-                                const isPost = item.type === 'post';
 
                                 // Build correct target URL:
                                 // - Post  → submit page
                                 // - Reply → thread page (postUrl, or built from subreddit+postId)
-                                let targetUrl: string;
+                                const isPost = item.type === 'post';
+                                let targetUrl: string = '';
+                                let missingUrl = false;
+
                                 if (isPost) {
                                   targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit`;
                                 } else {
@@ -918,11 +920,23 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                   } else if (item.subreddit && item.postId) {
                                     targetUrl = `https://www.reddit.com/r/${item.subreddit}/comments/${item.postId}/`;
                                   } else {
-                                    targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/`;
+                                    // No usable URL — warn the user instead of opening wrong page
+                                    missingUrl = true;
                                   }
                                 }
 
-                                if (!isMobile && !isExtensionMissing) {
+                                if (missingUrl) {
+                                  showToast('⚠️ لم يتم ربط هذا الرد بـ thread بعد. اذهب لـ Analytics للمزامنة.', 'error');
+                                  return;
+                                }
+
+                                if (isMobile) {
+                                  window.open(targetUrl, '_blank');
+                                  showToast('فُتح Reddit! الصق الرد وانشر.', 'success');
+                                  return;
+                                }
+
+                                if (!isExtensionMissing) {
                                   window.postMessage({
                                     source: 'REDIGO_WEB_APP',
                                     type: 'REDIGO_DEPLOY',
