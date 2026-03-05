@@ -119,9 +119,13 @@ export const Support: React.FC = () => {
         };
 
         try {
+            const token = localStorage.getItem('token');
             const res = await fetch('/api/support/tickets', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(ticketData)
             });
             if (res.ok) {
@@ -155,9 +159,13 @@ export const Support: React.FC = () => {
         }
 
         try {
+            const token = localStorage.getItem('token');
             const res = await fetch(`/api/support/tickets/${activeTicket.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(updateData)
             });
             if (res.ok) {
@@ -171,9 +179,13 @@ export const Support: React.FC = () => {
 
     const updateTicketStatus = async (ticketId: string, newStatus: Ticket['status']) => {
         try {
+            const token = localStorage.getItem('token');
             const res = await fetch(`/api/support/tickets/${ticketId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({ status: newStatus })
             });
             if (res.ok) {

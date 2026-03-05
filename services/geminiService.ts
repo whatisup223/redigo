@@ -15,7 +15,9 @@ export interface BrandProfile {
 
 export const fetchBrandProfile = async (userId: string | number): Promise<BrandProfile> => {
   try {
-    const res = await fetch(`/api/user/brand-profile?userId=${userId}&_t=${Date.now()}`, { cache: 'no-store' });
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const res = await fetch(`/api/user/brand-profile?userId=${userId}&_t=${Date.now()}`, { cache: 'no-store', headers });
     if (!res.ok) return {};
     return await res.json();
   } catch {
@@ -130,9 +132,13 @@ export const generateRedditReply = async (
     // LINK TRACKING INTEGRATION
     if (useTracking && includeLink && userId) {
       try {
+        const token = localStorage.getItem('token');
         const trackRes = await fetch('/api/tracking/create', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
             userId,
             originalUrl: effectiveWebsite,
@@ -184,9 +190,13 @@ LINK INTEGRATION (STRICT REQUIREMENT):
       brandInstructions = `NO BRAND/LINK ALLOWED: Do not mention any product name, brand name, or include any links/URLs. Focus 100% on providing pure, expert advice.`;
     }
 
+    const _genToken = localStorage.getItem('token');
     const response = await fetch('/api/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(_genToken ? { 'Authorization': `Bearer ${_genToken}` } : {})
+      },
       body: JSON.stringify({
         userId,
         type: 'comment',
@@ -293,9 +303,13 @@ export const generateRedditPost = async (
     // LINK TRACKING INTEGRATION
     if (useTracking && includeLink && userId) {
       try {
+        const token = localStorage.getItem('token');
         const trackRes = await fetch('/api/tracking/create', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
             userId,
             originalUrl: effectiveWebsite,
@@ -344,9 +358,13 @@ BRAND INTEGRATION IN POST BODY (STRICT REQUIREMENT):
       'Storytelling': "Open with a compelling hook that mirrors the Reddit community's shared experience or frustration.",
     };
 
+    const _postToken = localStorage.getItem('token');
     const response = await fetch('/api/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(_postToken ? { 'Authorization': `Bearer ${_postToken}` } : {})
+      },
       body: JSON.stringify({
         userId,
         type: 'post',

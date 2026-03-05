@@ -146,12 +146,14 @@ export const Analytics: React.FC = () => {
       showToast('Checking your Reddit profile...', 'success');
       try {
         const userId = user.id || user._id;
+        const token = localStorage.getItem('token');
+        const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
         // Invalidate cache by adding timestamp — forces fresh Reddit fetch
         const ts = Date.now();
         const syncUrl = activeTab === 'posts'
           ? `/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`
           : `/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`;
-        await fetch(syncUrl);
+        await fetch(syncUrl, { headers: authHeaders });
         showToast('Finished! Refreshing data...', 'success');
       } catch (e) {
         showToast('Failed to check. Make sure Reddit username is correct.', 'error');
@@ -220,9 +222,11 @@ export const Analytics: React.FC = () => {
         } else {
           // Fallback: try profile sync
           const userId = user?.id || user?._id;
+          const token = localStorage.getItem('token');
+          const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
           const ts = Date.now();
-          await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`);
-          await fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`);
+          await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`, { headers: authHeaders });
+          await fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`, { headers: authHeaders });
           showToast('Could not verify directly. Tried profile sync instead.', 'error');
           await fetchData();
         }
@@ -283,21 +287,23 @@ export const Analytics: React.FC = () => {
   const fetchData = async () => {
     const userId = user?.id || user?._id;
     if (!userId) return;
+    const token = localStorage.getItem('token');
+    const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
     try {
       const ts = Date.now(); // Cache busting
-      const historyRes = await fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}`);
+      const historyRes = await fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}`, { headers: authHeaders });
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(Array.isArray(historyData) ? historyData : []);
       }
 
-      const postsRes = await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}`);
+      const postsRes = await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}`, { headers: authHeaders });
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         setPostsHistory(Array.isArray(postsData) ? postsData : []);
       }
 
-      const tracksRes = await fetch(`/api/tracking/user/${userId}?_=${ts}`);
+      const tracksRes = await fetch(`/api/tracking/user/${userId}?_=${ts}`, { headers: authHeaders });
       if (tracksRes.ok) {
         const tracksData = await tracksRes.json();
         setTrackingLinks(Array.isArray(tracksData) ? tracksData : []);
@@ -314,10 +320,12 @@ export const Analytics: React.FC = () => {
   const handleArchiveLink = async (id: string) => {
     if (!confirm('Are you sure you want to archive this tracking link? It will be hidden from your analytics view.')) return;
     try {
+      const token = localStorage.getItem('token');
+      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
       const ts = Date.now();
       const res = await fetch(`/api/tracking/archive?_=${ts}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ userId: user?.id, id })
       });
       if (res.ok) {
@@ -334,10 +342,12 @@ export const Analytics: React.FC = () => {
   const handleDeleteLink = async (id: string) => {
     if (!confirm('Are you sure you want to permanently delete this tracking link? This action cannot be undone.')) return;
     try {
+      const token = localStorage.getItem('token');
+      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
       const ts = Date.now();
       const res = await fetch(`/api/tracking/delete?_=${ts}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ userId: user?.id, id })
       });
       if (res.ok) {
@@ -355,10 +365,12 @@ export const Analytics: React.FC = () => {
     if (!confirm(`Are you sure you want to delete this ${type} from Reddit? This will remove it from Reddit and hide it from your history.`)) return;
     try {
       setToast({ message: 'Deleting from Reddit...', type: 'success' });
+      const token = localStorage.getItem('token');
+      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
       const ts = Date.now();
       const res = await fetch(`/api/reddit/delete?_=${ts}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ userId: user?.id, id, redditId, type })
       });
       if (res.ok) {

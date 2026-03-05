@@ -24,6 +24,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
+import mongoSanitize from 'express-mongo-sanitize';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 
@@ -485,7 +486,30 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors());
+
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  process.env.BASE_URL,
+  process.env.APP_URL,
+  'https://www.reddit.com'
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow if: No origin (server-to-server), in allowedOrigins list, or is a reddit.com subdomain
+    const isReddit = origin && (origin === 'https://reddit.com' || origin.endsWith('.reddit.com'));
+    if (!origin || allowedOrigins.includes(origin) || isReddit) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS Blocked] Origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+app.use(mongoSanitize());
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // --- Reddit API Rate Limiters (Compliance) ---
@@ -556,12 +580,13 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
   let event;
 
   try {
-    if (stripeSettings.webhookSecret && stripe && sig) {
+    if (stripe && sig && stripeSettings.webhookSecret) {
       event = stripe.webhooks.constructEvent(request.body, sig, stripeSettings.webhookSecret);
     } else {
-      addSystemLog('WARN', '[Webhook] Received without verification (Dev or Missing Secret)');
-      console.log('[Webhook] Received without verification (Dev or Missing Secret)');
-      event = JSON.parse(request.body.toString());
+      // SECURITY FIX: Reject unverified events completely
+      const reason = !stripe ? 'Stripe not initialized' : !sig ? 'Missing signature' : 'Missing Webhook Secret';
+      addSystemLog('WARN', `[Webhook] Rejected unverified event: ${reason}`);
+      return response.status(401).send(`Webhook Error: Unverified events are blocked. ${reason}`);
     }
   } catch (err) {
     addSystemLog('ERROR', `[Webhook] Signature verification failed: ${err.message}`);
@@ -658,20 +683,21 @@ app.post('/api/paypal/webhook', express.json(), async (req, res) => {
           const vData = await vRes.json();
           if (vData.verification_status !== 'SUCCESS') {
             addSystemLog('WARN', '[PayPal Webhook] Signature verification failed', { status: vData.verification_status });
-            if (!isSandbox) {
-              console.warn('[PayPal] Webhook signature verification failed. Rejecting.');
-              return res.status(400).send('Verification Failed');
-            }
+            console.warn('[PayPal] Webhook signature verification failed. Rejecting.');
+            return res.status(400).send('Verification Failed');
           }
+        } else {
+          addSystemLog('ERROR', '[PayPal Webhook] Verification API Error', { status: vRes.status });
+          return res.status(400).send('Verification API Unreachable');
         }
       } catch (vErr) {
         console.error('[PayPal Webhook Verification Error]', vErr);
-        // Continue in sandbox for ease of testing
-        if (!isSandbox) return res.status(500).send('Verification Process Error');
+        return res.status(500).send('Verification Process Error');
       }
-    } else if (!isSandbox) {
-      addSystemLog('WARN', '[PayPal Webhook] Received without headers or Webhook ID in Production');
-      return res.status(400).send('Webhook ID missing');
+    } else {
+      // SECURITY FIX: Reject if No Webhook ID or Headers
+      addSystemLog('WARN', '[PayPal Webhook] Rejected: Missing Webhook ID or Headers');
+      return res.status(400).send('Webhook ID or Auth Headers missing. Verification is mandatory.');
     }
 
     if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
@@ -925,7 +951,7 @@ const reportRedditResult = (userId, success, statusCode) => {
 // ── Safeguard Admin API Endpoints ─────────────────────────────────────────────
 
 // Get Current Safeguard Status (Health Dashboard)
-app.get('/api/admin/safeguard/status', async (req, res) => {
+app.get('/api/admin/safeguard/status', adminAuth, async (req, res) => {
   try {
     const config = getSafeguardConfig();
     const activeJails = [];
@@ -952,7 +978,7 @@ app.get('/api/admin/safeguard/status', async (req, res) => {
 });
 
 // Update Safeguard Config
-app.post('/api/admin/safeguard/config', async (req, res) => {
+app.post('/api/admin/safeguard/config', adminAuth, async (req, res) => {
   try {
     const newConfig = req.body;
     saveSettings({ safeguardConfig: newConfig });
@@ -963,7 +989,7 @@ app.post('/api/admin/safeguard/config', async (req, res) => {
 });
 
 // Manual Unjail User
-app.post('/api/admin/safeguard/unjail', async (req, res) => {
+app.post('/api/admin/safeguard/unjail', adminAuth, async (req, res) => {
   try {
     const { userId } = req.body;
     if (userId) {
@@ -978,7 +1004,7 @@ app.post('/api/admin/safeguard/unjail', async (req, res) => {
 });
 
 // Manual Kill-Switch Toggle (PERSISTENT)
-app.post('/api/admin/safeguard/killswitch', async (req, res) => {
+app.post('/api/admin/safeguard/killswitch', adminAuth, async (req, res) => {
   try {
     const { active } = req.body;
     safeguardState.isGlobalKillSwitchActive = active;
@@ -1227,6 +1253,7 @@ app.post('/api/tracking/create', async (req, res) => {
   try {
     const { userId, originalUrl, subreddit, postId, type } = req.body;
     if (!userId || !originalUrl) return res.status(400).json({ error: 'Missing required fields' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -1269,6 +1296,7 @@ app.post('/api/tracking/create', async (req, res) => {
 app.get('/api/tracking/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     // Don't fetch archived links
     const userLinks = await TrackingLink.find({ userId: userId.toString(), isArchived: { $ne: true } }).sort({ createdAt: -1 });
     res.json(userLinks);
@@ -1282,6 +1310,7 @@ app.post('/api/tracking/archive', async (req, res) => {
   try {
     const { userId, id } = req.body;
     if (!userId || !id) return res.status(400).json({ error: 'Missing required fields' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     await TrackingLink.updateOne({ id, userId: userId.toString() }, { $set: { isArchived: true } });
     res.json({ success: true });
@@ -1295,6 +1324,7 @@ app.post('/api/tracking/delete', async (req, res) => {
   try {
     const { userId, id } = req.body;
     if (!userId || !id) return res.status(400).json({ error: 'Missing required fields' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     await TrackingLink.deleteOne({ id, userId: userId.toString() });
     res.json({ success: true });
@@ -1408,6 +1438,47 @@ const generalAuth = async (req, res, next) => {
   // Admin check
   if (decodedUser?.role === 'admin' || req.user?.role === 'admin') {
     req.isAdmin = true;
+  }
+
+  // ── Protected Routes: require a valid JWT ────────────────────────────────
+  // These paths expose or modify user-specific data and must not be accessible
+  // without authentication. The extension always sends a Bearer token, so it
+  // is unaffected. Frontend pages now also send the token.
+  //
+  // Routes NOT listed here (e.g. /api/tracking/click/:id, /api/public-settings,
+  // /api/config, /api/plans, /api/auth/reddit/url, /api/subreddit/about)
+  // remain open intentionally.
+  const protectedPathPrefixes = [
+    '/api/user/',
+    '/api/users/',
+    '/api/generate',
+    '/api/generate-image',
+    '/api/reddit/reply',
+    '/api/reddit/post',
+    '/api/reddit/analyze',
+    '/api/reddit/deep-scan',
+    '/api/reddit/delete',
+    '/api/reddit/posts',
+    '/api/item/status',
+    '/api/tracking/create',
+    '/api/tracking/archive',
+    '/api/tracking/delete',
+    '/api/tracking/user/',
+    '/api/outreach/',
+    '/api/user/complete-onboarding',
+    '/api/user/subscribe',
+    '/api/user/replies',
+    '/api/user/posts',
+    '/api/user/cancel-subscription',
+    '/api/user/cancel-deletion',
+    '/api/user/schedule-deletion',
+    '/api/user/reddit/',
+    '/api/support/tickets',
+  ];
+
+  const isProtected = protectedPathPrefixes.some(prefix => path.startsWith(prefix));
+  if (isProtected && !decodedUser) {
+    return res.status(401).json({ error: 'Authentication required. Please log in.' });
   }
 
   next();
@@ -1886,6 +1957,7 @@ app.get('/api/user/saved-leads', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user.lastSearchLeads || []);
@@ -1898,6 +1970,7 @@ app.post('/api/user/clear-leads', async (req, res) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: [] } });
     res.json({ success: true });
   } catch (err) {
@@ -1908,6 +1981,7 @@ app.post('/api/user/clear-leads', async (req, res) => {
 app.post('/api/user/complete-onboarding', async (req, res) => {
   try {
     const { userId, redditUsername } = req.body;
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({ id: userId.toString() });
 
     if (user) {
@@ -1967,6 +2041,7 @@ app.post('/api/user/brand-profile', async (req, res) => {
   try {
     const { userId, ...brandData } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
 
@@ -2380,7 +2455,7 @@ app.get('/api/plans', async (req, res) => {
   }
 });
 
-app.post('/api/plans', async (req, res) => {
+app.post('/api/plans', adminAuth, async (req, res) => {
   try {
     const { id, name, monthlyPrice, yearlyPrice, credits, dailyLimitMonthly, dailyLimitYearly, features, isPopular, highlightText, allowImages, allowTracking, purchaseEnabled, isVisible, maxAccounts } = req.body;
 
@@ -2421,7 +2496,7 @@ app.post('/api/plans', async (req, res) => {
   }
 });
 
-app.put('/api/plans/:id', async (req, res) => {
+app.put('/api/plans/:id', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const planDb = await Plan.findOne({ id });
@@ -2457,7 +2532,7 @@ app.put('/api/plans/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/plans/:id', async (req, res) => {
+app.delete('/api/plans/:id', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const planDb = await Plan.findOne({ id });
@@ -2486,6 +2561,7 @@ app.post('/api/user/subscribe', async (req, res) => {
   try {
     const { userId, planId, billingCycle, gateway } = req.body;
     if (!userId || !planId) return res.status(400).json({ error: 'Missing required fields' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -2625,6 +2701,7 @@ app.get('/api/user/brand-profile', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     let profile = user ? user.brandProfile : null;
@@ -2668,6 +2745,15 @@ const adminAuth = (req, res, next) => {
   } catch (err) {
     res.status(403).json({ error: 'Unauthorized access to admin API' });
   }
+};
+
+// ─── Authorization Helper ─────────────────────────────────────────────
+// Returns true if the requester is the owner of the resource OR an admin.
+// targetUserId: the userId that owns the resource (string or number)
+const isOwnerOrAdmin = (req, targetUserId) => {
+  if (!req.user) return false;
+  if (req.user.role === 'admin') return true;
+  return String(req.user.id) === String(targetUserId);
 };
 
 // ─── Extension Download Tracking ──────────────────────────────────────
@@ -3060,6 +3146,7 @@ app.get('/api/user/announcements/latest', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'UserId required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -3087,6 +3174,7 @@ app.post('/api/user/announcements/dismiss', async (req, res) => {
   try {
     const { userId, announcementId } = req.body;
     if (!userId || !announcementId) return res.status(400).json({ error: 'Missing fields' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -3110,6 +3198,7 @@ app.post('/api/outreach/confirm', async (req, res) => {
   try {
     const { itemId, userId, type, permalink, redditCommentId } = req.body;
     if (!itemId || !userId) return res.status(400).json({ error: 'Item ID and User ID are required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const Model = type === 'post' ? RedditPost : RedditReply;
     await Model.updateOne(
@@ -3136,6 +3225,7 @@ app.post('/api/outreach/update-stats', async (req, res) => {
   try {
     const { itemId, userId, type, ups, replies } = req.body;
     if (!itemId || !userId) return res.status(400).json({ error: 'Missing fields' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const Model = type === 'post' ? RedditPost : RedditReply;
     await Model.updateOne(
@@ -3159,24 +3249,25 @@ app.post('/api/outreach/update-stats', async (req, res) => {
 
 app.post('/api/item/status', async (req, res) => {
   try {
-    const { id, status } = req.body;
-    if (!id || !status) return res.status(400).json({ error: 'Missing ID or status' });
+    const { id, status, userId } = req.body;
+    if (!id || !status || !userId) return res.status(400).json({ error: 'Missing ID, status, or userId' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
-    // We try both models since we don't know the type from the basic request
+    // We try both models since we don't know the type from the basic request, but enforce userId for security
     const update = { status };
     if (status === 'Pending' || status === 'Sent') {
       update.deployedAt = new Date();
     }
 
     const [postRes, replyRes] = await Promise.all([
-      RedditPost.updateOne({ id: id.toString() }, { $set: update }),
-      RedditReply.updateOne({ id: id.toString() }, { $set: update })
+      RedditPost.updateOne({ id: id.toString(), userId: userId.toString() }, { $set: update }),
+      RedditReply.updateOne({ id: id.toString(), userId: userId.toString() }, { $set: update })
     ]);
 
     if (postRes.modifiedCount > 0 || replyRes.modifiedCount > 0) {
       res.json({ success: true });
     } else {
-      res.status(404).json({ error: 'Item not found' });
+      res.status(404).json({ error: 'Item not found for this user' });
     }
   } catch (err) {
     console.error('Update item status error:', err);
@@ -3386,6 +3477,7 @@ app.get('/api/admin/users/:id/stats', adminAuth, async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    if (!isOwnerOrAdmin(req, id)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({ id: id.toString() });
 
     if (user) {
@@ -3478,6 +3570,7 @@ app.get('/api/users/:id', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    if (!isOwnerOrAdmin(req, id)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({ id: id.toString() });
 
     if (user) {
@@ -3503,7 +3596,7 @@ app.put('/api/users/:id/password', async (req, res) => {
   try {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;
-
+    if (!isOwnerOrAdmin(req, id)) return res.status(403).json({ error: 'Access denied' });
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current and new password are required' });
     }
@@ -3588,6 +3681,7 @@ app.put('/api/users/:id/2fa', async (req, res) => {
 app.post('/api/user/cancel-subscription', async (req, res) => {
   try {
     const { userId, reason, comment } = req.body;
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({
       $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
     });
@@ -3633,6 +3727,7 @@ app.post('/api/user/cancel-subscription', async (req, res) => {
 app.post('/api/user/schedule-deletion', async (req, res) => {
   try {
     const { userId, password } = req.body;
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({
       $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
     });
@@ -3719,6 +3814,7 @@ app.post('/api/user/extension-ping', async (req, res) => {
 app.post('/api/user/cancel-deletion', async (req, res) => {
   try {
     const { userId } = req.body;
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({
       $or: [{ id: userId }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
     });
@@ -3898,7 +3994,7 @@ app.get('/api/admin/test-analysis', adminAuth, async (req, res) => {
   try {
     const fakePosts = [{ id: 'test1', title: 'Test post', selftext: 'I really hate my current CRM, it is too expensive. Looking for alternatives.', ups: 10, num_comments: 5 }];
     const analyzed = await performSemanticAnalysis(fakePosts);
-    res.json({ success: true, aiSettings, input: fakePosts, output: analyzed });
+    res.json({ success: true, input: fakePosts, output: analyzed });
   } catch (err) {
     res.status(500).json({ error: err.message, stack: err.stack });
   }
@@ -4058,9 +4154,18 @@ app.get('/api/support/tickets', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email required' });
 
     if (role?.toLowerCase() === 'admin') {
+      // SECURITY FIX: Verify real JWT, not mock token
       const authHeader = req.headers.authorization;
-      if (authHeader !== 'Bearer mock-jwt-token-123') {
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(403).json({ error: 'Admin role requires valid authorization' });
+      }
+      try {
+        const decoded = jwt.verify(authHeader.substring(7), JWT_SECRET);
+        if (decoded.role !== 'admin') {
+          return res.status(403).json({ error: 'Admin role required' });
+        }
+      } catch (e) {
+        return res.status(403).json({ error: 'Invalid or expired token' });
       }
       const allTickets = await Ticket.find({}).sort({ createdAt: -1 });
       res.json(allTickets);
@@ -4159,6 +4264,7 @@ app.delete('/api/support/tickets/:id', adminAuth, async (req, res) => {
 app.post('/api/generate', generateLimiter, async (req, res) => {
   try {
     const { prompt, context, userId, type } = req.body; // type can be 'comment' or 'post'
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     // 🔍 Debug: log which provider/model is being used (key prefix only for security)
@@ -4393,6 +4499,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
 app.post('/api/generate-image', async (req, res) => {
   try {
     const { prompt, userId, subreddit, itemId } = req.body;
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const keyToUse = aiSettings.apiKey || process.env.GEMINI_API_KEY;
 
     // --- SUBREDDIT IMAGE SUPPORT CHECK (BACKEND PROTECTION) ---
@@ -4576,6 +4683,8 @@ app.post('/api/generate-image', async (req, res) => {
 app.get('/api/user/latest-image', async (req, res) => {
   try {
     const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user.latestImage || null);
@@ -4703,7 +4812,7 @@ app.get('/api/user/replies', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
-
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const history = await RedditReply.find({ userId: userId.toString(), status: { $ne: 'Deleted' } }).sort({ createdAt: -1 });
     res.json(history);
   } catch (err) {
@@ -4713,8 +4822,10 @@ app.get('/api/user/replies', async (req, res) => {
 
 app.delete('/api/user/replies', async (req, res) => {
   try {
-    const { id } = req.query;
-    await RedditReply.updateOne({ id: id.toString() }, { $set: { status: 'Deleted' } });
+    const { id, userId } = req.query;
+    if (!id) return res.status(400).json({ error: 'Missing id' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
+    await RedditReply.updateOne({ id: id.toString(), userId: userId?.toString() }, { $set: { status: 'Deleted' } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Delete failed' });
@@ -4828,7 +4939,7 @@ app.get('/api/user/posts', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: 'User ID required' });
-
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     const history = await RedditPost.find({ userId: userId.toString(), status: { $ne: 'Deleted' } }).sort({ createdAt: -1 });
     res.json(history);
   } catch (err) {
@@ -4838,33 +4949,26 @@ app.get('/api/user/posts', async (req, res) => {
 
 app.delete('/api/user/posts', async (req, res) => {
   try {
-    const { id } = req.query;
-    await RedditPost.updateOne({ id: id.toString() }, { $set: { status: 'Deleted' } });
+    const { id, userId } = req.query;
+    if (!id) return res.status(400).json({ error: 'Missing id' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
+    await RedditPost.updateOne({ id: id.toString(), userId: userId?.toString() }, { $set: { status: 'Deleted' } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Delete failed' });
   }
 });
 
-app.post('/api/item/status', async (req, res) => {
-  try {
-    const { id, status } = req.body;
-    await Promise.all([
-      RedditPost.updateOne({ id: id.toString() }, { $set: { status: status, deployedAt: new Date() } }),
-      RedditReply.updateOne({ id: id.toString() }, { $set: { status: status, deployedAt: new Date() } })
-    ]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Status update failed' });
-  }
-});
+// Redundant /api/item/status removed to prevent bypass. 
+// Validated version is defined above (around line 3245).
 
 // NOTE: /api/outreach/confirm and /api/outreach/update-stats are defined above (with proper userId validation)
 
 app.post('/api/reddit/verify', async (req, res) => {
   try {
-    const { itemId, url, type } = req.body;
-    if (!itemId || !url) return res.status(400).json({ error: 'Missing parameters' });
+    const { itemId, url, type, userId } = req.body;
+    if (!itemId || !url || !userId) return res.status(400).json({ error: 'Missing parameters' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const jsonUrl = url.split('?')[0].replace(/\/$/, '') + '.json';
     const response = await fetch(jsonUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
@@ -4881,9 +4985,9 @@ app.post('/api/reddit/verify', async (req, res) => {
     }
 
     if (type === 'post') {
-      await RedditPost.updateOne({ id: itemId }, { $set: { status: 'Active', ups, replies } });
+      await RedditPost.updateOne({ id: itemId, userId: userId.toString() }, { $set: { status: 'Active', ups, replies } });
     } else {
-      await RedditReply.updateOne({ id: itemId }, { $set: { status: 'Active', ups, replies } });
+      await RedditReply.updateOne({ id: itemId, userId: userId.toString() }, { $set: { status: 'Active', ups, replies } });
     }
     res.json({ success: true, ups, replies, status: 'Active' });
   } catch (error) {
@@ -5331,7 +5435,7 @@ app.get('/api/proxy-download', async (req, res) => {
   }
 });
 
-app.get('/api/debug-settings', (req, res) => {
+app.get('/api/debug-settings', adminAuth, (req, res) => {
   res.json({
     aiSettings: aiSettings,
     analyzerKeyStart: (aiSettings.analyzerApiKey || '').substring(0, 4),
@@ -5345,6 +5449,7 @@ app.post('/api/reddit/analyze', async (req, res) => {
     if (!userId || !rawJson || !rawJson.data || !rawJson.data.children) {
       return res.status(400).json({ error: 'Invalid or missing Reddit data.' });
     }
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -5544,6 +5649,7 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
   try {
     const { userId, postUrl, postId, subreddit } = req.body;
     if (!userId || !postUrl || !postId) return res.status(400).json({ error: 'Missing required parameters' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });

@@ -85,9 +85,11 @@ export const Library: React.FC = () => {
         if (!user?.id) return;
         setLoading(true);
         try {
+            const token = localStorage.getItem('token');
+            const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
             const [postsRes, repliesRes] = await Promise.all([
-                fetch(`/api/user/posts?userId=${user.id}`),
-                fetch(`/api/user/replies?userId=${user.id}`)
+                fetch(`/api/user/posts?userId=${user.id}`, { headers: authHeaders }),
+                fetch(`/api/user/replies?userId=${user.id}`, { headers: authHeaders })
             ]);
 
             const postsData = await postsRes.json();
@@ -128,8 +130,10 @@ export const Library: React.FC = () => {
         if (!window.confirm('Are you sure you want to delete this content permanently?')) return;
 
         try {
+            const token = localStorage.getItem('token');
+            const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
             const endpoint = item.type === 'post' ? `/api/user/posts` : `/api/user/replies`;
-            const response = await fetch(`${endpoint}?id=${item.id}`, { method: 'DELETE' });
+            const response = await fetch(`${endpoint}?id=${item.id}&userId=${user?.id}`, { method: 'DELETE', headers: authHeaders });
 
             if (response.ok) {
                 showToast('Item deleted successfully', 'success');
@@ -467,10 +471,14 @@ export const Library: React.FC = () => {
                                                 // Mark as Pending in DB for sync tracking if it was a Draft
                                                 if (!isPublished && item.status?.toLowerCase() === 'draft') {
                                                     try {
+                                                        const token = localStorage.getItem('token');
+                                                        const authHeaders: HeadersInit = { 'Content-Type': 'application/json' };
+                                                        if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
                                                         await fetch('/api/item/status', {
                                                             method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({ id: item.id || item._id, status: 'Pending' })
+                                                            headers: authHeaders,
+                                                            body: JSON.stringify({ id: item.id || item._id, status: 'Pending', userId: user?.id })
                                                         });
                                                         setItems(prev => prev.map(i => (i.id || i._id) === (item.id || item._id) ? { ...i, status: 'Pending' } : i));
                                                     } catch (err) { }

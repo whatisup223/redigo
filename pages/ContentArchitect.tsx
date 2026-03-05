@@ -90,6 +90,10 @@ const toneActiveMap: Record<string, string> = {
 
 export const ContentArchitect: React.FC = () => {
     const { user, updateUser, syncUser } = useAuth();
+    const getAuthHeaders = (): Record<string, string> => {
+        const token = localStorage.getItem('token');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
     const [step, setStep] = useState(1);
     const isForcedRef = useRef(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -285,7 +289,7 @@ export const ContentArchitect: React.FC = () => {
             // If the draft has an image prompt but no image URL, check the server
             if (draft.imagePrompt && !draft.imageUrl && user?.id) {
                 try {
-                    const res = await fetch(`/api/user/latest-image?userId=${user.id}`);
+                    const res = await fetch(`/api/user/latest-image?userId=${user.id}`, { headers: getAuthHeaders() });
                     const latestImage = await res.json();
 
                     // Robust comparison: trim and normalize prompts
@@ -468,7 +472,7 @@ export const ContentArchitect: React.FC = () => {
         try {
             const response = await fetch('/api/generate-image', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ prompt, userId: user!.id, subreddit: postData.subreddit, itemId: itemId || postData.id })
             });
 
@@ -714,8 +718,8 @@ export const ContentArchitect: React.FC = () => {
             if (postData.id) {
                 fetch('/api/item/status', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: postData.id, status: 'Pending' })
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    body: JSON.stringify({ id: postData.id, status: 'Pending', userId: user?.id })
                 }).catch(() => { });
             }
             return;
@@ -748,8 +752,8 @@ export const ContentArchitect: React.FC = () => {
                 if (postData.id) {
                     fetch('/api/item/status', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: postData.id, status: 'Pending' })
+                        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                        body: JSON.stringify({ id: postData.id, status: 'Pending', userId: user?.id })
                     }).catch(() => { });
                 }
                 // No extension to respond — reset loading after 5s

@@ -176,12 +176,11 @@ export const Dashboard: React.FC = () => {
     if (isInitial) setIsLoading(true);
 
     try {
-      // We don't necessarily need to syncUser here because AuthContext handles it on mount
-      // and other components handle it after actions. But if we must, we do it safely.
+      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       const [histRes, profileRes] = await Promise.allSettled([
-        fetch(`/api/user/replies/sync?userId=${user.id}`),
-        fetch(`/api/user/reddit/profile?userId=${user.id}`),
+        fetch(`/api/user/replies/sync?userId=${user.id}`, { headers: authHeaders }),
+        fetch(`/api/user/reddit/profile?userId=${user.id}`, { headers: authHeaders }),
       ]);
 
       if (histRes.status === 'fulfilled' && histRes.value.ok) {
@@ -198,7 +197,7 @@ export const Dashboard: React.FC = () => {
 
       // Fetch Latest Announcement (Only if onboarding is finished)
       if (user.hasCompletedOnboarding) {
-        const annRes = await fetch(`/api/user/announcements/latest?userId=${user.id}`);
+        const annRes = await fetch(`/api/user/announcements/latest?userId=${user.id}`, { headers: authHeaders });
         if (annRes.ok) {
           const annData = await annRes.json();
           setAnnouncement(annData);
@@ -209,14 +208,17 @@ export const Dashboard: React.FC = () => {
     } finally {
       if (isInitial) setIsLoading(false);
     }
-  }, [user?.id, user?.hasCompletedOnboarding]); // Only depend on ID and onboarding state
+  }, [user?.id, user?.hasCompletedOnboarding, token]); // Added token dependency
 
   const handleDismissAnnouncement = async () => {
     if (!announcement || !user) return;
     try {
       await fetch('/api/user/announcements/dismiss', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ userId: user.id, announcementId: announcement.id })
       });
       setAnnouncement(null);

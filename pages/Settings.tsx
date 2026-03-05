@@ -483,7 +483,9 @@ export const Settings: React.FC = () => {
             if (!user?.id) { setLoading(false); return; }
             try {
                 const [brandRes, plansRes] = await Promise.all([
-                    fetch(`/api/user/brand-profile?userId=${user.id}`),
+                    fetch(`/api/user/brand-profile?userId=${user.id}`, {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    }),
                     fetch('/api/plans')
                 ]);
 
@@ -517,7 +519,10 @@ export const Settings: React.FC = () => {
         try {
             const res = await fetch('/api/user/brand-profile', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({ userId: user.id, ...brandProfile })
             });
 
@@ -568,7 +573,10 @@ export const Settings: React.FC = () => {
         try {
             const response = await fetch(`/api/users/${user.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({
                     name: profileName,
                     avatar: avatarUrl,
@@ -608,7 +616,10 @@ export const Settings: React.FC = () => {
         try {
             const response = await fetch(`/api/users/${user.id}/password`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({
                     currentPassword: passwordData.currentPassword,
                     newPassword: passwordData.newPassword

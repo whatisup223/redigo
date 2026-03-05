@@ -89,6 +89,10 @@ const MOCK_POSTS: RedditPost[] = [
 
 export const Comments: React.FC = () => {
   const { user, updateUser, syncUser } = useAuth();
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
   const replyCardRef = useRef<HTMLDivElement>(null);
   const isForcedRef = useRef(false);
   type SafeguardError = { type: 'manual_kill_switch' | 'global_auto' | 'user_jail' | 'generic'; message: string; lockedUntil: number | null; };
@@ -236,7 +240,7 @@ export const Comments: React.FC = () => {
       .catch(console.error);
 
     // Load saved leads on mount
-    fetch(`/api/user/saved-leads?userId=${user?.id}`)
+    fetch(`/api/user/saved-leads?userId=${user?.id}`, { headers: getAuthHeaders() })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -429,7 +433,7 @@ export const Comments: React.FC = () => {
     try {
       const response = await fetch('/api/user/clear-leads', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ userId: user?.id })
       });
       if (response.ok) {
@@ -455,7 +459,7 @@ export const Comments: React.FC = () => {
     try {
       const response = await fetch('/api/reddit/deep-scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           userId: user.id,
           postUrl: post.url,
@@ -585,7 +589,7 @@ export const Comments: React.FC = () => {
     try {
       const response = await fetch('/api/generate-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ prompt, userId: user!.id, subreddit, itemId })
       });
 
@@ -816,8 +820,8 @@ export const Comments: React.FC = () => {
       if (generatedReply?.id) {
         fetch('/api/item/status', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: generatedReply.id, status: 'Pending' })
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ id: generatedReply.id, status: 'Pending', userId: user?.id })
         }).catch(() => { });
       }
       return;
@@ -858,8 +862,8 @@ export const Comments: React.FC = () => {
         if (generatedReply?.id) {
           fetch('/api/item/status', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: generatedReply.id, status: 'Pending' })
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({ id: generatedReply.id, status: 'Pending', userId: user?.id })
           }).catch(() => { });
         }
         // No extension to respond — reset loading after 5s
@@ -1048,7 +1052,7 @@ export const Comments: React.FC = () => {
 
           const response = await fetch('/api/reddit/analyze', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
             body: JSON.stringify({ rawJson, keywords: searchKeywords, userId: user.id })
           });
           if (response.status === 423) {
@@ -1076,7 +1080,7 @@ export const Comments: React.FC = () => {
           console.warn('[Hybrid] Extension fetch failed, checking fallback...', extErr);
           if (redditSettings.useServerFallback) {
             console.log('[Hybrid] Falling back to Server Fetching');
-            const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
+            const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`, { headers: getAuthHeaders() });
 
             if (response.status === 423) {
               const errData = await response.json();
@@ -1105,7 +1109,7 @@ export const Comments: React.FC = () => {
         }
       } else {
         console.log('[Hybrid] Using Server Fetching (Fallback, Mobile, or Extension Disabled)');
-        const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
+        const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`, { headers: getAuthHeaders() });
 
         if (response.status === 423) {
           const errData = await response.json();
@@ -1552,7 +1556,7 @@ export const Comments: React.FC = () => {
                       try {
                         await fetch('/api/user/clear-leads', {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
+                          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                           body: JSON.stringify({ userId: user.id })
                         });
                       } catch (err) {
