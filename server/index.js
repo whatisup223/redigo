@@ -830,9 +830,16 @@ const checkSafeguard = (userId) => {
   const config = getSafeguardConfig();
   const uid = userId ? userId.toString() : 'anonymous';
 
-  // 1. Manual or Auto Global Kill Switch
-  if (safeguardState.isGlobalKillSwitchActive || config.isGlobalKillSwitchManual) {
-    throw new Error('Reddit access is temporarily restricted by Redigo Safeguards for system safety. This typically resolves within 15-30 minutes.');
+  // 1a. Manual Global Kill Switch
+  if (config.isGlobalKillSwitchManual) {
+    throw new Error('Reddit access is temporarily restricted by the Administrator. Please wait until the restriction is lifted.');
+  }
+
+  // 1b. Auto Global Kill Switch (System-wide error threshold reached)
+  if (safeguardState.isGlobalKillSwitchActive) {
+    const elapsedMinutes = (Date.now() - (safeguardState.lastGlobalErrorAt || Date.now())) / (1000 * 60);
+    const globalRemaining = Math.max(1, Math.ceil(30 - elapsedMinutes));
+    throw new Error(`Reddit access is temporarily restricted by Redigo Safeguards for system safety (${globalRemaining} minutes remaining).`);
   }
 
   // 2. Individual User Jail Check
@@ -960,6 +967,12 @@ app.post('/api/admin/safeguard/killswitch', async (req, res) => {
   try {
     const { active } = req.body;
     safeguardState.isGlobalKillSwitchActive = active;
+
+    // Reset accumulated errors if turning OFF the kill-switch,
+    // otherwise the auto-switch might immediately trigger again.
+    if (!active) {
+      safeguardState.globalErrorCount = 0;
+    }
 
     // Persist this choice into config as well
     const config = getSafeguardConfig();
