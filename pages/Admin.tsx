@@ -196,6 +196,7 @@ export const Admin: React.FC = () => {
     });
     const [isSafeguardSaving, setIsSafeguardSaving] = useState(false);
     const [isSafeguardLoading, setIsSafeguardLoading] = useState(false);
+    const [isSafeguardLoaded, setIsSafeguardLoaded] = useState(false);
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -631,15 +632,18 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     // Safeguard Functions
-    const fetchSafeguard = async () => {
+    const fetchSafeguard = async (forceInit = false) => {
         const token = localStorage.getItem('token');
         try {
             const res = await fetch('/api/admin/safeguard/status', { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
                 const data = await res.json();
                 setSafeguardStatus(data);
-                if (data.config && Object.keys(data.config).length > 0) {
+
+                // Only initialize config if forced, or if we haven't loaded it yet this session
+                if (data.config && (forceInit || !isSafeguardLoaded)) {
                     setSafeguardConfig(prev => ({ ...prev, ...data.config }));
+                    setIsSafeguardLoaded(true);
                 }
             }
         } catch (e) {
@@ -658,7 +662,7 @@ Return ONLY a valid JSON array. No conversational text.
             });
             if (res.ok) {
                 alert('Safeguard configuration saved successfully.');
-                fetchSafeguard();
+                fetchSafeguard(true);
             }
         } catch (err) {
             alert('Failed to save safeguard configuration.');
@@ -3194,7 +3198,7 @@ Return ONLY a valid JSON array. No conversational text.
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <button
-                                                        onClick={fetchSafeguard}
+                                                        onClick={() => fetchSafeguard(true)}
                                                         className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition-all active:scale-95"
                                                     >
                                                         <RefreshCw size={20} className={isSafeguardLoading ? 'animate-spin' : ''} />

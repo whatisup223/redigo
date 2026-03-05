@@ -813,10 +813,10 @@ setInterval(() => {
 const getSafeguardConfig = () => {
   const settings = settingsCache.safeguardConfig || {};
   return {
-    userMaxErrors: Number(settings.userMaxErrors) || 5,
-    userJailDurationMinutes: Number(settings.userJailDurationMinutes) || 60,
-    globalMaxErrors: Number(settings.globalMaxErrors) || 50,
-    globalSlowdownMultiplier: Number(settings.globalSlowdownMultiplier) || 5, // Multiply delays by X when stressed
+    userMaxErrors: (settings.userMaxErrors !== undefined && settings.userMaxErrors !== null) ? Number(settings.userMaxErrors) : 5,
+    userJailDurationMinutes: (settings.userJailDurationMinutes !== undefined && settings.userJailDurationMinutes !== null) ? Number(settings.userJailDurationMinutes) : 60,
+    globalMaxErrors: (settings.globalMaxErrors !== undefined && settings.globalMaxErrors !== null) ? Number(settings.globalMaxErrors) : 50,
+    globalSlowdownMultiplier: (settings.globalSlowdownMultiplier !== undefined && settings.globalSlowdownMultiplier !== null) ? Number(settings.globalSlowdownMultiplier) : 5,
     isGlobalKillSwitchManual: settings.isGlobalKillSwitchManual === true
   };
 };
@@ -904,7 +904,6 @@ const reportRedditResult = (userId, success, statusCode) => {
 
 // Get Current Safeguard Status (Health Dashboard)
 app.get('/api/admin/safeguard/status', async (req, res) => {
-  // authCheck would normally be here, but for now we trust the client or use a secret header
   try {
     const config = getSafeguardConfig();
     const activeJails = [];
@@ -920,7 +919,7 @@ app.get('/api/admin/safeguard/status', async (req, res) => {
       state: {
         globalErrorCount: safeguardState.globalErrorCount,
         lastGlobalErrorAt: safeguardState.lastGlobalErrorAt,
-        isGlobalKillSwitchActive: safeguardState.isGlobalKillSwitchActive,
+        isGlobalKillSwitchActive: safeguardState.isGlobalKillSwitchActive || config.isGlobalKillSwitchManual,
         activeJailsCount: activeJails.length
       },
       activeJails: activeJails.sort((a, b) => (b.jailedAt || 0) - (a.jailedAt || 0)).slice(0, 50)
@@ -956,11 +955,17 @@ app.post('/api/admin/safeguard/unjail', async (req, res) => {
   }
 });
 
-// Manual Kill-Switch Toggle (State-only, persists till reset or manual change)
+// Manual Kill-Switch Toggle (PERSISTENT)
 app.post('/api/admin/safeguard/killswitch', async (req, res) => {
   try {
     const { active } = req.body;
     safeguardState.isGlobalKillSwitchActive = active;
+
+    // Persist this choice into config as well
+    const config = getSafeguardConfig();
+    config.isGlobalKillSwitchManual = active;
+    saveSettings({ safeguardConfig: config });
+
     res.json({ success: true, isGlobalKillSwitchActive: active });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -5532,11 +5537,21 @@ app.post('/api/reddit/deep-scan', async (req, res) => {
       return res.json({ comments: [], credits: user.credits });
     }
 
+    // Safeguard
+    try {
+      checkSafeguard(userId);
+    } catch (safeErr) {
+      return res.status(423).json({ error: safeErr.message });
+    }
+
     // Convert URL to JSON
     const jsonUrl = postUrl.replace(/\/$/, '') + '/.json?limit=50&sort=top';
     const response = await fetch(jsonUrl, {
       headers: { 'User-Agent': getDynamicUserAgent(userId, user.redditUsername) }
     });
+
+    // Report result to safeguard
+    reportRedditResult(userId, response.ok, response.status);
 
     if (!response.ok) throw new Error(`Reddit API Error: ${response.status}`);
 
@@ -5700,11 +5715,20 @@ app.get('/api/subreddit/about', async (req, res) => {
     const cleanName = name.replace(/^(\/)?r\//, '').trim();
     console.log(`[Subreddit Check] Checking r/${cleanName} (Original: ${name})`);
 
+    // Safeguard check
+    try {
+      checkSafeguard('system');
+    } catch (e) {
+      return res.status(423).json({ error: e.message });
+    }
+
     const response = await fetch(`https://www.reddit.com/r/${cleanName}/about.json`, {
       headers: {
         'User-Agent': getDynamicUserAgent('system', 'guest')
       }
     });
+
+    reportRedditResult('system', response.ok, response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -5736,6 +5760,13 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
     console.log(`[Reddit] Fetching for User ${userId} from r/${subreddit}`);
 
     if (!userId) return res.status(401).json({ error: 'User ID required' });
+
+    // ── REDDIT SAFEGUARD ──────────────────────────────────────────────────────
+    try {
+      checkSafeguard(userId);
+    } catch (safeErr) {
+      return res.status(423).json({ error: safeErr.message });
+    }
 
     // ── FALLBACK & POLICY CHECK ─────────────────────────────────────────────
     const userAgent = req.headers['user-agent'] || '';
@@ -5786,6 +5817,9 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
     };
 
     const response = await fetch(fetchUrl, { headers: fetchHeaders });
+
+    // Safeguard Report
+    reportRedditResult(userId, response.ok, response.status);
 
     if (!response.ok) {
       if (response.status === 404) {

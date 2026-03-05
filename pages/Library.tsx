@@ -416,12 +416,17 @@ export const Library: React.FC = () => {
                                             onClick={async () => {
                                                 const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
                                                 const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+                                                const isPublished = ['Posted', 'Live', 'Sent'].includes(item.status);
                                                 const isPost = item.type === 'post';
 
                                                 // Build target URL
                                                 let targetUrl = '';
                                                 let missingUrl = false;
-                                                if (isPost) {
+
+                                                if (isPublished && item.postUrl) {
+                                                    // If already live, just go to the link
+                                                    targetUrl = item.postUrl.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com');
+                                                } else if (isPost) {
                                                     targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit`;
                                                 } else {
                                                     if (item.postUrl && !item.postUrl.includes('/submit')) {
@@ -441,8 +446,8 @@ export const Library: React.FC = () => {
                                                 // Deploy Logic
                                                 if (isMobile) {
                                                     window.open(targetUrl, '_blank');
-                                                    showToast('Opened Reddit! Paste your content.', 'success');
-                                                } else if (hasExtension) {
+                                                    showToast(isPublished ? 'Opening post on Reddit...' : 'Opened Reddit! Paste your content.', 'success');
+                                                } else if (hasExtension && !isPublished) {
                                                     window.postMessage({
                                                         source: 'REDIGO_WEB_APP',
                                                         type: 'REDIGO_DEPLOY',
@@ -456,11 +461,11 @@ export const Library: React.FC = () => {
                                                     showToast('Sending to Extension...', 'success');
                                                 } else {
                                                     window.open(targetUrl, '_blank');
-                                                    showToast('Opened Reddit! Please paste your content.', 'success');
+                                                    showToast(isPublished ? 'Opening post on Reddit...' : 'Opened Reddit! Please paste your content.', 'success');
                                                 }
 
                                                 // Mark as Pending in DB for sync tracking if it was a Draft
-                                                if (item.status?.toLowerCase() === 'draft') {
+                                                if (!isPublished && item.status?.toLowerCase() === 'draft') {
                                                     try {
                                                         await fetch('/api/item/status', {
                                                             method: 'POST',
@@ -473,7 +478,7 @@ export const Library: React.FC = () => {
                                             }}
                                             className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95"
                                         >
-                                            {item.status === 'Posted' ? 'Repost ♻️' : 'Publish 🚀'}
+                                            {['Posted', 'Live', 'Sent'].includes(item.status) ? 'View Live 🔗' : 'Publish 🚀'}
                                         </button>
                                     </div>
                                 </div>
