@@ -687,27 +687,22 @@ export const ContentArchitect: React.FC = () => {
         if (!user?.id) return;
         const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
 
-        // Fallback for missing extension on PC
-        if (!isMobile && document.documentElement.getAttribute('data-redigo-extension') !== 'installed' && user.role !== 'admin') {
-            setShowExtensionWarning(true);
-            return;
-        }
-
-        // On Mobile, we just guide them to the assistant
+        // On Mobile, guide them to the assistant drawer
         if (isMobile) {
-            // No warning modal, just open the assistant drawer
             const assistantButton = document.getElementById('redigo-assistant-button');
             if (assistantButton) assistantButton.click();
             showToast('Ready in Assistant! Copy & Post on Reddit.', 'success');
             return;
         }
 
+        // No extension warning here — posting is FREE.
+        // With extension: auto-paste. Without extension: open Reddit directly.
         setIsPosting(true);
         try {
-            // targetUrl for a new post in a subreddit
             const targetUrl = `https://www.reddit.com/r/${postData.subreddit}/submit`;
+            const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
 
-            // Send the instruction to the content injected bridge
+            // Always send the postMessage (extension picks it up if installed)
             window.postMessage({
                 source: 'REDIGO_WEB_APP',
                 type: 'REDIGO_DEPLOY',
@@ -716,23 +711,18 @@ export const ContentArchitect: React.FC = () => {
                 text: postData.content,
                 imageUrl: postData.imageUrl,
                 targetUrl: targetUrl,
-                isPost: true // Tell Extension Content Script this is a Submit Page
+                isPost: true
             }, '*');
 
-            const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
-
-            // Explicitly open the Reddit submit page if no extension is taking over
-            if (targetUrl && !hasExtension) {
+            // If no extension — open Reddit directly in a new tab
+            if (!hasExtension) {
                 window.open(targetUrl, '_blank');
-                showToast('Opening Submit Page...', 'success');
+                showToast('Opening Reddit! Paste your content & submit.', 'success');
             } else {
                 showToast('Sending to Extension...', 'success');
             }
 
-            // Prevent draft from sticking around
             localStorage.removeItem('redditgo_post_draft');
-
-            // The loading state will be disabled by the useEffect listener when the extension replies!
         } catch (err: any) {
             showToast(err.message || 'Failed to communicate with extension', 'error');
             setIsPosting(false);
