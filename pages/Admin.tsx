@@ -640,8 +640,9 @@ Return ONLY a valid JSON array. No conversational text.
                 const data = await res.json();
                 setSafeguardStatus(data);
 
-                // Only initialize config if forced, or if we haven't loaded it yet this session
-                if (data.config && (forceInit || !isSafeguardLoaded)) {
+                // CRITICAL: ONLY update the editable config state if forceInit is true (initial load or manual refresh)
+                // The background interval should NEVER touch the safeguardConfig state to avoid overwriting user typing.
+                if (data.config && forceInit) {
                     setSafeguardConfig(prev => ({ ...prev, ...data.config }));
                     setIsSafeguardLoaded(true);
                 }
@@ -702,8 +703,10 @@ Return ONLY a valid JSON array. No conversational text.
     // Poll safeguard when tab is active
     useEffect(() => {
         if (settingsTab !== 'safeguard' || activeTab !== 'settings') return;
-        fetchSafeguard();
-        const interval = setInterval(() => fetchSafeguard(), 5000);
+        // INITIAL LOAD: forceInit = true to populate the input fields
+        fetchSafeguard(true);
+        // BACKGROUND POLLING: forceInit = false to ONLY update status/counts without touching inputs
+        const interval = setInterval(() => fetchSafeguard(false), 5000);
         return () => clearInterval(interval);
     }, [settingsTab, activeTab]);
 
@@ -3263,8 +3266,8 @@ Return ONLY a valid JSON array. No conversational text.
                                                             <input
                                                                 type="number"
                                                                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
-                                                                value={safeguardConfig.userMaxErrors}
-                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, userMaxErrors: parseInt(e.target.value) })}
+                                                                value={safeguardConfig.userMaxErrors === undefined ? '' : safeguardConfig.userMaxErrors}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, userMaxErrors: e.target.value === '' ? '' : parseInt(e.target.value) })}
                                                                 placeholder="5"
                                                             />
                                                             <p className="text-[10px] text-slate-400 mt-2 font-medium">Errors before user is jailed.</p>
@@ -3275,8 +3278,8 @@ Return ONLY a valid JSON array. No conversational text.
                                                             <input
                                                                 type="number"
                                                                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
-                                                                value={safeguardConfig.userJailDurationMinutes}
-                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, userJailDurationMinutes: parseInt(e.target.value) })}
+                                                                value={safeguardConfig.userJailDurationMinutes === undefined ? '' : safeguardConfig.userJailDurationMinutes}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, userJailDurationMinutes: e.target.value === '' ? '' : parseInt(e.target.value) })}
                                                                 placeholder="60"
                                                             />
                                                         </label>
@@ -3286,8 +3289,8 @@ Return ONLY a valid JSON array. No conversational text.
                                                             <input
                                                                 type="number"
                                                                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
-                                                                value={safeguardConfig.globalMaxErrors}
-                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, globalMaxErrors: parseInt(e.target.value) })}
+                                                                value={safeguardConfig.globalMaxErrors === undefined ? '' : safeguardConfig.globalMaxErrors}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, globalMaxErrors: e.target.value === '' ? '' : parseInt(e.target.value) })}
                                                                 placeholder="50"
                                                             />
                                                             <p className="text-[10px] text-slate-400 mt-2 font-medium">Errors before Global Scale-down.</p>
@@ -3298,8 +3301,8 @@ Return ONLY a valid JSON array. No conversational text.
                                                             <input
                                                                 type="number"
                                                                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
-                                                                value={safeguardConfig.globalSlowdownMultiplier}
-                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, globalSlowdownMultiplier: parseInt(e.target.value) })}
+                                                                value={safeguardConfig.globalSlowdownMultiplier === undefined ? '' : safeguardConfig.globalSlowdownMultiplier}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, globalSlowdownMultiplier: e.target.value === '' ? '' : parseInt(e.target.value) })}
                                                                 placeholder="5"
                                                             />
                                                             <p className="text-[10px] text-slate-400 mt-2 font-medium">Multiplier for request delays.</p>
