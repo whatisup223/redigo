@@ -2334,7 +2334,7 @@ Return ONLY a valid JSON array. No conversational text.
                         {activeTab === 'settings' && (
                             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* Sub-Navigation */}
-                                <div className="flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl w-full md:w-fit border border-slate-200/60 overflow-x-auto no-scrollbar">
+                                <div className="flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl w-full max-w-full border border-slate-200/60 overflow-x-auto no-scrollbar">
                                     <button
                                         onClick={() => setSettingsTab('ai')}
                                         className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'ai' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -3316,10 +3316,10 @@ Return ONLY a valid JSON array. No conversational text.
                                                                 <p className="text-xs text-red-400 font-bold">Stop ALL server-side Reddit calls immediately.</p>
                                                             </div>
                                                             <button
-                                                                onClick={() => handleToggleKillSwitch(!safeguardStatus.state?.isGlobalKillSwitchActive)}
-                                                                className={`w-16 h-8 rounded-full p-1 transition-all ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'bg-red-600' : 'bg-slate-300'}`}
+                                                                onClick={() => handleToggleKillSwitch(!safeguardConfig.isGlobalKillSwitchManual)}
+                                                                className={`w-16 h-8 rounded-full p-1 transition-all ${safeguardConfig.isGlobalKillSwitchManual ? 'bg-red-600' : 'bg-slate-300'}`}
                                                             >
-                                                                <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'translate-x-8' : 'translate-x-0'}`} />
+                                                                <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${safeguardConfig.isGlobalKillSwitchManual ? 'translate-x-8' : 'translate-x-0'}`} />
                                                             </button>
                                                         </div>
                                                         <div className="text-[10px] text-red-500/70 font-bold leading-relaxed">
