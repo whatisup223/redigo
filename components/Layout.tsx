@@ -122,19 +122,34 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
       // Find confirmed items (no longer Draft/Pending)
       const confirmedIds = new Set<string>();
+      // Find possibly deleted items: Pending for more than 48h and not found on Reddit
+      const possiblyDeletedCount = { count: 0 };
+      const now = Date.now();
+      const HOURS_48 = 48 * 60 * 60 * 1000;
+
       for (const item of pendingItems) {
         const itemId = item.id || item._id;
         const synced = all.find(r =>
           (r.id || r._id) === itemId &&
           ['live', 'sent', 'active'].includes((r.status || '').toLowerCase())
         );
-        if (synced) confirmedIds.add(itemId);
+        if (synced) {
+          confirmedIds.add(itemId);
+        } else if (
+          ['pending', 'sent'].includes((item.status || '').toLowerCase()) &&
+          item.deployedAt && (now - new Date(item.deployedAt).getTime()) > HOURS_48
+        ) {
+          // Old pending item not found — possibly deleted or shadowbanned
+          possiblyDeletedCount.count++;
+        }
       }
 
       if (confirmedIds.size > 0) {
         setPendingItems(prev => prev.filter(i => !confirmedIds.has(i.id || i._id)));
         setPendingCount(prev => Math.max(0, prev - confirmedIds.size));
         showToast(`✅ ${confirmedIds.size} item(s) confirmed published!`, 'success');
+      } else if (possiblyDeletedCount.count > 0) {
+        showToast(`⚠️ ${possiblyDeletedCount.count} item(s) not found — may have been deleted or removed by Reddit.`, 'error');
       } else {
         showToast('No new confirmations yet. Try again after posting.', 'success');
       }

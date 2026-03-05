@@ -718,8 +718,12 @@ export const ContentArchitect: React.FC = () => {
             if (!hasExtension) {
                 window.open(targetUrl, '_blank');
                 showToast('Opening Reddit! Paste your content & submit.', 'success');
+                // No extension to respond — reset loading after 5s
+                setTimeout(() => setIsPosting(false), 5000);
             } else {
                 showToast('Sending to Extension...', 'success');
+                // Extension will respond via message; failsafe if it doesn't
+                setTimeout(() => setIsPosting(false), 15000);
             }
 
             localStorage.removeItem('redditgo_post_draft');

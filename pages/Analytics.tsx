@@ -163,6 +163,15 @@ export const Analytics: React.FC = () => {
         });
         // Refresh the data in-place — no reload needed
         await fetchData();
+
+        // After refresh: check if item is still stuck as Draft/Pending and is old (48h+)
+        const HOURS_48 = 48 * 60 * 60 * 1000;
+        const deployedAt = item.deployedAt ? new Date(item.deployedAt).getTime() : 0;
+        const isOld = deployedAt > 0 && (Date.now() - deployedAt) > HOURS_48;
+        const stillPending = ['draft', 'pending', 'sent'].includes((item.status || '').toLowerCase());
+        if (stillPending && isOld) {
+          showToast('⚠️ Item not found on Reddit — it may have been deleted or removed by moderators.', 'error');
+        }
       }
       return;
     }

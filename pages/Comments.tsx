@@ -780,11 +780,14 @@ export const Comments: React.FC = () => {
       if (targetUrl && !hasExtension) {
         window.open(targetUrl, '_blank');
         showToast('Opening Thread...', 'success');
+        // No extension to respond — reset loading after 5s
+        setTimeout(() => setIsPosting(false), 5000);
       } else {
         showToast('Sending to Extension... Thread opening.', 'success');
+        // Extension will respond via message; failsafe timeout in case it doesn't
+        setTimeout(() => setIsPosting(false), 15000);
       }
 
-      // Loading state will be handled by the useEffect listener when the extension responds
     } catch (err: any) {
       showToast(err.message || 'Failed to communicate with extension', 'error');
       setIsPosting(false);
