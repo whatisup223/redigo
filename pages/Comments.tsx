@@ -926,31 +926,9 @@ export const Comments: React.FC = () => {
     }, 1000);
 
     try {
-      // --- Subreddit Universal Pre-flight Check ---
-      const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}`);
-      if (subRes.status === 423) {
-        const errData = await subRes.json();
-        const errMsg = errData.error || 'Reddit access restricted by safeguards.';
-        setSearchError(errMsg);
-        showToast(errMsg, 'error');
-        setIsFetching(false);
-        setReloadCooldown(0);
-        return;
-      }
-
-      if (!subRes.ok) {
-        const errData = await subRes.json();
-        const errMsg = `${errData.message || 'Subreddit not found or inaccessible.'} [${subRes.status}]`;
-        setSearchError(errMsg);
-        showToast(errMsg, 'error');
-        setIsFetching(false);
-        setReloadCooldown(0);
-        return;
-      }
-
-      let data: any;
       const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
       const isExtActive = isExtensionActive();
+      const canUseExtension = redditSettings.useExtensionFetching && isExtActive && !isMobile;
 
       console.log('[Hybrid Debug]', {
         useExtensionFetching: redditSettings.useExtensionFetching,
@@ -960,7 +938,34 @@ export const Comments: React.FC = () => {
         useServerFallback: redditSettings.useServerFallback
       });
 
-      const canUseExtension = redditSettings.useExtensionFetching && isExtActive && !isMobile;
+      // --- Subreddit Universal Pre-flight Check ---
+      const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}`);
+
+      if (!subRes.ok) {
+        if (!canUseExtension) {
+          if (subRes.status === 423) {
+            const errData = await subRes.json();
+            const errMsg = errData.error || 'Reddit access restricted by safeguards.';
+            setSearchError(errMsg);
+            showToast(errMsg, 'error');
+            setIsFetching(false);
+            setReloadCooldown(0);
+            return;
+          }
+
+          const errData = await subRes.json();
+          const errMsg = `${errData.message || 'Subreddit not found or inaccessible.'} [${subRes.status}]`;
+          setSearchError(errMsg);
+          showToast(errMsg, 'error');
+          setIsFetching(false);
+          setReloadCooldown(0);
+          return;
+        } else {
+          console.log(`[Hybrid] Server pre-flight failed (Status ${subRes.status}), but extension is active so we bravely proceed...`);
+        }
+      }
+
+      let data: any;
 
       if (canUseExtension) {
         console.log('[Hybrid] Attempting Extension Fetch...');
