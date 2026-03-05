@@ -177,7 +177,7 @@ export const Dashboard: React.FC = () => {
 
     try {
       const activeToken = token || localStorage.getItem('token');
-      if (!activeToken) return;
+      if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
       const authHeaders: HeadersInit = { 'Authorization': `Bearer ${activeToken}` };
 
       const [histRes, profileRes] = await Promise.allSettled([

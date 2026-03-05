@@ -69,7 +69,7 @@ export const Support: React.FC = () => {
             const role = isAdmin ? 'admin' : 'user';
             const token = localStorage.getItem('token');
             const headers: any = {};
-            if (isAdmin && token) {
+            if (token && token !== 'null' && token !== 'undefined') {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
@@ -124,7 +124,7 @@ export const Support: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token && token !== 'null' && token !== 'undefined' ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify(ticketData)
             });
@@ -164,7 +164,7 @@ export const Support: React.FC = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token && token !== 'null' && token !== 'undefined' ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify(updateData)
             });
@@ -184,7 +184,7 @@ export const Support: React.FC = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    ...(token && token !== 'null' && token !== 'undefined' ? { 'Authorization': `Bearer ${token}` } : {})
                 },
                 body: JSON.stringify({ status: newStatus })
             });
@@ -201,6 +201,7 @@ export const Support: React.FC = () => {
 
         try {
             const token = localStorage.getItem('token');
+            if (!token || token === 'null' || token === 'undefined') return;
             const res = await fetch(`/api/support/tickets/${ticketId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }

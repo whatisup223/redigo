@@ -84,7 +84,7 @@ export const Library: React.FC = () => {
     const fetchLibrary = async () => {
         if (!user?.id) return;
         const token = localStorage.getItem('token');
-        if (!token) return;
+        if (!token || token === 'null' || token === 'undefined') return;
 
         setLoading(true);
         try {
@@ -131,7 +131,7 @@ export const Library: React.FC = () => {
     const handleDelete = async (item: LibraryItem) => {
         if (!window.confirm('Are you sure you want to delete this content permanently?')) return;
         const token = localStorage.getItem('token');
-        if (!token) return;
+        if (!token || token === 'null' || token === 'undefined') return;
 
         try {
             const authHeaders: HeadersInit = { 'Authorization': `Bearer ${token}` };

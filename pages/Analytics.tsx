@@ -228,7 +228,7 @@ export const Analytics: React.FC = () => {
           // Fallback: try profile sync
           const userId = user?.id || user?._id;
           const token = localStorage.getItem('token');
-          if (!token) return;
+          if (!token || token === 'null' || token === 'undefined') return;
           const authHeaders: HeadersInit = { 'Authorization': `Bearer ${token}` };
           const ts = Date.now();
           await fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`, { headers: authHeaders });
@@ -294,7 +294,7 @@ export const Analytics: React.FC = () => {
     const userId = user?.id || user?._id;
     if (!userId) return;
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token || token === 'null' || token === 'undefined') return;
     const authHeaders: HeadersInit = { 'Authorization': `Bearer ${token}` };
     try {
       const ts = Date.now(); // Cache busting
