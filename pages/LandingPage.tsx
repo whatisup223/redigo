@@ -415,8 +415,8 @@ export const LandingPage: React.FC = () => {
                             {/* Curve representation */}
                             <div className="absolute inset-x-8 top-4 bottom-8 overflow-hidden z-10 pointer-events-none">
                               <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 600 160">
-                                <path d="M0,160 C50,160 100,160 150,160 C200,160 250,160 300,140 C350,100 400,60 450,40 C500,20 550,60 600,160" stroke="#3b82f6" strokeWidth="3" fill="url(#gradientBlueDash)" />
-                                <path d="M0,160 C50,160 100,160 150,160 C200,160 250,160 350,120 C400,80 450,160 500,160 C550,160 600,160" stroke="#ea580c" strokeWidth="3" fill="none" className="opacity-0" />
+                                <path d="M0,160 C50,160 100,160 150,160 C200,160 250,160 300,140 C350,100 400,60 450,40 C500,20 550,60 600,160 L600,160 L0,160 Z" stroke="#3b82f6" strokeWidth="3" fill="url(#gradientBlueDash)" />
+                                <path d="M0,160 C50,160 100,160 150,160 C200,160 250,160 350,120 C400,80 450,160 500,160 C550,160 600,160 600,160" stroke="#ea580c" strokeWidth="3" fill="none" className="opacity-0" />
 
                                 <defs>
                                   <linearGradient id="gradientBlueDash" x1="0" y1="0" x2="0" y2="1">
