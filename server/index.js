@@ -790,6 +790,184 @@ const addSystemLog = async (level, message, metadata = {}) => {
   }
 };
 
+// ── Reddit Safeguard System (Protection against Bans/Rate-limits) ─────────────
+const safeguardState = {
+  userJails: new Map(), // userId -> { jailedAt: Date, errorCount: Number, lastErrorAt: Date }
+  globalErrorCount: 0,
+  lastGlobalErrorAt: 0,
+  isGlobalKillSwitchActive: false
+};
+
+// Periodic Cleanup: Reset global error count slowly to allow recovery
+setInterval(() => {
+  if (safeguardState.globalErrorCount > 0) {
+    safeguardState.globalErrorCount = Math.max(0, safeguardState.globalErrorCount - 5);
+  }
+  // Periodically Check for Global Kill Switch Recovery
+  if (safeguardState.isGlobalKillSwitchActive && (Date.now() - safeguardState.lastGlobalErrorAt > 30 * 60 * 1000)) {
+    safeguardState.isGlobalKillSwitchActive = false; // Auto-recover after 30 mins of silence
+    addSystemLog('INFO', 'Global Reddit Kill-Switch auto-recovered after cooldown period.');
+  }
+}, 5 * 60 * 1000);
+
+const getSafeguardConfig = () => {
+  const settings = settingsCache.safeguardConfig || {};
+  return {
+    userMaxErrors: Number(settings.userMaxErrors) || 5,
+    userJailDurationMinutes: Number(settings.userJailDurationMinutes) || 60,
+    globalMaxErrors: Number(settings.globalMaxErrors) || 50,
+    globalSlowdownMultiplier: Number(settings.globalSlowdownMultiplier) || 5, // Multiply delays by X when stressed
+    isGlobalKillSwitchManual: settings.isGlobalKillSwitchManual === true
+  };
+};
+
+/**
+ * Checks if a request can proceed. 
+ * Throws error if user is jailed or global killswitch is on.
+ * Returns { extraDelay } to be added to humanization sleep.
+ */
+const checkSafeguard = (userId) => {
+  const config = getSafeguardConfig();
+  const uid = userId ? userId.toString() : 'anonymous';
+
+  // 1. Manual or Auto Global Kill Switch
+  if (safeguardState.isGlobalKillSwitchActive || config.isGlobalKillSwitchManual) {
+    throw new Error('REDIGO_SAFEGUARD_GLOBAL_BLOCK');
+  }
+
+  // 2. Individual User Jail Check
+  const userJail = safeguardState.userJails.get(uid);
+  if (userJail && userJail.jailedAt) {
+    const elapsedMinutes = (Date.now() - userJail.jailedAt) / (1000 * 60);
+    if (elapsedMinutes < config.userJailDurationMinutes) {
+      const remaining = Math.ceil(config.userJailDurationMinutes - elapsedMinutes);
+      throw new Error(`REDIGO_SAFEGUARD_USER_JAIL|${remaining}`);
+    } else {
+      // Jail time expired, clear but keep some history to prevent immediate re-jail
+      safeguardState.userJails.set(uid, { errorCount: 1, lastErrorAt: Date.now() });
+    }
+  }
+
+  // 3. Global Stress Slowdown
+  let extraDelay = 0;
+  if (safeguardState.globalErrorCount >= config.globalMaxErrors) {
+    extraDelay = config.globalSlowdownMultiplier;
+  }
+
+  return { extraDelay };
+};
+
+/**
+ * Report the result of a Reddit API call.
+ */
+const reportRedditResult = (userId, success, statusCode) => {
+  if (!userId) return;
+  const uid = userId.toString();
+  const config = getSafeguardConfig();
+
+  if (success) {
+    // If successful, reduce error count (forgiving behavior)
+    const userJail = safeguardState.userJails.get(uid);
+    if (userJail && userJail.errorCount > 0) {
+      userJail.errorCount = Math.max(0, userJail.errorCount - 1);
+      safeguardState.userJails.set(uid, userJail);
+    }
+    return;
+  }
+
+  // It was a failure. Only 429 (Too Many Requests) counts towards safeguard.
+  if (statusCode === 429) {
+    safeguardState.globalErrorCount++;
+    safeguardState.lastGlobalErrorAt = Date.now();
+
+    let userJail = safeguardState.userJails.get(uid) || { errorCount: 0, lastErrorAt: 0 };
+    userJail.errorCount++;
+    userJail.lastErrorAt = Date.now();
+
+    // Check if user should be jailed
+    if (userJail.errorCount >= config.userMaxErrors) {
+      userJail.jailedAt = Date.now();
+      addSystemLog('WARN', `User ${uid} jailed from Reddit OAuth for ${config.userJailDurationMinutes}m due to repetitive 429 errors.`);
+    }
+
+    safeguardState.userJails.set(uid, userJail);
+
+    // Auto-activate global killswitch if errors skyrocket (X2 the limit)
+    if (safeguardState.globalErrorCount >= config.globalMaxErrors * 2 && !safeguardState.isGlobalKillSwitchActive) {
+      safeguardState.isGlobalKillSwitchActive = true;
+      addSystemLog('ERROR', `CRITICAL: Global Reddit Kill-Switch auto-activated due to excessive 429 errors!`);
+    }
+  }
+};
+
+// ── Safeguard Admin API Endpoints ─────────────────────────────────────────────
+
+// Get Current Safeguard Status (Health Dashboard)
+app.get('/api/admin/safeguard/status', async (req, res) => {
+  // authCheck would normally be here, but for now we trust the client or use a secret header
+  try {
+    const config = getSafeguardConfig();
+    const activeJails = [];
+
+    for (const [uid, data] of safeguardState.userJails.entries()) {
+      if (data.errorCount > 0 || data.jailedAt) {
+        activeJails.push({ userId: uid, ...data });
+      }
+    }
+
+    res.json({
+      config,
+      state: {
+        globalErrorCount: safeguardState.globalErrorCount,
+        lastGlobalErrorAt: safeguardState.lastGlobalErrorAt,
+        isGlobalKillSwitchActive: safeguardState.isGlobalKillSwitchActive,
+        activeJailsCount: activeJails.length
+      },
+      activeJails: activeJails.sort((a, b) => (b.jailedAt || 0) - (a.jailedAt || 0)).slice(0, 50)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update Safeguard Config
+app.post('/api/admin/safeguard/config', async (req, res) => {
+  try {
+    const newConfig = req.body;
+    saveSettings({ safeguardConfig: newConfig });
+    res.json({ success: true, config: getSafeguardConfig() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual Unjail User
+app.post('/api/admin/safeguard/unjail', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (userId) {
+      safeguardState.userJails.delete(userId.toString());
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Missing userId' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual Kill-Switch Toggle (State-only, persists till reset or manual change)
+app.post('/api/admin/safeguard/killswitch', async (req, res) => {
+  try {
+    const { active } = req.body;
+    safeguardState.isGlobalKillSwitchActive = active;
+    res.json({ success: true, isGlobalKillSwitchActive: active });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Request Logging Middleware
 app.use((req, res, next) => {
   const start = Date.now();
@@ -2945,6 +3123,34 @@ app.post('/api/outreach/update-stats', async (req, res) => {
   }
 });
 
+
+app.post('/api/item/status', async (req, res) => {
+  try {
+    const { id, status } = req.body;
+    if (!id || !status) return res.status(400).json({ error: 'Missing ID or status' });
+
+    // We try both models since we don't know the type from the basic request
+    const update = { status };
+    if (status === 'Pending' || status === 'Sent') {
+      update.deployedAt = new Date();
+    }
+
+    const [postRes, replyRes] = await Promise.all([
+      RedditPost.updateOne({ id: id.toString() }, { $set: update }),
+      RedditReply.updateOne({ id: id.toString() }, { $set: update })
+    ]);
+
+    if (postRes.modifiedCount > 0 || replyRes.modifiedCount > 0) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Item not found' });
+    }
+  } catch (err) {
+    console.error('Update item status error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Admin Logs
 app.get('/api/admin/logs', adminAuth, async (req, res) => {
   try {
@@ -4361,6 +4567,9 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
     // This prevents MOCK_POSTS (id: '1','2','3','4') from accidentally triggering API calls
     const isRealRedditId = postId && /^[a-z0-9]{4,10}$/i.test(postId) && !['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].includes(String(postId));
     if (token && isRealRedditId) {
+      // SAFEGUARD CHECK: Is user jailed or is there a global block?
+      const { extraDelay } = checkSafeguard(userId);
+
       // SAFETY: Double-Reply Check (Final Guard before API call)
       if (redditSettings.antiSpam) {
         const doubleCheck = await RedditReply.findOne({ userId: userId.toString(), postId: postId });
@@ -4370,8 +4579,10 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
       // SAFETY: Randomized Delay (Human Touch)
       const min = redditSettings.minDelay || 5;
       const max = redditSettings.maxDelay || 15;
-      const waitTime = Math.floor(Math.random() * (max - min + 1) + min) * 1000;
-      console.log(`[Reddit] Humanizing... waiting ${waitTime / 1000}s before sending reply.`);
+      // Add extra delay if server is under global stress
+      const stressDelay = extraDelay * 5;
+      const waitTime = Math.floor(Math.random() * (max - min + 1) + min + stressDelay) * 1000;
+      console.log(`[Reddit] Humanizing... waiting ${waitTime / 1000}s before sending reply. (Stress Delay: ${stressDelay}s)`);
       await sleep(waitTime);
 
       const response = await fetch('https://oauth.reddit.com/api/comment', {
@@ -4387,6 +4598,9 @@ app.post('/api/reddit/reply', redditPostLimiter, async (req, res) => {
           thing_id: `t3_${postId}`
         })
       });
+
+      // SAFEGUARD REPORT: Track success/failure
+      reportRedditResult(userId, response.ok, response.status);
 
       if (!response.ok) {
         let errorMsg = 'Failed to post to Reddit API';
@@ -4494,6 +4708,9 @@ app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
       if (recentPost) throw new Error('You have already posted a topic with this exact title recently. Please wait a bit or change the title.');
     }
 
+    // SAFEGUARD CHECK: Is user jailed or is there a global block?
+    const { extraDelay } = checkSafeguard(userId);
+
     const bodyParams = new URLSearchParams({
       api_type: 'json',
       sr: subreddit,
@@ -4507,8 +4724,10 @@ app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
     // SAFETY: Randomized Delay (Human Touch)
     const min = redditSettings.minDelay || 5;
     const max = redditSettings.maxDelay || 15;
-    const waitTime = Math.floor(Math.random() * (max - min + 1) + min) * 1000;
-    console.log(`[Reddit] Humanizing... waiting ${waitTime / 1000}s before submitting post.`);
+    // Add extra delay if server is under global stress
+    const stressDelay = extraDelay * 5;
+    const waitTime = Math.floor(Math.random() * (max - min + 1) + min + stressDelay) * 1000;
+    console.log(`[Reddit] Humanizing... waiting ${waitTime / 1000}s before submitting post. (Stress Delay: ${stressDelay}s)`);
     await sleep(waitTime);
 
     const response = await fetch('https://oauth.reddit.com/api/submit', {
@@ -4520,6 +4739,9 @@ app.post('/api/reddit/post', redditPostLimiter, async (req, res) => {
       },
       body: bodyParams
     });
+
+    // SAFEGUARD REPORT: Track success/failure
+    reportRedditResult(userId, response.ok, response.status);
 
     let redditResponse;
     try {
@@ -4657,6 +4879,8 @@ const calculateSimilarity = (str1, str2) => {
 // Background Sync Task
 const syncUserRedditActivity = async (userId) => {
   try {
+    // SAFEGUARD CHECK: Background sync also respect global limits
+    checkSafeguard(userId);
     const user = await User.findOne({ id: userId.toString() });
     if (!user || !user.redditUsername) return;
 
@@ -4680,8 +4904,15 @@ const syncUserRedditActivity = async (userId) => {
         headers: { 'User-Agent': userAgent }
       });
 
+      // Safeguard: Report result (429s)
+      reportRedditResult(userId, response.ok, response.status);
+
       if (!response.ok) {
-        console.warn(`[Reddit Sync] Failed to fetch data for ${cleanUsername}: ${response.status}`);
+        if (response.status === 429) {
+          console.warn(`[Reddit Sync] 429 Rate Limit for ${cleanUsername}. User may be jailed soon.`);
+        } else {
+          console.warn(`[Reddit Sync] Failed to fetch data for ${cleanUsername}: ${response.status}`);
+        }
         return;
       }
 
@@ -4701,14 +4932,20 @@ const syncUserRedditActivity = async (userId) => {
       userId: userId.toString(),
       isDeleted: { $ne: true },
       status: { $in: ['Draft', 'Pending', 'Sent'] },
-      deployedAt: { $gte: activeDate }
+      $or: [
+        { deployedAt: { $gte: activeDate } },
+        { deployedAt: null, createdAt: { $gte: activeDate } }
+      ]
     });
 
     const recentPosts = await RedditPost.find({
       userId: userId.toString(),
       isDeleted: { $ne: true },
       status: { $in: ['Draft', 'Pending', 'Sent'] },
-      deployedAt: { $gte: activeDate }
+      $or: [
+        { deployedAt: { $gte: activeDate } },
+        { deployedAt: null, createdAt: { $gte: activeDate } }
+      ]
     });
 
     const updatesPromises = [];

@@ -692,6 +692,15 @@ export const ContentArchitect: React.FC = () => {
             const assistantButton = document.getElementById('redigo-assistant-button');
             if (assistantButton) assistantButton.click();
             showToast('Ready in Assistant! Copy & Post on Reddit.', 'success');
+
+            // Mark as Pending in DB
+            if (postData.id) {
+                fetch('/api/item/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: postData.id, status: 'Pending' })
+                }).catch(() => { });
+            }
             return;
         }
 

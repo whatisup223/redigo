@@ -177,9 +177,25 @@ export const Admin: React.FC = () => {
 
     const activeTab = getActiveTab();
     const [analyticsTab, setAnalyticsTab] = useState<'overview' | 'churn'>('overview');
-    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email' | 'system'>('ai');
+    const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email' | 'system' | 'safeguard'>('ai');
     const [systemSettings, setSystemSettings] = useState({ googleAnalyticsId: '' });
     const [aiSubTab, setAiSubTab] = useState<'creative' | 'analyzer'>('creative');
+
+    // Safeguard States
+    const [safeguardStatus, setSafeguardStatus] = useState<any>({
+        config: {},
+        state: { globalErrorCount: 0, isGlobalKillSwitchActive: false, activeJailsCount: 0 },
+        activeJails: []
+    });
+    const [safeguardConfig, setSafeguardConfig] = useState<any>({
+        userMaxErrors: 5,
+        userJailDurationMinutes: 60,
+        globalMaxErrors: 50,
+        globalSlowdownMultiplier: 5,
+        isGlobalKillSwitchManual: false
+    });
+    const [isSafeguardSaving, setIsSafeguardSaving] = useState(false);
+    const [isSafeguardLoading, setIsSafeguardLoading] = useState(false);
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
@@ -598,6 +614,97 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleRestoreUser = async (userId: string | number) => {
+        const token = localStorage.getItem('token');
+        setIsRestoringDetail(true);
+        try {
+            const res = await fetch(`/api/admin/users/${userId}/restore`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                alert('User access restored.');
+                fetchDetailUser(userId as any);
+                fetchData();
+            }
+        } catch { }
+        setIsRestoringDetail(false);
+    };
+
+    // Safeguard Functions
+    const fetchSafeguard = async () => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/safeguard/status', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                setSafeguardStatus(data);
+                if (data.config && Object.keys(data.config).length > 0) {
+                    setSafeguardConfig(prev => ({ ...prev, ...data.config }));
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch safeguard status', e);
+        }
+    };
+
+    const handleSaveSafeguard = async () => {
+        const token = localStorage.getItem('token');
+        setIsSafeguardSaving(true);
+        try {
+            const res = await fetch('/api/admin/safeguard/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(safeguardConfig)
+            });
+            if (res.ok) {
+                alert('Safeguard configuration saved successfully.');
+                fetchSafeguard();
+            }
+        } catch (err) {
+            alert('Failed to save safeguard configuration.');
+        } finally {
+            setIsSafeguardSaving(false);
+        }
+    };
+
+    const handleUnjailUser = async (uid: string) => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/safeguard/unjail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: uid })
+            });
+            if (res.ok) {
+                fetchSafeguard();
+            }
+        } catch (err) { }
+    };
+
+    const handleToggleKillSwitch = async (active: boolean) => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch('/api/admin/safeguard/killswitch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ active })
+            });
+            if (res.ok) {
+                fetchSafeguard();
+            }
+        } catch (err) { }
+    };
+
+    // Poll safeguard when tab is active
+    useEffect(() => {
+        if (settingsTab !== 'safeguard' || activeTab !== 'settings') return;
+        fetchSafeguard();
+        const interval = setInterval(fetchSafeguard, 5000);
+        return () => clearInterval(interval);
+    }, [settingsTab, activeTab]);
+
+    const handleRestoreDeletion = async (userId: string | number) => {
+        const token = localStorage.getItem('token');
         if (!token) return;
         setIsRestoringDetail(true);
         try {
@@ -2277,6 +2384,13 @@ Return ONLY a valid JSON array. No conversational text.
                                         <Activity size={18} />
                                         System
                                     </button>
+                                    <button
+                                        onClick={() => setSettingsTab('safeguard')}
+                                        className={`flex-shrink-0 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2 ${settingsTab === 'safeguard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <Shield size={18} />
+                                        Safeguard
+                                    </button>
                                 </div>
 
                                 {/* Content Area */}
@@ -3060,6 +3174,207 @@ Return ONLY a valid JSON array. No conversational text.
                                                     <p className="text-slate-500 text-sm max-w-xs mx-auto">
                                                         Ensure your User Agent is unique to avoid rate limiting.
                                                     </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {settingsTab === 'safeguard' && (
+                                        <div className="space-y-8 animate-in fade-in duration-500">
+                                            {/* Header */}
+                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-14 h-14 bg-slate-900 rounded-[1.5rem] flex items-center justify-center text-white shadow-xl shadow-slate-200">
+                                                        <Shield size={28} />
+                                                    </div>
+                                                    <div>
+                                                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">API Safeguard & Health</h2>
+                                                        <p className="text-slate-400 font-medium">Protect server IP from Reddit bans and rate limits.</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <button
+                                                        onClick={fetchSafeguard}
+                                                        className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition-all active:scale-95"
+                                                    >
+                                                        <RefreshCw size={20} className={isSafeguardLoading ? 'animate-spin' : ''} />
+                                                    </button>
+                                                    <button
+                                                        onClick={handleSaveSafeguard}
+                                                        disabled={isSafeguardSaving}
+                                                        className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2"
+                                                    >
+                                                        {isSafeguardSaving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                                                        Save Configuration
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Real-time Status Cards */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div className={`p-6 rounded-[2.5rem] border flex items-center gap-5 transition-all ${safeguardStatus.state?.globalErrorCount > 0 ? 'bg-orange-50 border-orange-100' : 'bg-green-50/50 border-green-100'}`}>
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${safeguardStatus.state?.globalErrorCount > 0 ? 'bg-orange-600 text-white' : 'bg-green-600 text-white'}`}>
+                                                        <AlertTriangle size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-0.5">Global Errors</p>
+                                                        <p className={`text-2xl font-black ${safeguardStatus.state?.globalErrorCount > 10 ? 'text-orange-600' : 'text-slate-900'}`}>{safeguardStatus.state?.globalErrorCount || 0}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className={`p-6 rounded-[2.5rem] border flex items-center gap-5 transition-all ${safeguardStatus.state?.activeJailsCount > 0 ? 'bg-purple-50 border-purple-100' : 'bg-slate-50 border-slate-100'}`}>
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${safeguardStatus.state?.activeJailsCount > 0 ? 'bg-purple-600 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                                                        <Users size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-0.5">Users in Jail</p>
+                                                        <p className="text-2xl font-black text-slate-900">{safeguardStatus.state?.activeJailsCount || 0}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className={`p-6 rounded-[2.5rem] border flex items-center gap-5 transition-all ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'bg-red-50 border-red-100 animate-pulse' : 'bg-slate-50 border-slate-100'}`}>
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'bg-red-600 text-white' : 'bg-slate-300 text-slate-500'}`}>
+                                                        <Zap size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-0.5">Kill Switch</p>
+                                                        <p className={`text-2xl font-black ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'text-red-600' : 'text-slate-400'}`}>
+                                                            {safeguardStatus.state?.isGlobalKillSwitchActive ? 'ACTIVE' : 'IDLE'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                {/* Configuration Section */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <Settings size={20} className="text-slate-400" />
+                                                        <h3 className="font-bold text-slate-900">Slowdown & Jail Config</h3>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <label className="block">
+                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">User Max Errors</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
+                                                                value={safeguardConfig.userMaxErrors}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, userMaxErrors: parseInt(e.target.value) })}
+                                                                placeholder="5"
+                                                            />
+                                                            <p className="text-[10px] text-slate-400 mt-2 font-medium">Errors before user is jailed.</p>
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Jail Duration (Min)</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
+                                                                value={safeguardConfig.userJailDurationMinutes}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, userJailDurationMinutes: parseInt(e.target.value) })}
+                                                                placeholder="60"
+                                                            />
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Global Max Errors</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
+                                                                value={safeguardConfig.globalMaxErrors}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, globalMaxErrors: parseInt(e.target.value) })}
+                                                                placeholder="50"
+                                                            />
+                                                            <p className="text-[10px] text-slate-400 mt-2 font-medium">Errors before Global Scale-down.</p>
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Slowdown Factor</span>
+                                                            <input
+                                                                type="number"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 focus:outline-none transition-all font-bold"
+                                                                value={safeguardConfig.globalSlowdownMultiplier}
+                                                                onChange={(e) => setSafeguardConfig({ ...safeguardConfig, globalSlowdownMultiplier: parseInt(e.target.value) })}
+                                                                placeholder="5"
+                                                            />
+                                                            <p className="text-[10px] text-slate-400 mt-2 font-medium">Multiplier for request delays.</p>
+                                                        </label>
+                                                    </div>
+
+                                                    <div className="p-6 bg-red-50 border border-red-100 rounded-[2rem] space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className="text-sm font-black text-red-600 uppercase tracking-widest">Manual Kill Switch</p>
+                                                                <p className="text-xs text-red-400 font-bold">Stop ALL server-side Reddit calls immediately.</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleToggleKillSwitch(!safeguardStatus.state?.isGlobalKillSwitchActive)}
+                                                                className={`w-16 h-8 rounded-full p-1 transition-all ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'bg-red-600' : 'bg-slate-300'}`}
+                                                            >
+                                                                <div className={`w-6 h-6 bg-white rounded-full shadow-md transition-transform ${safeguardStatus.state?.isGlobalKillSwitchActive ? 'translate-x-8' : 'translate-x-0'}`} />
+                                                            </button>
+                                                        </div>
+                                                        <div className="text-[10px] text-red-500/70 font-bold leading-relaxed">
+                                                            Use this only during active API attacks or critical ban risk. Users of the Chrome Extension will NOT be affected as they fetch locally.
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Active Jails Section */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <Users size={20} className="text-slate-400" />
+                                                            <h3 className="font-bold text-slate-900">Abusive Users (Jailed)</h3>
+                                                        </div>
+                                                        <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black">{(safeguardStatus.activeJails?.length || 0)} ACTIVE</span>
+                                                    </div>
+
+                                                    <div className="bg-slate-50 rounded-[2rem] border border-slate-200 overflow-hidden">
+                                                        <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
+                                                            {safeguardStatus.activeJails?.length > 0 ? (
+                                                                <table className="w-full text-left border-collapse">
+                                                                    <thead className="bg-slate-100/50 sticky top-0 z-10">
+                                                                        <tr>
+                                                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">User ID</th>
+                                                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Errors</th>
+                                                                            <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-slate-100">
+                                                                        {safeguardStatus.activeJails.map((jail: any) => (
+                                                                            <tr key={jail.userId} className="group hover:bg-white transition-colors">
+                                                                                <td className="px-6 py-4">
+                                                                                    <div className="text-xs font-bold text-slate-700 truncate max-w-[120px]">{jail.userId}</div>
+                                                                                    <div className="text-[9px] text-slate-400 font-medium">Jailed: {new Date(jail.jailedAt).toLocaleTimeString()}</div>
+                                                                                </td>
+                                                                                <td className="px-6 py-4 text-center">
+                                                                                    <span className="px-2.5 py-1 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold">{jail.errorCount} / {safeguardConfig.userMaxErrors}</span>
+                                                                                </td>
+                                                                                <td className="px-6 py-4 text-right">
+                                                                                    <button
+                                                                                        onClick={() => handleUnjailUser(jail.userId)}
+                                                                                        className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-widest"
+                                                                                    >
+                                                                                        Unjail
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            ) : (
+                                                                <div className="p-12 text-center space-y-3">
+                                                                    <div className="w-12 h-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                                                                        <CheckCircle size={24} />
+                                                                    </div>
+                                                                    <p className="text-sm font-bold text-slate-900">No users are currently jailed.</p>
+                                                                    <p className="text-xs text-slate-400">All users are behaving within limits.</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

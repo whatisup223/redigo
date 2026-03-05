@@ -962,6 +962,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                 if (isMobile) {
                                   window.open(targetUrl, '_blank');
                                   showToast('فُتح Reddit! الصق الرد وانشر.', 'success');
+                                  // Mark as Pending so background sync tracks it
+                                  if (item.status?.toLowerCase() === 'draft' || !item.status) {
+                                    fetch('/api/item/status', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: item.id || item._id, status: 'Pending' })
+                                    }).catch(() => { });
+                                    setPendingItems(prev => prev.map(i => (i.id || i._id) === (item.id || item._id) ? { ...i, status: 'Pending' } : i));
+                                  }
                                   return;
                                 }
 
@@ -981,7 +990,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                   showToast('Sending to Extension...', 'success');
                                 } else {
                                   window.open(targetUrl, '_blank');
-                                  if (item.status?.toLowerCase() === 'draft') {
+                                  if (item.status?.toLowerCase() === 'draft' || !item.status) {
                                     fetch('/api/item/status', {
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },

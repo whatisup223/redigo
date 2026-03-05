@@ -746,6 +746,15 @@ export const Comments: React.FC = () => {
       const assistantButton = document.getElementById('redigo-assistant-button');
       if (assistantButton) assistantButton.click();
       showToast('Ready in Assistant! Copy & Reply on Reddit.', 'success');
+
+      // Mark as Pending in DB so the auto-sync can track it
+      if (generatedReply?.id) {
+        fetch('/api/item/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: generatedReply.id, status: 'Pending' })
+        }).catch(() => { });
+      }
       return;
     }
 
