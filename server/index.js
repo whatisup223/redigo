@@ -1493,9 +1493,11 @@ const generalAuth = async (req, res, next) => {
     '/api/support/tickets',
   ];
 
-  const isProtected = protectedPathPrefixes.some(prefix => path.startsWith(prefix));
+  const isProtected = protectedPathPrefixes.some(prefix => path.startsWith(prefix.replace(/\/$/, '')));
   if (isProtected && !decodedUser) {
-    return res.status(401).json({ error: 'Authentication required. Please log in.' });
+    const reason = !authHeader ? 'Missing Authorization header' : 'Invalid or expired token';
+    console.log(`[AUTH 401] Blocked access to ${path}. Reason: ${reason}`);
+    return res.status(401).json({ error: `Authentication required. ${reason}. Please log in.` });
   }
 
   next();

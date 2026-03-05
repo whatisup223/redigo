@@ -98,10 +98,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
 
                 console.log('[Auth] User synced with server:', freshUser.plan);
-            } else if (response.status === 403) {
+            } else if (response.status === 401 || response.status === 403) {
                 const data = await response.json();
-                if (data.error && (data.error.toLowerCase().includes('banned') || data.error.toLowerCase().includes('suspended'))) {
+                console.warn('[Auth] Sync failed with status:', response.status, data);
+                // If it's a 401 or a Ban/Suspension, log out because the session is invalid
+                if (response.status === 401 || (data.error && (data.error.toLowerCase().includes('banned') || data.error.toLowerCase().includes('suspended')))) {
                     logout();
+                    if (response.status === 401) {
+                        window.location.href = '/login?error=session_expired';
+                    } else {
+                        window.location.href = '/login?error=' + (data.error.toLowerCase().includes('banned') ? 'banned' : 'suspended');
+                    }
                 }
             }
         } catch (error) {
