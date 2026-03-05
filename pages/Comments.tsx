@@ -91,6 +91,57 @@ export const Comments: React.FC = () => {
   const { user, updateUser, syncUser } = useAuth();
   const replyCardRef = useRef<HTMLDivElement>(null);
   const isForcedRef = useRef(false);
+  type SafeguardError = { type: 'manual_kill_switch' | 'global_auto' | 'user_jail' | 'generic'; message: string; lockedUntil: number | null; };
+  const [searchError, setSearchErrorRaw] = useState<SafeguardError | null>(null);
+  const [safeguardCountdown, setSafeguardCountdown] = useState<number>(0);
+
+  // Persist safeguard state across refreshes
+  const setSearchError = (errData: SafeguardError | null) => {
+    setSearchErrorRaw(errData);
+    if (errData?.lockedUntil) {
+      localStorage.setItem('safeguard_locked_until', errData.lockedUntil.toString());
+      localStorage.setItem('safeguard_type', errData.type);
+      localStorage.setItem('safeguard_message', errData.message);
+    } else if (!errData) {
+      localStorage.removeItem('safeguard_locked_until');
+      localStorage.removeItem('safeguard_type');
+      localStorage.removeItem('safeguard_message');
+    }
+  };
+
+  // Restore safeguard block from localStorage on page refresh
+  useEffect(() => {
+    const lockedUntil = localStorage.getItem('safeguard_locked_until');
+    const type = localStorage.getItem('safeguard_type') as any;
+    const message = localStorage.getItem('safeguard_message');
+    if (lockedUntil && type && message) {
+      const until = parseInt(lockedUntil);
+      if (until > Date.now()) {
+        setSearchErrorRaw({ type, message, lockedUntil: until });
+      } else {
+        localStorage.removeItem('safeguard_locked_until');
+        localStorage.removeItem('safeguard_type');
+        localStorage.removeItem('safeguard_message');
+      }
+    }
+  }, []);
+
+  // Live countdown interval — ticks every second
+  useEffect(() => {
+    if (!searchError?.lockedUntil) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((searchError.lockedUntil! - Date.now()) / 1000));
+      setSafeguardCountdown(remaining);
+      if (remaining <= 0) {
+        setSearchError(null);
+        setSafeguardCountdown(0);
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [searchError]);
+
   const [posts, setPosts] = useState<any[]>([]);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -100,7 +151,6 @@ export const Comments: React.FC = () => {
   const [searchKeywords, setSearchKeywords] = useState('');
   const [generatedReply, setGeneratedReply] = useState<GeneratedReply | null>(null);
   const [editedComment, setEditedComment] = useState('');
-  const [searchError, setSearchError] = useState<string | null>(null);
   const [commentImagePrompt, setCommentImagePrompt] = useState('');
   const [commentImageUrl, setCommentImageUrl] = useState('');
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -945,9 +995,8 @@ export const Comments: React.FC = () => {
         if (!canUseExtension) {
           if (subRes.status === 423) {
             const errData = await subRes.json();
-            const errMsg = errData.error || 'Reddit access restricted by safeguards.';
-            setSearchError(errMsg);
-            showToast(errMsg, 'error');
+            setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Reddit access restricted by safeguards.', lockedUntil: errData.lockedUntil || null });
+            showToast(errData.error || 'Reddit access restricted by safeguards.', 'error');
             setIsFetching(false);
             setReloadCooldown(0);
             return;
@@ -955,7 +1004,7 @@ export const Comments: React.FC = () => {
 
           const errData = await subRes.json();
           const errMsg = `${errData.message || 'Subreddit not found or inaccessible.'} [${subRes.status}]`;
-          setSearchError(errMsg);
+          setSearchError({ type: 'generic', message: errMsg, lockedUntil: null });
           showToast(errMsg, 'error');
           setIsFetching(false);
           setReloadCooldown(0);
@@ -1040,7 +1089,7 @@ export const Comments: React.FC = () => {
 
             if (response.status === 404 || response.status === 403) {
               const errData = await response.json();
-              setSearchError(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`);
+              setSearchError({ type: 'generic', message: `${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`, lockedUntil: null });
               showToast(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`, 'error');
               setIsFetching(false);
               setReloadCooldown(0);
@@ -1050,7 +1099,7 @@ export const Comments: React.FC = () => {
             if (!response.ok) throw new Error('Server fallback failed');
             data = await response.json();
           } else {
-            setSearchError(`${extErr.message || 'Extension fetch failed'} [EXT]`);
+            setSearchError({ type: 'generic', message: `${extErr.message || 'Extension fetch failed'} [EXT]`, lockedUntil: null });
             throw extErr;
           }
         }
@@ -1060,7 +1109,7 @@ export const Comments: React.FC = () => {
 
         if (response.status === 423) {
           const errData = await response.json();
-          setSearchError(errData.error || 'Request blocked by safeguards.');
+          setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Request blocked by safeguards.', lockedUntil: errData.lockedUntil || null });
           showToast(errData.error || 'Request blocked by safeguards.', 'error');
           setIsFetching(false);
           setReloadCooldown(0);
@@ -1073,7 +1122,7 @@ export const Comments: React.FC = () => {
         }
         if (response.status === 404 || response.status === 403) {
           const errData = await response.json();
-          setSearchError(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`);
+          setSearchError({ type: 'generic', message: `${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`, lockedUntil: null });
           showToast(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`, 'error');
           setIsFetching(false);
           setReloadCooldown(0);
@@ -1119,6 +1168,21 @@ export const Comments: React.FC = () => {
     if (!user?.id) return;
     fetchBrandProfile(user.id).then(p => { if (p?.brandName) setBrandProfile(p); });
   }, [user]);
+
+  // Pre-compute safeguard card display values (must be outside JSX)
+  const sgIsManual = searchError?.type === 'manual_kill_switch';
+  const sgIsJail = searchError?.type === 'user_jail';
+  const sgMins = Math.floor(safeguardCountdown / 60);
+  const sgSecs = safeguardCountdown % 60;
+  const sgCountdownStr = safeguardCountdown > 0 ? `${sgMins}:${sgSecs.toString().padStart(2, '0')}` : null;
+  const sgBg = sgIsManual ? 'bg-amber-50 border-amber-200' : sgIsJail ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200';
+  const sgIconBg = sgIsManual ? 'bg-amber-100 text-amber-600' : sgIsJail ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600';
+  const sgLabelColor = sgIsManual ? 'text-amber-500' : sgIsJail ? 'text-red-500' : 'text-orange-500';
+  const sgTitleColor = sgIsManual ? 'text-amber-900' : sgIsJail ? 'text-red-900' : 'text-orange-900';
+  const sgMsgColor = sgIsManual ? 'text-amber-700' : sgIsJail ? 'text-red-700' : 'text-orange-700';
+  const sgCdBg = sgIsManual ? 'bg-amber-100' : sgIsJail ? 'bg-red-100' : 'bg-orange-100';
+  const sgCdLabelColor = sgIsManual ? 'text-amber-400' : sgIsJail ? 'text-red-400' : 'text-orange-400';
+  const sgCdNumColor = sgIsManual ? 'text-amber-700' : sgIsJail ? 'text-red-700' : 'text-orange-700';
 
   return (
     <>
@@ -1530,14 +1594,35 @@ export const Comments: React.FC = () => {
             )}
 
             {searchError && !isFetching && (
-              <div className="flex flex-col items-center justify-center py-20 bg-red-50 rounded-[3rem] border border-red-100 shadow-sm space-y-4">
-                <div className="w-20 h-20 bg-red-100 text-red-600 rounded-3xl flex items-center justify-center">
-                  <AlertTriangle size={40} />
+              <div className={`flex flex-col items-center justify-center py-16 rounded-[3rem] border shadow-sm space-y-5 px-8 text-center ${sgBg}`}>
+                <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl ${sgIconBg}`}>
+                  {sgIsManual ? '🔐' : sgIsJail ? '⛔' : '🛡️'}
                 </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-bold text-red-900">Search Error</h3>
-                  <p className="text-red-700 text-sm font-medium">{searchError}</p>
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgLabelColor}`}>
+                    {sgIsManual ? 'System Protected by Admin' : sgIsJail ? 'Account Temporarily Restricted' : 'System Safeguard Active'}
+                  </p>
+                  <h3 className={`text-lg font-black mb-2 ${sgTitleColor}`}>
+                    {sgIsManual ? 'Reddit Access Paused' : sgIsJail ? 'Cooling Down...' : 'Auto-Protection Triggered'}
+                  </h3>
+                  <p className={`text-sm font-medium max-w-xs leading-relaxed ${sgMsgColor}`}>
+                    {sgIsManual
+                      ? 'The administrator has temporarily paused Reddit access for system maintenance and protection. Our team is actively working on it.'
+                      : sgIsJail
+                        ? 'Your account was temporarily restricted due to excessive errors. This protects your Reddit account from bans.'
+                        : 'Redigo detected unusual Reddit API activity and activated automatic protection to prevent potential bans.'}
+                  </p>
                 </div>
+                {sgCountdownStr ? (
+                  <div className={`flex flex-col items-center px-8 py-4 rounded-2xl ${sgCdBg}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgCdLabelColor}`}>Resuming in</p>
+                    <p className={`text-4xl font-black tabular-nums ${sgCdNumColor}`}>{sgCountdownStr}</p>
+                  </div>
+                ) : sgIsManual ? (
+                  <div className="px-6 py-3 bg-amber-100 rounded-2xl">
+                    <p className="text-amber-600 text-xs font-black uppercase tracking-widest">Indefinite — Admin Control</p>
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -1711,10 +1796,10 @@ export const Comments: React.FC = () => {
                 )}
               </div>
             ))}
-          </div>
+          </div >
 
           {/* Assistant Panel */}
-          <div className="xl:col-span-4">
+          < div className="xl:col-span-4" >
             <div className="sticky top-10 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[calc(100vh-120px)] min-h-[600px]">
               <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">

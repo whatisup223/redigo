@@ -832,14 +832,23 @@ const checkSafeguard = (userId) => {
 
   // 1a. Manual Global Kill Switch
   if (config.isGlobalKillSwitchManual) {
-    throw new Error('Reddit access is temporarily restricted by the Administrator. Please wait until the restriction is lifted.');
+    const err = new Error('Reddit access is temporarily restricted by the Administrator for system protection. Our team is actively working on it.');
+    err.restrictionType = 'manual_kill_switch';
+    err.lockedUntil = null;
+    throw err;
   }
 
   // 1b. Auto Global Kill Switch (System-wide error threshold reached)
   if (safeguardState.isGlobalKillSwitchActive) {
-    const elapsedMinutes = (Date.now() - (safeguardState.lastGlobalErrorAt || Date.now())) / (1000 * 60);
-    const globalRemaining = Math.max(1, Math.ceil(30 - elapsedMinutes));
-    throw new Error(`Reddit access is temporarily restricted by Redigo Safeguards for system safety (${globalRemaining} minutes remaining).`);
+    const lastErrorAt = safeguardState.lastGlobalErrorAt || Date.now();
+    const lockedUntil = lastErrorAt + (30 * 60 * 1000);
+    const remaining = Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000));
+    const err = new Error(`Reddit access is temporarily restricted by Redigo Safeguards for system safety (${remaining} minutes remaining).`);
+    err.restrictionType = 'global_auto';
+    err.jailedAt = lastErrorAt;
+    err.durationMinutes = 30;
+    err.lockedUntil = lockedUntil;
+    throw err;
   }
 
   // 2. Individual User Jail Check
@@ -847,8 +856,14 @@ const checkSafeguard = (userId) => {
   if (userJail && userJail.jailedAt) {
     const elapsedMinutes = (Date.now() - userJail.jailedAt) / (1000 * 60);
     if (elapsedMinutes < config.userJailDurationMinutes) {
+      const lockedUntil = userJail.jailedAt + (config.userJailDurationMinutes * 60 * 1000);
       const remaining = Math.ceil(config.userJailDurationMinutes - elapsedMinutes);
-      throw new Error(`Your account is temporarily suspended from Reddit actions due to excessive errors (${remaining} minutes remaining). Please wait or contact support.`);
+      const err = new Error(`Your account has been temporarily restricted due to excessive errors (${remaining} minutes remaining). Please wait or contact support.`);
+      err.restrictionType = 'user_jail';
+      err.jailedAt = userJail.jailedAt;
+      err.durationMinutes = config.userJailDurationMinutes;
+      err.lockedUntil = lockedUntil;
+      throw err;
     } else {
       // Jail time expired, clear but keep some history to prevent immediate re-jail
       safeguardState.userJails.set(uid, { errorCount: 1, lastErrorAt: Date.now() });
@@ -5746,7 +5761,7 @@ app.get('/api/subreddit/about', async (req, res) => {
     try {
       checkSafeguard('system');
     } catch (e) {
-      return res.status(423).json({ error: e.message });
+      return res.status(423).json({ error: e.message, restrictionType: e.restrictionType || 'unknown', jailedAt: e.jailedAt || null, durationMinutes: e.durationMinutes || null, lockedUntil: e.lockedUntil || null });
     }
 
     const response = await fetch(`https://www.reddit.com/r/${cleanName}/about.json`, {
