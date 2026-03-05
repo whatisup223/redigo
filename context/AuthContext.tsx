@@ -57,7 +57,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+    const [token, setToken] = useState<string | null>(() => {
+        const t = localStorage.getItem('token');
+        return (t === 'null' || t === 'undefined') ? null : t;
+    });
 
     const logout = useCallback(() => {
         localStorage.removeItem('token');

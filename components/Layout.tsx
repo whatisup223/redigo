@@ -65,13 +65,17 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const fetchAssistantItems = async () => {
     if (!user?.id) return;
     setLoadingItems(true);
+    const activeToken = token || localStorage.getItem('token');
+    if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
+    const authHeaders: HeadersInit = { 'Authorization': `Bearer ${activeToken}` };
+
     try {
       const [postsRes, repliesRes] = await Promise.all([
-        fetch(`/api/user/posts?userId=${user.id}`), // Use standard posts endpoint
-        fetch(`/api/user/replies?userId=${user.id}`) // Use standard replies endpoint
+        fetch(`/api/user/posts?userId=${user.id}`, { headers: authHeaders }),
+        fetch(`/api/user/replies?userId=${user.id}`, { headers: authHeaders })
       ]);
-      const posts = await postsRes.json();
-      const replies = await repliesRes.json();
+      const posts = postsRes.ok ? await postsRes.json() : [];
+      const replies = repliesRes.ok ? await repliesRes.json() : [];
 
       const combined = [
         ...(Array.isArray(posts) ? posts : [])
@@ -90,10 +94,16 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   };
 
   const handleDismiss = async (id: string, type: 'post' | 'reply') => {
+    const activeToken = token || localStorage.getItem('token');
+    if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
+
     try {
       await fetch('/api/reddit/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${activeToken}`
+        },
         body: JSON.stringify({ userId: user?.id, id, type, redditId: 'deleted' })
       });
       setPendingItems(pendingItems.filter(i => (i.id || i._id) !== id));
@@ -107,12 +117,16 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     const userId = user?.id || (user as any)?._id;
     if (!userId || isSyncing) return;
     setIsSyncing(true);
+    const activeToken = token || localStorage.getItem('token');
+    if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
+    const authHeaders: HeadersInit = { 'Authorization': `Bearer ${activeToken}` };
+
     try {
       const ts = Date.now();
       // Force fresh Reddit fetch — invalidates cache
       await Promise.all([
-        fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`),
-        fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`)
+        fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}&forceRefresh=1`, { headers: authHeaders }),
+        fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}&forceRefresh=1`, { headers: authHeaders })
       ]);
 
       // Snapshot count before refresh
@@ -144,7 +158,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
             stillStuckPending.forEach(item => {
               fetch('/api/item/status', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${activeToken}`
+                },
                 body: JSON.stringify({ id: item.id || item._id, status: 'Draft' })
               }).catch(() => { });
             });
@@ -187,7 +204,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, updateUser } = useAuth(); // Added updateUser
+  const { user, token, logout, updateUser } = useAuth(); // Added token
   const sidebarRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const [isExtensionMissing, setIsExtensionMissing] = React.useState(false);
@@ -273,11 +290,15 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     const poll = async () => {
       if (cancelled) return;
 
+      const activeToken = token || localStorage.getItem('token');
+      if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
+      const authHeaders: HeadersInit = { 'Authorization': `Bearer ${activeToken}` };
+
       try {
         const ts = Date.now();
         const [postsRes, repliesRes] = await Promise.all([
-          fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}`),
-          fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}`)
+          fetch(`/api/user/posts/sync?userId=${userId}&_=${ts}`, { headers: authHeaders }),
+          fetch(`/api/user/replies/sync?userId=${userId}&_=${ts}`, { headers: authHeaders })
         ]);
 
         const posts = postsRes.ok ? await postsRes.json() : [];
@@ -359,13 +380,17 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   useEffect(() => {
     if (!user?.id) return;
     const fetchPendingCount = async () => {
+      const activeToken = token || localStorage.getItem('token');
+      if (!activeToken || activeToken === 'null' || activeToken === 'undefined') return;
+      const authHeaders: HeadersInit = { 'Authorization': `Bearer ${activeToken}` };
+
       try {
         const [postsRes, repliesRes] = await Promise.all([
-          fetch(`/api/user/posts?userId=${user.id}`),
-          fetch(`/api/user/replies?userId=${user.id}`)
+          fetch(`/api/user/posts?userId=${user.id}`, { headers: authHeaders }),
+          fetch(`/api/user/replies?userId=${user.id}`, { headers: authHeaders })
         ]);
-        const posts = await postsRes.json();
-        const replies = await repliesRes.json();
+        const posts = postsRes.ok ? await postsRes.json() : [];
+        const replies = repliesRes.ok ? await repliesRes.json() : [];
         const pendingPosts = (Array.isArray(posts) ? posts : []).filter((p: any) => p.status?.toLowerCase() === 'pending' || p.status?.toLowerCase() === 'draft').length;
         const pendingReplies = (Array.isArray(replies) ? replies : []).filter((r: any) => r.status?.toLowerCase() === 'pending' || r.status?.toLowerCase() === 'draft').length;
         setPendingCount(pendingPosts + pendingReplies);
@@ -966,7 +991,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                   if (item.status?.toLowerCase() === 'draft' || !item.status) {
                                     fetch('/api/item/status', {
                                       method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                                      },
                                       body: JSON.stringify({ id: item.id || item._id, status: 'Pending' })
                                     }).catch(() => { });
                                     setPendingItems(prev => prev.map(i => (i.id || i._id) === (item.id || item._id) ? { ...i, status: 'Pending' } : i));
@@ -993,7 +1021,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                   if (item.status?.toLowerCase() === 'draft' || !item.status) {
                                     fetch('/api/item/status', {
                                       method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                                      },
                                       body: JSON.stringify({ id: item.id || item._id, status: 'Pending' })
                                     }).catch(console.error);
                                     setPendingItems(prev => prev.map(i => (i.id || i._id) === (item.id || item._id) ? { ...i, status: 'Pending' } : i));
