@@ -905,10 +905,25 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                             <button
                               onClick={async () => {
                                 const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+                                const isPost = item.type === 'post';
 
-                                // PC direct deploy
+                                // Build correct target URL:
+                                // - Post  → submit page
+                                // - Reply → thread page (postUrl, or built from subreddit+postId)
+                                let targetUrl: string;
+                                if (isPost) {
+                                  targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit`;
+                                } else {
+                                  if (item.postUrl && !item.postUrl.includes('/submit')) {
+                                    targetUrl = item.postUrl.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com');
+                                  } else if (item.subreddit && item.postId) {
+                                    targetUrl = `https://www.reddit.com/r/${item.subreddit}/comments/${item.postId}/`;
+                                  } else {
+                                    targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/`;
+                                  }
+                                }
+
                                 if (!isMobile && !isExtensionMissing) {
-                                  const targetUrl = item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : (item.postUrl || '#');
                                   window.postMessage({
                                     source: 'REDIGO_WEB_APP',
                                     type: 'REDIGO_DEPLOY',
@@ -917,15 +932,13 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                                     subreddit: item.subreddit,
                                     imageUrl: item.imageUrl ? new URL(item.imageUrl, window.location.origin).href : undefined,
                                     itemId: item.id || item._id,
-                                    isPost: item.type === 'post',
+                                    isPost: isPost,
+                                    parentId: !isPost ? (item.redditCommentId || item.postId || undefined) : undefined,
                                     targetUrl: targetUrl
                                   }, '*');
-
                                   showToast('Sending to Extension...', 'success');
                                 } else {
-                                  // Mobile or manual fallback
-                                  window.open(item.type === 'post' ? `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit` : item.postUrl, '_blank');
-
+                                  window.open(targetUrl, '_blank');
                                   if (item.status?.toLowerCase() === 'draft') {
                                     fetch('/api/item/status', {
                                       method: 'POST',
@@ -941,6 +954,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
                             >
                               {!isMobile && !isExtensionMissing ? <><Zap size={14} fill="currentColor" /> Deploy</> : <><ExternalLink size={14} /> Open Reddit</>}
                             </button>
+
                           </div>
                         </div>
                       );
