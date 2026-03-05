@@ -31,24 +31,32 @@ interface LibraryItem {
     postContent?: string;
     comment?: string;
     subreddit: string;
-    status: 'Draft' | 'Posted' | 'Failed';
+    status: 'Draft' | 'Posted' | 'Failed' | 'Pending' | 'Live' | 'Sent';
     createdAt: string;
     imageUrl?: string;
     postUrl?: string;
 }
 
 const StatusBadge = ({ status }: { status: string }) => {
-    const styles = {
-        'Posted': 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        'Draft': 'bg-orange-50 text-orange-600 border-orange-100',
-        'Failed': 'bg-red-50 text-red-600 border-red-100',
-    }[status] || 'bg-slate-50 text-slate-600 border-slate-100';
+    const s = (status || '').toLowerCase();
 
-    const Icon = {
-        'Posted': CheckCircle,
-        'Draft': Clock,
-        'Failed': AlertCircle,
-    }[status] || Clock;
+    // Grouping related statuses for visual consistency
+    const isSuccess = ['posted', 'live', 'sent'].includes(s);
+    const isPending = s === 'pending';
+    const isDraft = s === 'draft';
+    const isFailed = s === 'failed';
+
+    const styles = isSuccess
+        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+        : isPending
+            ? 'bg-amber-50 text-amber-600 border-amber-100' // Pending: slightly different yellow
+            : isDraft
+                ? 'bg-orange-50 text-orange-600 border-orange-100'
+                : isFailed
+                    ? 'bg-red-50 text-red-600 border-red-100'
+                    : 'bg-slate-50 text-slate-600 border-slate-100';
+
+    const Icon = isSuccess ? CheckCircle : isFailed ? AlertCircle : Clock;
 
     return (
         <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider ${styles}`}>
@@ -63,7 +71,7 @@ export const Library: React.FC = () => {
     const [items, setItems] = useState<LibraryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'All' | 'Draft' | 'Posted' | 'Failed'>('All');
+    const [statusFilter, setStatusFilter] = useState<'All' | 'Draft' | 'Posted' | 'Failed' | 'Pending' | 'Live' | 'Sent'>('All');
     const [typeFilter, setTypeFilter] = useState<'All' | 'post' | 'reply'>('All');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -166,9 +174,9 @@ export const Library: React.FC = () => {
 
     const stats = {
         total: items.length,
-        posted: items.filter(i => i.status === 'Posted').length,
+        posted: items.filter(i => ['Posted', 'Live', 'Sent'].includes(i.status)).length,
         drafts: items.filter(i => i.status === 'Draft' || !i.status).length,
-        successRate: items.length > 0 ? Math.round((items.filter(i => i.status === 'Posted').length / items.length) * 100) : 100
+        successRate: items.length > 0 ? Math.round((items.filter(i => ['Posted', 'Live', 'Sent'].includes(i.status)).length / items.length) * 100) : 100
     };
 
     return (
@@ -233,14 +241,14 @@ export const Library: React.FC = () => {
                         </div>
 
                         {/* Status Filter */}
-                        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-                            {['All', 'Posted', 'Draft', 'Failed'].map(status => (
+                        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100 flex-wrap">
+                            {['All', 'Posted', 'Pending', 'Draft', 'Failed'].map(status => (
                                 <button
                                     key={status}
                                     onClick={() => setStatusFilter(status as any)}
                                     className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${statusFilter === status ? 'bg-white text-orange-600 shadow-sm border border-orange-100' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
-                                    {status}
+                                    {status === 'Posted' ? 'Published' : status}
                                 </button>
                             ))}
                         </div>
@@ -406,26 +414,61 @@ export const Library: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={async () => {
-                                                const originalStatus = item.status;
-                                                // Repost Logic: Toggle status to Draft so it appears in the Assistant
-                                                if (originalStatus === 'Posted') {
+                                                const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+                                                const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
+                                                const isPost = item.type === 'post';
+
+                                                // Build target URL
+                                                let targetUrl = '';
+                                                let missingUrl = false;
+                                                if (isPost) {
+                                                    targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit`;
+                                                } else {
+                                                    if (item.postUrl && !item.postUrl.includes('/submit')) {
+                                                        targetUrl = item.postUrl.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com');
+                                                    } else if (item.subreddit && item.postUrl) { // handle postId if stored as part of URL
+                                                        targetUrl = item.postUrl;
+                                                    } else {
+                                                        missingUrl = true;
+                                                    }
+                                                }
+
+                                                if (missingUrl && !isPost) {
+                                                    showToast('⚠️ No thread URL found for this reply.', 'error');
+                                                    return;
+                                                }
+
+                                                // Deploy Logic
+                                                if (isMobile) {
+                                                    window.open(targetUrl, '_blank');
+                                                    showToast('Opened Reddit! Paste your content.', 'success');
+                                                } else if (hasExtension) {
+                                                    window.postMessage({
+                                                        source: 'REDIGO_WEB_APP',
+                                                        type: 'REDIGO_DEPLOY',
+                                                        text: item.postContent || item.comment || '',
+                                                        title: item.postTitle || '',
+                                                        imageUrl: item.imageUrl,
+                                                        itemId: item.id || item._id,
+                                                        isPost: isPost,
+                                                        targetUrl: targetUrl
+                                                    }, '*');
+                                                    showToast('Sending to Extension...', 'success');
+                                                } else {
+                                                    window.open(targetUrl, '_blank');
+                                                    showToast('Opened Reddit! Please paste your content.', 'success');
+                                                }
+
+                                                // Mark as Pending in DB for sync tracking if it was a Draft
+                                                if (item.status?.toLowerCase() === 'draft') {
                                                     try {
                                                         await fetch('/api/item/status', {
                                                             method: 'POST',
                                                             headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({ id: item.id || item._id, status: 'Draft' })
+                                                            body: JSON.stringify({ id: item.id || item._id, status: 'Pending' })
                                                         });
-                                                        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'Draft' } : i));
-                                                    } catch (err) {
-                                                        showToast('Failed to prepare for repost', 'error');
-                                                        return;
-                                                    }
-                                                }
-
-                                                const assistantButton = document.getElementById('redigo-assistant-button');
-                                                if (assistantButton) {
-                                                    assistantButton.click();
-                                                    showToast(originalStatus === 'Posted' ? 'Preparing Repost...' : 'Item loaded in Assistant!', 'success');
+                                                        setItems(prev => prev.map(i => (i.id || i._id) === (item.id || item._id) ? { ...i, status: 'Pending' } : i));
+                                                    } catch (err) { }
                                                 }
                                             }}
                                             className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95"
