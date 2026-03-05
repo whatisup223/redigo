@@ -218,11 +218,19 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Effect 2: Exponential Backoff Polling when there are pending items
-  // Works on mobile and browser without extension (fallback)
+  // Effect 2: Auto Polling — fallback for mobile/browser without extension
+  // Stabilized counter to avoid re-triggering the effect on every render
+  const pendingPollCountRef = React.useRef(0);
+  const pendingPollCount = pendingItems.filter(i =>
+    ['pending', 'sent'].includes((i.status || '').toLowerCase())
+  ).length;
+  // Only update ref when value actually changes (prevents infinite re-renders)
+  if (pendingPollCountRef.current !== pendingPollCount) {
+    pendingPollCountRef.current = pendingPollCount;
+  }
+
   useEffect(() => {
     const userId = user?.id || (user as any)?._id;
-    // Only start polling if there are pending/sent items and we have a user
     const hasPending = pendingItems.some(i =>
       ['pending', 'sent', 'draft'].includes((i.status || '').toLowerCase())
     );
@@ -247,70 +255,56 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
         const replies = repliesRes.ok ? await repliesRes.json() : [];
         const all: any[] = [...(Array.isArray(posts) ? posts : []), ...(Array.isArray(replies) ? replies : [])];
 
-        // Find any pending items that are now confirmed on Reddit
-        const confirmedIds = new Set<string>();
-        setPendingItems(prev => {
-          for (const item of prev) {
-            const itemId = item.id || item._id;
-            const synced = all.find(r =>
-              (r.id || r._id) === itemId &&
-              ['live', 'sent', 'active'].includes((r.status || '').toLowerCase())
-            );
-            if (synced) confirmedIds.add(itemId);
+        // Build a normalized live-map with String() comparison — fixes ObjectId vs string mismatch
+        const liveMap = new Map<string, true>();
+        for (const r of all) {
+          if (['live', 'sent', 'active'].includes((r.status || '').toLowerCase())) {
+            if (r.id) liveMap.set(String(r.id), true);
+            if (r._id) liveMap.set(String(r._id), true);
           }
+        }
 
-          if (confirmedIds.size > 0) {
-            showToast(`✅ تم التأكيد! تم كشف نشرك على Reddit.`, 'success');
-            setPendingCount(prev2 => Math.max(0, prev2 - confirmedIds.size));
-            return prev.filter(i => !confirmedIds.has(i.id || i._id));
-          }
-          return prev;
-        });
+        if (liveMap.size > 0) {
+          setPendingItems(prev => {
+            const confirmedIds = new Set<string>();
+            for (const item of prev) {
+              const idStr = String(item.id || item._id || '');
+              const mongoStr = String(item._id || '');
+              if (liveMap.has(idStr) || (mongoStr && liveMap.has(mongoStr))) {
+                confirmedIds.add(item.id || item._id);
+              }
+            }
+
+            if (confirmedIds.size > 0) {
+              showToast(`✅ تم التأكيد! تم كشف نشرك على Reddit.`, 'success');
+              setPendingCount(prev2 => Math.max(0, prev2 - confirmedIds.size));
+              return prev.filter(i => !confirmedIds.has(i.id || i._id));
+            }
+            return prev;
+          });
+        }
 
       } catch (_) { /* Network error — continue polling */ }
 
       attempt++;
-
       if (cancelled) return;
 
       if (attempt >= delays.length) {
-        // All attempts exhausted — revert still-pending items back to Draft
-        setPendingItems(prev => {
-          const stillPending = prev.filter(i =>
-            ['pending', 'sent'].includes((i.status || '').toLowerCase())
-          );
-          if (stillPending.length > 0) {
-            stillPending.forEach(item => {
-              fetch('/api/item/status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: item.id || item._id, status: 'Draft' })
-              }).catch(() => { });
-            });
-            showToast('⚠️ لم نتأكد من النشر. تحقق من Analytics لو نشرته.', 'error');
-            return prev.map(i =>
-              ['pending', 'sent'].includes((i.status || '').toLowerCase())
-                ? { ...i, status: 'Draft' }
-                : i
-            );
-          }
-          return prev;
-        });
-        return; // Stop polling
+        // All attempts exhausted — just warn, don't forcefully revert to Draft
+        showToast('⚠️ لم نتأكد من النشر تلقائياً. اضغط Sync للتحقق يدوياً.', 'error');
+        return;
       }
 
-      // Schedule next attempt with exponential backoff
       timeoutId = setTimeout(poll, delays[attempt]);
     };
 
-    // Start first poll after 30 seconds
     timeoutId = setTimeout(poll, delays[0]);
-
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [pendingItems.filter(i => ['pending', 'sent'].includes((i.status || '').toLowerCase())).length, user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPollCountRef.current, user?.id]);
 
 
 

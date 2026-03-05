@@ -165,3 +165,41 @@ window.addEventListener('message', (event) => {
         }
     }
 });
+
+// -- INBOUND: Relay Chrome Extension messages ? React app --------------------
+// background.js uses chrome.tabs.sendMessage to notify the dashboard.
+// Since React can only receive window.postMessage, we relay here.
+if (isContextValid()) {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (!message || !message.type) return;
+
+        // Relay REDIGO_POST_CONFIRMED ? React removes item from list immediately
+        if (message.type === 'REDIGO_POST_CONFIRMED') {
+            window.postMessage({
+                source: 'REDIGO_EXT',
+                type: 'REDIGO_POST_CONFIRMED',
+                itemId: message.itemId,
+                itemType: message.itemType
+            }, '*');
+            sendResponse({ relayed: true });
+        }
+    });
+}
+
+
+// -- INBOUND RELAY: Chrome Extension -> React app
+// background.js uses chrome.tabs.sendMessage; React needs window.postMessage.
+if (typeof isContextValid === 'function' && isContextValid()) {
+    chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+        if (!message || !message.type) return;
+        if (message.type === 'REDIGO_POST_CONFIRMED') {
+            window.postMessage({
+                source: 'REDIGO_EXT',
+                type: 'REDIGO_POST_CONFIRMED',
+                itemId: message.itemId,
+                itemType: message.itemType
+            }, '*');
+            sendResponse({ relayed: true });
+        }
+    });
+}

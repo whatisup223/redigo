@@ -176,44 +176,45 @@ chrome.webRequest.onCompleted.addListener((details) => {
     if (details.method === 'POST' && (details.url.includes('/api/comment') || details.url.includes('/api/submit'))) {
         if (details.statusCode === 200 || details.statusCode === 201) {
             chrome.storage.local.get(['redigo_assistant_draft', 'redigo_user_id', 'redigo_token'], (res) => {
-                if (res.redigo_assistant_draft && res.redigo_user_id && res.redigo_token) {
-                    const payload = {
-                        itemId: res.redigo_assistant_draft.itemId,
-                        userId: res.redigo_user_id,
-                        type: res.redigo_assistant_draft.isPost ? 'post' : 'comment',
-                        permalink: details.url // Dummy url, sync will grab real one
-                    };
+                // Guard: only proceed if we have a valid Redigo draft with an itemId
+                if (!res.redigo_assistant_draft?.itemId || !res.redigo_user_id || !res.redigo_token) return;
 
-                    fetch('https://redditgo.online/api/outreach/confirm', {
+                const payload = {
+                    itemId: res.redigo_assistant_draft.itemId,
+                    userId: res.redigo_user_id,
+                    type: res.redigo_assistant_draft.isPost ? 'post' : 'comment',
+                    permalink: details.url // Dummy url, sync will grab real one
+                };
+
+                fetch('https://redditgo.online/api/outreach/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${res.redigo_token}` },
+                    body: JSON.stringify(payload)
+                }).catch(() => {
+                    fetch('http://localhost:3001/api/outreach/confirm', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${res.redigo_token}` },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
-                    }).catch(() => {
-                        fetch('http://localhost:3001/api/outreach/confirm', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
+                    }).catch(() => { });
+                });
+
+                // Instruct active (Reddit) tab to hide extension UI gently
+                chrome.tabs.sendMessage(details.tabId, { type: 'POST_AUTO_CONFIRMED' }).catch(() => { });
+
+                // Notify the Dashboard tab so it can remove the item from pending list immediately
+                const draftSnapshot = res.redigo_assistant_draft;
+                chrome.tabs.query({ url: ['*://redditgo.online/*', '*://localhost:*/*'] }, (tabs) => {
+                    for (const tab of tabs) {
+                        chrome.tabs.sendMessage(tab.id, {
+                            type: 'REDIGO_POST_CONFIRMED',
+                            itemId: draftSnapshot.itemId,
+                            itemType: draftSnapshot.isPost ? 'post' : 'comment'
                         }).catch(() => { });
-                    });
+                    }
+                });
 
-                    // Instruct active (Reddit) tab to hide extension UI gently
-                    chrome.tabs.sendMessage(details.tabId, { type: 'POST_AUTO_CONFIRMED' }).catch(() => { });
-
-                    // Notify the Dashboard tab so it can remove the item from pending list immediately
-                    const draftSnapshot = res.redigo_assistant_draft;
-                    chrome.tabs.query({ url: ['*://redditgo.online/*', '*://localhost:*/*'] }, (tabs) => {
-                        for (const tab of tabs) {
-                            chrome.tabs.sendMessage(tab.id, {
-                                type: 'REDIGO_POST_CONFIRMED',
-                                itemId: draftSnapshot.itemId,
-                                itemType: draftSnapshot.isPost ? 'post' : 'comment'
-                            }).catch(() => { });
-                        }
-                    });
-
-                    // Clean up draft
-                    chrome.storage.local.remove('redigo_assistant_draft');
-                }
+                // Clean up draft
+                chrome.storage.local.remove('redigo_assistant_draft');
             });
         }
     }
