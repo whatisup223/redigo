@@ -24,7 +24,6 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 import multer from 'multer';
-import mongoSanitize from 'express-mongo-sanitize';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_fallback_key_123';
 
