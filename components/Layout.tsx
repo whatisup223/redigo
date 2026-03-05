@@ -117,6 +117,10 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
       // Snapshot count before refresh
       const prevCount = pendingItems.length;
+      // Snapshot which items were Pending before
+      const pendingBeforeSync = pendingItems
+        .filter(i => i.status?.toLowerCase() === 'pending')
+        .map(i => i.id || i._id);
 
       // Reload assistant items from DB — items now Live won't pass Draft/Pending filter
       await fetchAssistantItems();
@@ -127,6 +131,31 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           const newCount = current.length;
           const confirmed = prevCount - newCount;
           const HOURS_48 = 48 * 60 * 60 * 1000;
+
+          // Items that were Pending before sync and are STILL Pending after sync
+          // → sync didn't find them on Reddit → reset to Draft so user can re-publish
+          const stillStuckPending = current.filter(i =>
+            pendingBeforeSync.includes(i.id || i._id) &&
+            i.status?.toLowerCase() === 'pending'
+          );
+
+          if (stillStuckPending.length > 0) {
+            // Reset to Draft in DB so user can try again
+            stillStuckPending.forEach(item => {
+              fetch('/api/item/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: item.id || item._id, status: 'Draft' })
+              }).catch(() => { });
+            });
+            // Update UI immediately
+            return current.map(i =>
+              pendingBeforeSync.includes(i.id || i._id) && i.status?.toLowerCase() === 'pending'
+                ? { ...i, status: 'Draft' }
+                : i
+            );
+          }
+
           const possiblyDeletedCount = current.filter(i =>
             ['pending', 'sent'].includes((i.status || '').toLowerCase()) &&
             i.deployedAt && (Date.now() - new Date(i.deployedAt).getTime()) > HOURS_48
@@ -137,11 +166,11 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
           } else if (possiblyDeletedCount > 0) {
             showToast(`⚠️ ${possiblyDeletedCount} item(s) not found — may have been deleted by Reddit.`, 'error');
           } else {
-            showToast('No new confirmations yet. Try again after posting.', 'success');
+            showToast('✅ Sync complete. Publish your content then sync again to confirm.', 'success');
           }
           return current;
         });
-      }, 500);
+      }, 800);
 
     } catch (e) {
       showToast('Sync failed. Check your connection.', 'error');
