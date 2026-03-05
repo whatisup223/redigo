@@ -812,6 +812,116 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
+// ─── Middleware & Logic ───
+
+// General Auth Middleware to enforce Bans/Suspensions on every request
+const generalAuth = async (req, res, next) => {
+  const path = req.path.replace(/\/$/, '');
+
+  // Run Global Check periodically (hourly)
+  runGlobalCheck().catch(e => console.error('Global check error:', e));
+
+  // Exempt public routes explicitly
+  const publicRoutes = ['/api/auth/login', '/api/auth/resend-2fa', '/api/auth/verify-2fa', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook', '/api/paypal/webhook'];
+  if (publicRoutes.includes(path)) return next();
+
+  // Try to extract user from token or ID
+  const authHeader = req.headers.authorization;
+  let userId = req.body?.userId || req.query?.userId || req.params?.id;
+  let decodedUser = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      decodedUser = jwt.verify(token, JWT_SECRET);
+      if (!userId) userId = decodedUser.id;
+    } catch (e) {
+      // Token invalid or expired
+    }
+  }
+
+  // If we have a userId, check status
+  if (userId) {
+    try {
+      const user = await User.findOne({
+        $or: [{ id: userId.toString() }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
+      });
+
+      if (user) {
+        req.userEmail = user.email;
+        req.user = user; // Attach user object to request for easier access
+
+        // 🛑 Handle Suspensions/Bans
+        if (user.status === 'Banned' || user.status === 'Suspended' || user.isSuspended) {
+          console.log(`[AUTH] Blocked ${user.status} user: ${user.email}`);
+          return res.status(403).json({
+            error: `Your account has been ${user.status === 'Suspended' || user.isSuspended ? 'suspended' : 'banned'}.`,
+            reason: user.statusMessage || 'Contact support for details.'
+          });
+        }
+
+        // 🔄 Handle Account Deletion Status
+        if (user.deletionScheduledDate) {
+          // Keep the info in logs, but don't cancel it here.
+          // The user must cancel it manually from the settings page.
+          console.log(`[AUTH] User ${user.email} is pending deletion.`);
+        }
+      }
+    } catch (e) {
+      console.error('Error in generalAuth:', e);
+    }
+  }
+
+  // Admin check
+  if (decodedUser?.role === 'admin' || req.user?.role === 'admin') {
+    req.isAdmin = true;
+  }
+
+  // ── Protected Routes: require a valid JWT ────────────────────────────────
+  // These paths expose or modify user-specific data and must not be accessible
+  // without authentication. The extension always sends a Bearer token, so it
+  // is unaffected. Frontend pages now also send the token.
+  const protectedPathPrefixes = [
+    '/api/user/',
+    '/api/users/',
+    '/api/generate',
+    '/api/generate-image',
+    '/api/reddit/reply',
+    '/api/reddit/post',
+    '/api/reddit/analyze',
+    '/api/reddit/deep-scan',
+    '/api/reddit/delete',
+    '/api/reddit/posts',
+    '/api/item/status',
+    '/api/tracking/create',
+    '/api/tracking/archive',
+    '/api/tracking/delete',
+    '/api/tracking/user/',
+    '/api/outreach/',
+    '/api/user/complete-onboarding',
+    '/api/user/subscribe',
+    '/api/user/replies',
+    '/api/user/posts',
+    '/api/user/cancel-subscription',
+    '/api/user/cancel-deletion',
+    '/api/user/schedule-deletion',
+    '/api/user/reddit/',
+    '/api/support/tickets',
+  ];
+
+  const isProtected = protectedPathPrefixes.some(prefix => path.startsWith(prefix.replace(/\/$/, '')));
+  if (isProtected && !decodedUser) {
+    const reason = !authHeader ? 'Missing Authorization header' : 'Invalid or expired token';
+    console.log(`[AUTH 401] Blocked access to ${path}. Reason: ${reason}`);
+    return res.status(401).json({ error: `Authentication required. ${reason}. Please log in.` });
+  }
+
+  next();
+};
+
+app.use(generalAuth);
+
+
 
 // --- System Logging (MongoDB) ---
 const addSystemLog = async (level, message, metadata = {}) => {
@@ -1392,118 +1502,6 @@ const setupAdmin = async () => {
 };
 setupAdmin();
 
-// ─── Middleware & Logic ───
-
-// General Auth Middleware to enforce Bans/Suspensions on every request
-const generalAuth = async (req, res, next) => {
-  const path = req.path.replace(/\/$/, '');
-
-  // Run Global Check periodically (hourly)
-  runGlobalCheck().catch(e => console.error('Global check error:', e));
-
-  // Exempt public routes explicitly
-  const publicRoutes = ['/api/auth/login', '/api/auth/resend-2fa', '/api/auth/verify-2fa', '/api/auth/signup', '/api/auth/verify-email', '/api/auth/resend-verification', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/health', '/api/webhook', '/api/paypal/webhook'];
-  if (publicRoutes.includes(path)) return next();
-
-  // Try to extract user from token or ID
-  const authHeader = req.headers.authorization;
-  let userId = req.body?.userId || req.query?.userId || req.params?.id;
-  let decodedUser = null;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    try {
-      decodedUser = jwt.verify(token, JWT_SECRET);
-      if (!userId) userId = decodedUser.id;
-    } catch (e) {
-      // Token invalid or expired
-    }
-  }
-
-  // If we have a userId, check status
-  if (userId) {
-    try {
-      const user = await User.findOne({
-        $or: [{ id: userId.toString() }, { _id: mongoose.isValidObjectId(userId) ? userId : null }]
-      });
-
-      if (user) {
-        req.userEmail = user.email;
-        req.user = user; // Attach user object to request for easier access
-
-        // 🛑 Handle Suspensions/Bans
-        if (user.status === 'Banned' || user.status === 'Suspended' || user.isSuspended) {
-          console.log(`[AUTH] Blocked ${user.status} user: ${user.email}`);
-          return res.status(403).json({
-            error: `Your account has been ${user.status === 'Suspended' || user.isSuspended ? 'suspended' : 'banned'}.`,
-            reason: user.statusMessage || 'Contact support for details.'
-          });
-        }
-
-        // 🔄 Handle Account Deletion Status
-        if (user.deletionScheduledDate) {
-          // Keep the info in logs, but don't cancel it here.
-          // The user must cancel it manually from the settings page.
-          console.log(`[AUTH] User ${user.email} is pending deletion.`);
-        }
-      }
-    } catch (e) {
-      console.error('Error in generalAuth:', e);
-    }
-  }
-
-  // Admin check
-  if (decodedUser?.role === 'admin' || req.user?.role === 'admin') {
-    req.isAdmin = true;
-  }
-
-  // ── Protected Routes: require a valid JWT ────────────────────────────────
-  // These paths expose or modify user-specific data and must not be accessible
-  // without authentication. The extension always sends a Bearer token, so it
-  // is unaffected. Frontend pages now also send the token.
-  //
-  // Routes NOT listed here (e.g. /api/tracking/click/:id, /api/public-settings,
-  // /api/config, /api/plans, /api/auth/reddit/url, /api/subreddit/about)
-  // remain open intentionally.
-  const protectedPathPrefixes = [
-    '/api/user/',
-    '/api/users/',
-    '/api/generate',
-    '/api/generate-image',
-    '/api/reddit/reply',
-    '/api/reddit/post',
-    '/api/reddit/analyze',
-    '/api/reddit/deep-scan',
-    '/api/reddit/delete',
-    '/api/reddit/posts',
-    '/api/item/status',
-    '/api/tracking/create',
-    '/api/tracking/archive',
-    '/api/tracking/delete',
-    '/api/tracking/user/',
-    '/api/outreach/',
-    '/api/user/complete-onboarding',
-    '/api/user/subscribe',
-    '/api/user/replies',
-    '/api/user/posts',
-    '/api/user/cancel-subscription',
-    '/api/user/cancel-deletion',
-    '/api/user/schedule-deletion',
-    '/api/user/reddit/',
-    '/api/support/tickets',
-  ];
-
-  const isProtected = protectedPathPrefixes.some(prefix => path.startsWith(prefix.replace(/\/$/, '')));
-  if (isProtected && !decodedUser) {
-    const reason = !authHeader ? 'Missing Authorization header' : 'Invalid or expired token';
-    console.log(`[AUTH 401] Blocked access to ${path}. Reason: ${reason}`);
-    return res.status(401).json({ error: `Authentication required. ${reason}. Please log in.` });
-  }
-
-  next();
-};
-
-app.use(generalAuth);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
