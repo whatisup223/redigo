@@ -429,12 +429,18 @@ export const ContentArchitect: React.FC = () => {
                     }
                 } else if (subRes.status === 404) {
                     const errData = await subRes.json();
-                    showToast(errData.message || 'Subreddit not found.', 'error');
+                    showToast(`${errData.message || 'Subreddit not found.'} [404]`, 'error');
                     setIncludeImage(false);
+                    return;
+                } else if (subRes.status === 423) {
+                    const errData = await subRes.json();
+                    showToast(errData.error || 'Blocked by safeguards.', 'error');
+                    setIncludeImage(false);
+                    setIsGeneratingImage(false);
                     return;
                 } else if (subRes.status === 429 || subRes.status === 403) {
                     // Reddit is blocking our server, safer to not charge for an image that might fail to post
-                    showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit or Private). Skipping image for safety.`, 'error');
+                    showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit or Private). Skipping image for safety. [${subRes.status}]`, 'error');
                     setIncludeImage(false);
                     return;
                 }

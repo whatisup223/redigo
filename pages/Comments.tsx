@@ -500,8 +500,14 @@ export const Comments: React.FC = () => {
             setIsGeneratingImage(false);
             return;
           }
+        } else if (subRes.status === 423) {
+          const errData = await subRes.json();
+          showToast(errData.error || 'Blocked by safeguards.', 'error');
+          setIncludeImage(false);
+          setIsGeneratingImage(false);
+          return;
         } else if (subRes.status === 429 || subRes.status === 403 || subRes.status === 500) {
-          showToast(`Cannot verify image support for r/${subreddit}. Image skipped for safety.`, 'error');
+          showToast(`Cannot verify image support for r/${subreddit}. Image skipped for safety. [${subRes.status}]`, 'error');
           setIncludeImage(false);
           return;
         }
@@ -922,9 +928,19 @@ export const Comments: React.FC = () => {
     try {
       // --- Subreddit Universal Pre-flight Check ---
       const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}`);
+      if (subRes.status === 423) {
+        const errData = await subRes.json();
+        const errMsg = errData.error || 'Reddit access restricted by safeguards.';
+        setSearchError(errMsg);
+        showToast(errMsg, 'error');
+        setIsFetching(false);
+        setReloadCooldown(0);
+        return;
+      }
+
       if (!subRes.ok) {
         const errData = await subRes.json();
-        const errMsg = errData.message || 'Subreddit not found or inaccessible.';
+        const errMsg = `${errData.message || 'Subreddit not found or inaccessible.'} [${subRes.status}]`;
         setSearchError(errMsg);
         showToast(errMsg, 'error');
         setIsFetching(false);
