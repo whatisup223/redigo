@@ -703,7 +703,7 @@ Return ONLY a valid JSON array. No conversational text.
     useEffect(() => {
         if (settingsTab !== 'safeguard' || activeTab !== 'settings') return;
         fetchSafeguard();
-        const interval = setInterval(fetchSafeguard, 5000);
+        const interval = setInterval(() => fetchSafeguard(), 5000);
         return () => clearInterval(interval);
     }, [settingsTab, activeTab]);
 

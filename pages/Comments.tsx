@@ -1009,6 +1009,15 @@ export const Comments: React.FC = () => {
               return;
             }
 
+            if (response.status === 423) {
+              const errData = await response.json();
+              setSearchError(errData.error || 'Blocked by safeguards.');
+              showToast(errData.error || 'Blocked by safeguards.', 'error');
+              setIsFetching(false);
+              setReloadCooldown(0);
+              return;
+            }
+
             if (!response.ok) throw new Error('Server fallback failed');
             data = await response.json();
           } else {
