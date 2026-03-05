@@ -226,8 +226,8 @@ export const Support: React.FC = () => {
         // Or if we just want to trust the path for now while debugging
         if (isAdmin) return matchesStatus && matchesSearch;
 
-        // User views only their own
-        return matchesStatus && matchesSearch && (t.userEmail === user?.email);
+        // For users, we trust the backend to only return their tickets based on the email we sent.
+        return matchesStatus && matchesSearch;
     });
 
     const getStatusColor = (status: string) => {

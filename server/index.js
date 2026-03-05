@@ -4167,7 +4167,9 @@ app.get('/api/support/tickets', async (req, res) => {
       const allTickets = await Ticket.find({}).sort({ createdAt: -1 });
       res.json(allTickets);
     } else {
-      const userTickets = await Ticket.find({ userEmail: email }).sort({ createdAt: -1 });
+      const userTickets = await Ticket.find({
+        $or: [{ userEmail: email }, { email: email }]
+      }).sort({ createdAt: -1 });
       res.json(userTickets);
     }
   } catch (err) {
