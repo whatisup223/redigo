@@ -1333,7 +1333,7 @@ export const Settings: React.FC = () => {
                                     disabled={brandSaving || !brandProfile.brandName}
                                     className={`w-full py-5 rounded-[2rem] font-black transition-all flex items-center justify-center gap-3 text-lg ${brandSaved
                                         ? 'bg-green-600 text-white shadow-lg shadow-green-200'
-                                        : 'bg-orange-600 text-white hover:bg-orange-50 shadow-2xl shadow-orange-200 disabled:opacity-50 disabled:grayscale'
+                                        : 'bg-orange-600 text-white hover:bg-orange-700 shadow-2xl shadow-orange-200 disabled:opacity-50 disabled:grayscale'
                                         }`}
                                 >
                                     {brandSaving
