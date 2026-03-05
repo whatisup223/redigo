@@ -474,6 +474,11 @@ export const ContentArchitect: React.FC = () => {
                 setShowDailyLimitModal(true);
                 return;
             }
+            if (response.status === 423) {
+                const errData = await response.json();
+                showToast(errData.error || 'Blocked by safeguards.', 'error');
+                return;
+            }
             if (!response.ok) throw new Error('Failed to generate image');
 
             const data = await response.json();
@@ -560,6 +565,12 @@ export const ContentArchitect: React.FC = () => {
                 const errMsg = errData.message || 'Subreddit not found or inaccessible.';
                 setSearchError(errMsg);
                 showToast(errMsg, 'error');
+                setIsGenerating(false);
+                setIsGeneratingImage(false);
+                return;
+            } else if (subRes.status === 423) {
+                const errData = await subRes.json();
+                showToast(errData.error || 'Blocked by safeguards.', 'error');
                 setIsGenerating(false);
                 setIsGeneratingImage(false);
                 return;

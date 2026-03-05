@@ -232,9 +232,12 @@ Return STRICT JSON (no markdown code blocks, no extra text outside the JSON):
       })
     });
 
-    if (response.status === 402) throw new Error('OUT_OF_CREDITS');
-    if (response.status === 429) throw new Error('DAILY_LIMIT_REACHED');
-    if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
+    if (!response.ok) {
+      if (response.status === 402) throw new Error('OUT_OF_CREDITS');
+      if (response.status === 429) throw new Error('DAILY_LIMIT_REACHED');
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || `Server responded with status: ${response.status}`);
+    }
 
     const data = await response.json();
 
@@ -389,9 +392,12 @@ Return STRICT JSON (no markdown code blocks, no extra text):
       })
     });
 
-    if (response.status === 402) throw new Error('OUT_OF_CREDITS');
-    if (response.status === 429) throw new Error('DAILY_LIMIT_REACHED');
-    if (!response.ok) throw new Error('Generation failed');
+    if (!response.ok) {
+      if (response.status === 402) throw new Error('OUT_OF_CREDITS');
+      if (response.status === 429) throw new Error('DAILY_LIMIT_REACHED');
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || 'Generation failed');
+    }
 
     const data = await response.json();
 

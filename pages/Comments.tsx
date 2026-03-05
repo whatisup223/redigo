@@ -416,6 +416,10 @@ export const Comments: React.FC = () => {
 
       if (response.status === 402) { setShowNoCreditsModal(true); return; }
       const data = await response.json();
+      if (response.status === 423) {
+        showToast(data.error || 'Blocked by safeguards.', 'error');
+        return;
+      }
       if (!response.ok) throw new Error(data.error || 'Deep Scan failed');
 
       // Update local posts state to include the new comments
@@ -531,6 +535,11 @@ export const Comments: React.FC = () => {
 
       if (response.status === 402) { setShowNoCreditsModal(true); return; }
       if (response.status === 429) { setShowDailyLimitModal(true); return; }
+      if (response.status === 423) {
+        const errData = await response.json();
+        showToast(errData.error || 'Blocked by safeguards.', 'error');
+        return;
+      }
       if (response.status === 403) {
         const errData = await response.json();
         showToast(errData.error || 'Image not allowed for this subreddit.', 'error');
@@ -1024,11 +1033,19 @@ export const Comments: React.FC = () => {
           setReloadCooldown(0);
           return;
         }
+        if (response.status === 423) {
+          const errData = await response.json();
+          setSearchError(errData.error || 'Request blocked by safeguards.');
+          showToast(errData.error || 'Request blocked by safeguards.', 'error');
+          setIsFetching(false);
+          setReloadCooldown(0);
+          return;
+        }
         if (response.status === 429) {
           const errData = await response.json();
           setIsFetching(false);
           if (errData.error === 'DAILY_LIMIT_REACHED') { setShowDailyLimitModal(true); return; }
-          showToast('Too many requests. Please wait.', 'error');
+          showToast(errData.error || 'Too many requests. Please wait.', 'error');
           return;
         }
         if (!response.ok) throw new Error('Fetch failed');

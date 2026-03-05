@@ -832,7 +832,7 @@ const checkSafeguard = (userId) => {
 
   // 1. Manual or Auto Global Kill Switch
   if (safeguardState.isGlobalKillSwitchActive || config.isGlobalKillSwitchManual) {
-    throw new Error('REDIGO_SAFEGUARD_GLOBAL_BLOCK');
+    throw new Error('Reddit access is temporarily restricted by Redigo Safeguards for system safety. This typically resolves within 15-30 minutes.');
   }
 
   // 2. Individual User Jail Check
@@ -841,7 +841,7 @@ const checkSafeguard = (userId) => {
     const elapsedMinutes = (Date.now() - userJail.jailedAt) / (1000 * 60);
     if (elapsedMinutes < config.userJailDurationMinutes) {
       const remaining = Math.ceil(config.userJailDurationMinutes - elapsedMinutes);
-      throw new Error(`REDIGO_SAFEGUARD_USER_JAIL|${remaining}`);
+      throw new Error(`Your account is temporarily suspended from Reddit actions due to excessive errors (${remaining} minutes remaining). Please wait or contact support.`);
     } else {
       // Jail time expired, clear but keep some history to prevent immediate re-jail
       safeguardState.userJails.set(uid, { errorCount: 1, lastErrorAt: Date.now() });
