@@ -5334,11 +5334,18 @@ app.post('/api/reddit/analyze', async (req, res) => {
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Safeguard Check
-    try {
-      checkSafeguard(userId);
-    } catch (safeErr) {
-      return res.status(423).json({ error: safeErr.message });
+    // Safeguard Check (PARTIAL: only user jail, NOT global kill switch)
+    // This endpoint is called by the Extension which fetches Reddit using the USER's IP.
+    // The Global Kill Switch only protects OUR server from Reddit bans — it makes no sense
+    // to block data analysis if the Extension already successfully fetched it from Reddit.
+    const userJailEntry = safeguardState.userJails.get(userId.toString());
+    if (userJailEntry && userJailEntry.jailedAt) {
+      const config = getSafeguardConfig();
+      const elapsedMinutes = (Date.now() - userJailEntry.jailedAt) / (1000 * 60);
+      if (elapsedMinutes < config.userJailDurationMinutes) {
+        const remaining = Math.ceil(config.userJailDurationMinutes - elapsedMinutes);
+        return res.status(423).json({ error: `Your account is temporarily suspended from Reddit actions due to excessive errors (${remaining} minutes remaining). Please wait or contact support.` });
+      }
     }
 
     // ── DATA PRE-PROCESSING (BEFORE DEDUCTION) ──────────────────────────────
