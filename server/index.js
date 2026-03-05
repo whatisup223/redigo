@@ -817,7 +817,7 @@ const getSafeguardConfig = () => {
     userJailDurationMinutes: (settings.userJailDurationMinutes !== undefined && settings.userJailDurationMinutes !== null) ? Number(settings.userJailDurationMinutes) : 60,
     globalMaxErrors: (settings.globalMaxErrors !== undefined && settings.globalMaxErrors !== null) ? Number(settings.globalMaxErrors) : 50,
     globalSlowdownMultiplier: (settings.globalSlowdownMultiplier !== undefined && settings.globalSlowdownMultiplier !== null) ? Number(settings.globalSlowdownMultiplier) : 5,
-    isGlobalKillSwitchManual: settings.isGlobalKillSwitchManual === true
+    isGlobalKillSwitchManual: settings.isGlobalKillSwitchManual === true || String(settings.isGlobalKillSwitchManual) === 'true'
   };
 };
 
@@ -5320,6 +5320,13 @@ app.post('/api/reddit/analyze', async (req, res) => {
 
     const user = await User.findOne({ id: userId.toString() });
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Safeguard Check
+    try {
+      checkSafeguard(userId);
+    } catch (safeErr) {
+      return res.status(423).json({ error: safeErr.message });
+    }
 
     // ── DATA PRE-PROCESSING (BEFORE DEDUCTION) ──────────────────────────────
     let posts = [];

@@ -981,6 +981,14 @@ export const Comments: React.FC = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rawJson, keywords: searchKeywords, userId: user.id })
           });
+          if (response.status === 423) {
+            const errData = await response.json();
+            setSearchError(errData.error || 'Blocked by safeguards.');
+            showToast(errData.error || 'Blocked by safeguards.', 'error');
+            setIsFetching(false);
+            setReloadCooldown(0);
+            return;
+          }
           if (response.status === 402) {
             setIsFetching(false);
             setShowNoCreditsModal(true);
@@ -1000,15 +1008,6 @@ export const Comments: React.FC = () => {
             console.log('[Hybrid] Falling back to Server Fetching');
             const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
 
-            if (response.status === 404 || response.status === 403) {
-              const errData = await response.json();
-              setSearchError(errData.message || 'Subreddit not found or inaccessible.');
-              showToast(errData.message || 'Subreddit not found or inaccessible.', 'error');
-              setIsFetching(false);
-              setReloadCooldown(0);
-              return;
-            }
-
             if (response.status === 423) {
               const errData = await response.json();
               setSearchError(errData.error || 'Blocked by safeguards.');
@@ -1018,10 +1017,19 @@ export const Comments: React.FC = () => {
               return;
             }
 
+            if (response.status === 404 || response.status === 403) {
+              const errData = await response.json();
+              setSearchError(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`);
+              showToast(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`, 'error');
+              setIsFetching(false);
+              setReloadCooldown(0);
+              return;
+            }
+
             if (!response.ok) throw new Error('Server fallback failed');
             data = await response.json();
           } else {
-            setSearchError(extErr.message || 'Extension fetch failed');
+            setSearchError(`${extErr.message || 'Extension fetch failed'} [EXT]`);
             throw extErr;
           }
         }
@@ -1029,6 +1037,14 @@ export const Comments: React.FC = () => {
         console.log('[Hybrid] Using Server Fetching (Fallback, Mobile, or Extension Disabled)');
         const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`);
 
+        if (response.status === 423) {
+          const errData = await response.json();
+          setSearchError(errData.error || 'Request blocked by safeguards.');
+          showToast(errData.error || 'Request blocked by safeguards.', 'error');
+          setIsFetching(false);
+          setReloadCooldown(0);
+          return;
+        }
         if (response.status === 402) {
           setIsFetching(false);
           setShowNoCreditsModal(true);
@@ -1036,16 +1052,8 @@ export const Comments: React.FC = () => {
         }
         if (response.status === 404 || response.status === 403) {
           const errData = await response.json();
-          setSearchError(errData.message || 'Subreddit not found or inaccessible.');
-          showToast(errData.message || 'Subreddit not found or inaccessible.', 'error');
-          setIsFetching(false);
-          setReloadCooldown(0);
-          return;
-        }
-        if (response.status === 423) {
-          const errData = await response.json();
-          setSearchError(errData.error || 'Request blocked by safeguards.');
-          showToast(errData.error || 'Request blocked by safeguards.', 'error');
+          setSearchError(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`);
+          showToast(`${errData.message || 'Subreddit not found or inaccessible.'} [${response.status}]`, 'error');
           setIsFetching(false);
           setReloadCooldown(0);
           return;
