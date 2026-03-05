@@ -718,6 +718,14 @@ export const ContentArchitect: React.FC = () => {
             if (!hasExtension) {
                 window.open(targetUrl, '_blank');
                 showToast('Opening Reddit! Paste your content & submit.', 'success');
+                // Mark as Pending in DB so the auto-sync can track it
+                if (postData.id) {
+                    fetch('/api/item/status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: postData.id, status: 'Pending' })
+                    }).catch(() => { });
+                }
                 // No extension to respond — reset loading after 5s
                 setTimeout(() => setIsPosting(false), 5000);
             } else {

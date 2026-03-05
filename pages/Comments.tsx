@@ -780,6 +780,14 @@ export const Comments: React.FC = () => {
       if (targetUrl && !hasExtension) {
         window.open(targetUrl, '_blank');
         showToast('Opening Thread...', 'success');
+        // Mark as Pending in DB so the auto-sync can track it
+        if (generatedReply?.id) {
+          fetch('/api/item/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: generatedReply.id, status: 'Pending' })
+          }).catch(() => { });
+        }
         // No extension to respond — reset loading after 5s
         setTimeout(() => setIsPosting(false), 5000);
       } else {
