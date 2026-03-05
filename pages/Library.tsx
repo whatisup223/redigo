@@ -83,10 +83,12 @@ export const Library: React.FC = () => {
 
     const fetchLibrary = async () => {
         if (!user?.id) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
-            const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const authHeaders: HeadersInit = { 'Authorization': `Bearer ${token}` };
             const [postsRes, repliesRes] = await Promise.all([
                 fetch(`/api/user/posts?userId=${user.id}`, { headers: authHeaders }),
                 fetch(`/api/user/replies?userId=${user.id}`, { headers: authHeaders })
@@ -128,10 +130,11 @@ export const Library: React.FC = () => {
 
     const handleDelete = async (item: LibraryItem) => {
         if (!window.confirm('Are you sure you want to delete this content permanently?')) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
         try {
-            const token = localStorage.getItem('token');
-            const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const authHeaders: HeadersInit = { 'Authorization': `Bearer ${token}` };
             const endpoint = item.type === 'post' ? `/api/user/posts` : `/api/user/replies`;
             const response = await fetch(`${endpoint}?id=${item.id}&userId=${user?.id}`, { method: 'DELETE', headers: authHeaders });
 

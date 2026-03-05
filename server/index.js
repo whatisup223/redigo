@@ -832,11 +832,16 @@ const generalAuth = async (req, res, next) => {
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    try {
-      decodedUser = jwt.verify(token, JWT_SECRET);
-      if (!userId) userId = decodedUser.id;
-    } catch (e) {
-      // Token invalid or expired
+    if (token && token !== 'null' && token !== 'undefined') {
+      try {
+        decodedUser = jwt.verify(token, JWT_SECRET);
+        if (!userId) userId = decodedUser.id;
+      } catch (e) {
+        // Token invalid or expired
+        console.log(`[AUTH] Invalid token from ${req.ip} for ${path}: ${e.message}`);
+      }
+    } else {
+      console.log(`[AUTH] Received literal '${token}' token from ${req.ip} for ${path}`);
     }
   }
 

@@ -178,7 +178,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({
                     userId: user.id || user._id,
@@ -208,7 +208,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({
                     userId: user.id || user._id,
@@ -239,7 +239,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({ userId: user.id || user._id })
             });
@@ -521,7 +521,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({ userId: user.id, ...brandProfile })
             });
@@ -575,7 +575,7 @@ export const Settings: React.FC = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({
                     name: profileName,
@@ -618,7 +618,7 @@ export const Settings: React.FC = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
                 },
                 body: JSON.stringify({
                     currentPassword: passwordData.currentPassword,
