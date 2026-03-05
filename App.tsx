@@ -17,8 +17,8 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { RedditCallback } from './pages/RedditCallback';
-import { ContentArchitect } from './pages/ContentArchitect';
-import { Comments } from './pages/Comments';
+import { LeadFinder } from './pages/LeadFinder';
+import { AIAgent } from './pages/AIAgent';
 import { Support } from './pages/Support';
 import { Library } from './pages/Library';
 import { AuthProvider } from './context/AuthContext';
@@ -68,8 +68,10 @@ const App: React.FC = () => {
 
             {/* User Dashboard Routes - Wrapped in AppLayout */}
             <Route path="/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/comment-agent" element={<ProtectedRoute><AppLayout><Comments /></AppLayout></ProtectedRoute>} />
-            <Route path="/post-agent" element={<ProtectedRoute><AppLayout><ContentArchitect /></AppLayout></ProtectedRoute>} />
+            <Route path="/lead-finder" element={<ProtectedRoute><AppLayout><LeadFinder /></AppLayout></ProtectedRoute>} />
+            <Route path="/ai-agent" element={<ProtectedRoute><AppLayout><AIAgent /></AppLayout></ProtectedRoute>} />
+            <Route path="/comment-agent" element={<Navigate to="/lead-finder" replace />} />
+            <Route path="/post-agent" element={<Navigate to="/ai-agent" replace />} />
             <Route path="/library" element={<ProtectedRoute><AppLayout><Library /></AppLayout></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { generateRedditPost, fetchBrandProfile, BrandProfile } from '../services/geminiService';
+import { generateRedditPost, generateRedditReply, fetchBrandProfile, BrandProfile } from '../services/geminiService';
 import {
     PenTool,
     Sparkles,
@@ -88,7 +88,7 @@ const toneActiveMap: Record<string, string> = {
     orange: 'border-orange-500 bg-orange-50 shadow-lg shadow-orange-100',
 };
 
-export const ContentArchitect: React.FC = () => {
+export const AIAgent: React.FC = () => {
     const { user, updateUser, syncUser } = useAuth();
     const getAuthHeaders = (): Record<string, string> => {
         const token = localStorage.getItem('token');
@@ -201,21 +201,44 @@ export const ContentArchitect: React.FC = () => {
         return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    // Check for draft on mount
+    // Check for lead or draft on mount
     useEffect(() => {
-        const savedDraft = localStorage.getItem('redditgo_post_draft');
-        if (savedDraft) {
-            try {
-                const draft = JSON.parse(savedDraft);
-                if (draft.title || draft.content) {
-                    setShowDraftBanner(true);
+        const params = new URLSearchParams(window.location.search);
+        const mode = params.get('mode');
+
+        if (mode === 'reply') {
+            const savedLead = localStorage.getItem('redditgo_current_lead');
+            if (savedLead) {
+                try {
+                    const lead = JSON.parse(savedLead);
+                    setPostData(prev => ({
+                        ...prev,
+                        subreddit: lead.subreddit || prev.subreddit,
+                        description: lead.selftext || lead.body || '',
+                        isReply: true,
+                        leadId: lead.id,
+                        postContext: lead
+                    } as any));
+                    showToast('Lead context loaded! Preparing reply strategist...', 'success');
+                } catch (e) {
+                    console.error('Failed to parse lead data');
                 }
-            } catch (e) {
-                localStorage.removeItem('redditgo_post_draft');
+            }
+        } else {
+            const savedDraft = localStorage.getItem('redditgo_post_draft');
+            if (savedDraft) {
+                try {
+                    const draft = JSON.parse(savedDraft);
+                    if (draft.title || draft.content) {
+                        setShowDraftBanner(true);
+                    }
+                } catch (e) {
+                    localStorage.removeItem('redditgo_post_draft');
+                }
             }
         }
         setIsInitialCheckDone(true);
-    }, []);
+    }, [window.location.search]);
 
     // ── Extension Real-time Detection ─────────────────────────────────────
     useEffect(() => {
@@ -649,25 +672,39 @@ export const ContentArchitect: React.FC = () => {
                 secondaryColor: postData.secondaryColor || user?.brandProfile?.secondaryColor || undefined
             };
 
-            const generated = await generateRedditPost(
-                postData.subreddit,
-                postData.goal,
-                postData.tone,
-                postData.productMention,
-                postData.productUrl,
-                user?.id,
-                overrideProfile,
-                language,
-                includeBrandName,
-                includeLink,
-                useTracking
-            );
+            const isReplyMode = (postData as any).isReply;
+            const generated = isReplyMode
+                ? await generateRedditReply(
+                    (postData as any).postContext,
+                    postData.subreddit,
+                    postData.tone,
+                    postData.targetAudience || 'General',
+                    user?.id,
+                    overrideProfile,
+                    language,
+                    includeBrandName,
+                    includeLink,
+                    useTracking
+                )
+                : await generateRedditPost(
+                    postData.subreddit,
+                    postData.goal,
+                    postData.tone,
+                    postData.productMention,
+                    postData.productUrl,
+                    user?.id,
+                    overrideProfile,
+                    language,
+                    includeBrandName,
+                    includeLink,
+                    useTracking
+                );
 
             setPostData(prev => ({
                 ...prev,
                 id: generated.id,
-                title: generated.title,
-                content: generated.content,
+                title: isReplyMode ? `RE: ${(postData as any).postContext.title}` : (generated as any).title,
+                content: isReplyMode ? (generated as any).comment : (generated as any).content,
                 imagePrompt: generated.imagePrompt,
                 imageUrl: mode === 'both' ? '' : prev.imageUrl
             }));
@@ -729,7 +766,11 @@ export const ContentArchitect: React.FC = () => {
         // With extension: auto-paste. Without extension: open Reddit directly.
         setIsPosting(true);
         try {
-            const targetUrl = `https://www.reddit.com/r/${postData.subreddit}/submit`;
+            const isReplyMode = (postData as any).isReply;
+            const targetUrl = isReplyMode
+                ? `https://www.reddit.com${(postData as any).postContext.permalink}?ref=redigo`
+                : `https://www.reddit.com/r/${postData.subreddit}/submit`;
+
             const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
 
             // Always send the postMessage (extension picks it up if installed)
@@ -737,11 +778,11 @@ export const ContentArchitect: React.FC = () => {
                 source: 'REDIGO_WEB_APP',
                 type: 'REDIGO_DEPLOY',
                 itemId: postData.id,
-                title: postData.title,
+                title: isReplyMode ? '' : postData.title,
                 text: postData.content,
                 imageUrl: postData.imageUrl,
                 targetUrl: targetUrl,
-                isPost: true
+                isPost: !isReplyMode
             }, '*');
 
             // If no extension — open Reddit directly in a new tab

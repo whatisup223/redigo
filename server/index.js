@@ -5860,6 +5860,50 @@ Instructions:
   }
 });
 
+// Search for Subreddits (Niche Discovery)
+app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: 'Search query required' });
+
+    // Safeguard check
+    try {
+      checkSafeguard('system');
+    } catch (e) {
+      return res.status(423).json({ error: e.message, restrictionType: e.restrictionType || 'unknown', jailedAt: e.jailedAt || null, durationMinutes: e.durationMinutes || null, lockedUntil: e.lockedUntil || null });
+    }
+
+    console.log(`[Subreddit Search] Searching for niches related to: ${q}`);
+
+    const response = await fetch(`https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(q)}&limit=25`, {
+      headers: {
+        'User-Agent': getDynamicUserAgent('system', 'guest')
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Reddit API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const results = (data.data?.children || []).map(child => ({
+      name: child.data.display_name,
+      title: child.data.title,
+      subscribers: child.data.subscribers,
+      description: child.data.public_description,
+      icon: child.data.icon_img || child.data.community_icon,
+      over18: child.data.over18,
+      type: child.data.subreddit_type,
+      activeUsers: child.data.accounts_active
+    }));
+
+    res.json(results);
+  } catch (err) {
+    console.error('[Subreddit Search Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/subreddit/about', async (req, res) => {
   try {
     let { name } = req.query;

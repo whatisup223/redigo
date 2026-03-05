@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Plus,
   Shield,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { OnboardingWizard } from './OnboardingWizard';
@@ -403,8 +404,8 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: PenTool, label: 'Post Agent', path: '/post-agent' },
-    { icon: MessageSquare, label: 'Comment Agent', path: '/comment-agent' },
+    { icon: Zap, label: 'AI Writing Agent', path: '/ai-agent' },
+    { icon: Search, label: 'Lead Finder', path: '/lead-finder' },
     { icon: LayoutList, label: 'Content Library', path: '/library' }, // New Library link
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing' },

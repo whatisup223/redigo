@@ -38,10 +38,10 @@ import {
   Download,
   Image as ImageIcon,
   PenTool,
-  Smartphone,
-  ExternalLink
+  ExternalLink,
+  Users
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { RedditPost, GeneratedReply } from '../types';
 import { generateRedditReply, fetchBrandProfile, BrandProfile } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
@@ -87,7 +87,7 @@ const MOCK_POSTS: RedditPost[] = [
   }
 ];
 
-export const Comments: React.FC = () => {
+export const LeadFinder: React.FC = () => {
   const { user, updateUser, syncUser } = useAuth();
   const getAuthHeaders = (): Record<string, string> => {
     const token = localStorage.getItem('token');
@@ -165,8 +165,13 @@ export const Comments: React.FC = () => {
 
   const [progressStep, setProgressStep] = useState(0);
   const [searchProgressStep, setSearchProgressStep] = useState(0);
+  const navigate = useNavigate();
 
-  // Wizard & Modal State
+  // Lead Finder Extended State
+  const [activeTab, setActiveTab] = useState<'hunter' | 'discovery'>('hunter');
+  const [nicheQuery, setNicheQuery] = useState('');
+  const [nicheResults, setNicheResults] = useState<any[]>([]);
+  const [isSearchingNiches, setIsSearchingNiches] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5 });
@@ -309,6 +314,43 @@ export const Comments: React.FC = () => {
     }
     setIsInitialCheckDone(true);
   }, []);
+
+  const handleNicheSearch = async () => {
+    if (!nicheQuery.trim()) return;
+    setIsSearchingNiches(true);
+    setNicheResults([]);
+    try {
+      const res = await fetch(`/api/subreddit/search?q=${encodeURIComponent(nicheQuery)}`, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setNicheResults(data);
+        if (data.length === 0) showToast('No matching subreddits found.', 'error');
+        else showToast(`Found ${data.length} communities!`, 'success');
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Niche search failed', 'error');
+      }
+    } catch (e) {
+      showToast('Niche search failed', 'error');
+    } finally {
+      setIsSearchingNiches(false);
+    }
+  };
+
+  const handleSendToAI = (post: any) => {
+    // Save post to local storage for the AI agent to pick up
+    localStorage.setItem('redigo_current_lead', JSON.stringify({
+      postId: post.id,
+      redditId: post.redditId || post.id,
+      title: post.title,
+      content: post.selftext || '',
+      subreddit: post.subreddit,
+      url: post.url,
+      author: post.author,
+      timestamp: Date.now()
+    }));
+    navigate('/ai-agent?mode=reply');
+  };
 
   // Auto-save effect
   useEffect(() => {
@@ -1395,101 +1437,139 @@ export const Comments: React.FC = () => {
 
       <div className="max-w-7xl mx-auto space-y-10 animate-fade-in font-['Outfit'] pt-4 px-4 pb-20">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-slate-100">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
-              <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Comment Agent</h1>
-            </div>
-            <p className="text-slate-400 font-medium text-sm pl-4">Find relevant Reddit discussions and craft the perfect reply.</p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="flex items-center bg-white border border-slate-200 rounded-2xl shadow-sm px-3 flex-1 sm:flex-none focus-within:ring-2 focus-within:ring-orange-100 transition-all">
-              <Target size={14} className="text-slate-400" />
-              <input
-                type="text"
-                value={targetSubreddit}
-                onChange={(e) => setTargetSubreddit(e.target.value)}
-                placeholder="subreddit"
-                className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-20 md:w-24"
-              />
-              <div className="w-[1px] h-4 bg-slate-200 mx-1" />
-              <Hash size={14} className="text-slate-400" />
-              <input
-                type="text"
-                value={searchKeywords}
-                onChange={(e) => setSearchKeywords(e.target.value)}
-                placeholder="keywords"
-                className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-28 md:w-32"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Sort Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
-                  className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-2.5 text-xs font-bold text-slate-700 hover:border-orange-200 transition-all"
-                >
-                  {sortBy === 'new' && <Clock size={14} className="text-orange-600" />}
-                  {sortBy === 'hot' && <Flame size={14} className="text-orange-600" />}
-                  {sortBy === 'rising' && <Zap size={14} className="text-orange-600" />}
-                  {sortBy === 'top' && <ArrowUpCircle size={14} className="text-orange-600" />}
-                  {sortBy === 'controversial' && <AlertCircle size={14} className="text-orange-600" />}
-                  <span className="capitalize">{sortBy}</span>
-                  <ChevronDown size={14} className={`transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isSortMenuOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setIsSortMenuOpen(false)}
-                    />
-                    <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200 origin-top-left sm:origin-top-right">
-                      <p className="text-[10px] font-black text-slate-400 px-3 py-2 uppercase tracking-widest">Sort by</p>
-                      {[
-                        { id: 'new', icon: Clock, label: 'Newest' },
-                        { id: 'hot', icon: Flame, label: 'Hot' },
-                        { id: 'rising', icon: Zap, label: 'Rising' },
-                        { id: 'top', icon: ArrowUpCircle, label: 'Top' },
-                        { id: 'controversial', icon: AlertCircle, label: 'Controversial' }
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            setSortBy(item.id);
-                            setIsSortMenuOpen(false);
-                          }}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${sortBy === item.id
-                            ? 'bg-orange-50 text-orange-600'
-                            : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                        >
-                          <item.icon size={14} />
-                          {item.label}
-                          {sortBy === item.id && <Check size={12} className="ml-auto" />}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+        <div className="flex flex-col gap-8 pb-2 border-b border-slate-100">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Lead Finder</h1>
               </div>
+              <p className="text-slate-400 font-medium text-sm pl-4">Discover subreddits and identify high-quality leads.</p>
+            </div>
 
+            {/* Tabs Switcher */}
+            <div className="bg-slate-100/80 p-1.5 rounded-2xl flex gap-1 self-start sm:self-auto backdrop-blur-sm border border-slate-200/50 shadow-inner">
               <button
-                onClick={fetchPosts}
-                disabled={isFetching || reloadCooldown > 0 || !targetSubreddit.trim() || !searchKeywords.trim()}
-                className="bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed group whitespace-nowrap"
+                onClick={() => setActiveTab('hunter')}
+                className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'hunter' ? 'bg-white text-orange-600 shadow-md ring-1 ring-black/5' : 'text-slate-400 hover:text-slate-600'}`}
               >
-                <div className="flex items-center gap-2">
-                  <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-                  <span>{reloadCooldown > 0 ? `${reloadCooldown}s` : 'Search'}</span>
-                </div>
-                {reloadCooldown === 0 && !isFetching && (
-                  <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT</span>
-                )}
+                <Target size={14} /> Post Hunter
+              </button>
+              <button
+                onClick={() => setActiveTab('discovery')}
+                className={`px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'discovery' ? 'bg-white text-orange-600 shadow-md ring-1 ring-black/5' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Users size={14} /> Niche Discovery
               </button>
             </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
+            {activeTab === 'hunter' ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex items-center bg-white border border-slate-200 rounded-2xl shadow-sm px-3 flex-1 sm:flex-none focus-within:ring-2 focus-within:ring-orange-100 transition-all">
+                  <Target size={14} className="text-slate-400" />
+                  <input
+                    type="text"
+                    value={targetSubreddit}
+                    onChange={(e) => setTargetSubreddit(e.target.value)}
+                    placeholder="subreddit"
+                    className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-20 md:w-24"
+                  />
+                  <div className="w-[1px] h-4 bg-slate-200 mx-1" />
+                  <Hash size={14} className="text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchKeywords}
+                    onChange={(e) => setSearchKeywords(e.target.value)}
+                    placeholder="keywords"
+                    className="p-2.5 bg-transparent focus:outline-none font-bold text-[11px] w-28 md:w-32"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Sort Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+                      className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-2.5 text-xs font-bold text-slate-700 hover:border-orange-200 transition-all"
+                    >
+                      {sortBy === 'new' && <Clock size={14} className="text-orange-600" />}
+                      {sortBy === 'hot' && <Flame size={14} className="text-orange-600" />}
+                      {sortBy === 'rising' && <Zap size={14} className="text-orange-600" />}
+                      {sortBy === 'top' && <ArrowUpCircle size={14} className="text-orange-600" />}
+                      {sortBy === 'controversial' && <AlertCircle size={14} className="text-orange-600" />}
+                      <span className="capitalize">{sortBy}</span>
+                      <ChevronDown size={14} className={`transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isSortMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsSortMenuOpen(false)} />
+                        <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200 origin-top-left sm:origin-top-right">
+                          <p className="text-[10px] font-black text-slate-400 px-3 py-2 uppercase tracking-widest">Sort by</p>
+                          {[
+                            { id: 'new', icon: Clock, label: 'Newest' },
+                            { id: 'hot', icon: Flame, label: 'Hot' },
+                            { id: 'rising', icon: Zap, label: 'Rising' },
+                            { id: 'top', icon: ArrowUpCircle, label: 'Top' },
+                            { id: 'controversial', icon: AlertCircle, label: 'Controversial' }
+                          ].map((item) => (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                setSortBy(item.id);
+                                setIsSortMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${sortBy === item.id ? 'bg-orange-50 text-orange-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                            >
+                              <item.icon size={14} />
+                              {item.label}
+                              {sortBy === item.id && <Check size={12} className="ml-auto" />}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={fetchPosts}
+                    disabled={isFetching || reloadCooldown > 0 || !targetSubreddit.trim() || !searchKeywords.trim()}
+                    className="bg-slate-900 text-white px-4 md:px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed group whitespace-nowrap min-w-[100px]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+                      <span>{reloadCooldown > 0 ? `${reloadCooldown}s` : 'Hunter Search'}</span>
+                    </div>
+                    {reloadCooldown === 0 && !isFetching && (
+                      <span className="text-[9px] text-orange-400 font-black tracking-[0.15em]">{costs.fetch} PT</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="flex items-center bg-white border border-slate-200 rounded-2xl shadow-sm px-4 flex-1 sm:w-80 focus-within:ring-2 focus-within:ring-orange-100 transition-all">
+                  <Search size={14} className="text-slate-400" />
+                  <input
+                    type="text"
+                    value={nicheQuery}
+                    onChange={(e) => setNicheQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleNicheSearch()}
+                    placeholder="search niches (e.g. 'saas', 'fitness')"
+                    className="p-3 bg-transparent focus:outline-none font-bold text-xs w-full"
+                  />
+                </div>
+                <button
+                  onClick={handleNicheSearch}
+                  disabled={isSearchingNiches || !nicheQuery.trim()}
+                  className="bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all disabled:opacity-30 flex items-center gap-2 shadow-lg shadow-orange-200"
+                >
+                  <Search size={16} className={isSearchingNiches ? 'animate-pulse' : ''} />
+                  <span>Explore Niches</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1532,278 +1612,353 @@ export const Comments: React.FC = () => {
         <CreditsBanner plan={user?.plan || 'Starter'} credits={user?.credits || 0} />
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
-          {/* Posts List */}
+          {/* Main Content Area */}
           <div className="xl:col-span-8 space-y-6">
+            {activeTab === 'discovery' ? (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Niche Results Summary */}
+                <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                      <Globe size={32} />
+                    </div>
+                    <div className="space-y-1 text-center md:text-left">
+                      <h2 className="text-2xl font-black text-slate-900">{isSearchingNiches ? 'Searching...' : nicheResults.length > 0 ? `Found ${nicheResults.length} Communities` : 'Niche Discovery'}</h2>
+                      <p className="text-sm font-medium text-slate-400">Discover active Reddit communities for your industry or product.</p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* AI Intent Filters and Actions */}
-            {posts.length > 0 && (
+                {isSearchingNiches ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-50">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="h-64 bg-slate-100/50 rounded-[2.5rem] animate-pulse border border-slate-100" />
+                    ))}
+                  </div>
+                ) : nicheResults.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {nicheResults.map(niche => (
+                      <div key={niche.name} className="bg-white border border-slate-100 rounded-[2.5rem] p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group flex flex-col h-full">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center border border-orange-100/50 shadow-inner group-hover:scale-110 transition-transform overflow-hidden shrink-0">
+                              {niche.icon ? <img src={niche.icon} className="w-full h-full object-cover" /> : <Users className="text-orange-600" size={24} />}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-extrabold text-slate-900 group-hover:text-orange-600 transition-colors truncate">r/{niche.name}</h3>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{niche.subscribers?.toLocaleString() || '0'} Members</p>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed mb-6 min-h-[3rem]">{niche.description || 'No description provided.'}</p>
+
+                        <div className="mt-auto flex flex-col gap-4">
+                          <div className="flex items-center gap-2">
+                            <div className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg border border-emerald-100 flex items-center gap-1.5 whitespace-nowrap">
+                              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                              {niche.activeUsers?.toLocaleString() || '0'} ACTIVE
+                            </div>
+                            {niche.over18 && (
+                              <div className="px-3 py-1.5 bg-red-50 text-red-600 text-[10px] font-black rounded-lg border border-red-100">NSFW</div>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setTargetSubreddit(niche.name);
+                              setActiveTab('hunter');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="w-full py-4 bg-orange-600 text-white rounded-2xl shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all flex items-center justify-center gap-2 group/btn font-black text-[10px] uppercase tracking-widest"
+                          >
+                            <Target size={16} className="group-hover/btn:scale-110 transition-transform" />
+                            <span>Hunt Leads in r/{niche.name}</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 bg-slate-50 rounded-[3.5rem] border-2 border-dashed border-slate-200">
+                    <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
+                      <Search size={32} className="text-slate-200" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 mb-2">Ready to Explore?</h3>
+                    <p className="text-slate-400 text-sm font-medium max-w-xs mx-auto">Enter a niche keyword at the top to discover high-potential subreddits for your business.</p>
+                  </div>
+                )}
+              </div>
+            ) : (
               <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center">
-                      <Filter size={20} />
+                {/* AI Intent Filters and Actions */}
+                {posts.length > 0 && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center">
+                          <Filter size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 leading-tight">Filter Results</h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Categorized by AI Intent</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          setPosts([]);
+                          setSelectedPost(null);
+                          try {
+                            await fetch('/api/user/clear-leads', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                              body: JSON.stringify({ userId: user.id })
+                            });
+                          } catch (err) {
+                            console.error('Failed to clear saved leads:', err);
+                          }
+                        }}
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all text-xs font-black uppercase tracking-widest border border-red-100 shadow-sm"
+                      >
+                        <Trash2 size={16} />
+                        <span>Clear All Results</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
+                      {['All', 'Problem Solving', 'Seeking Alternative', 'Request Advice', 'Product Launch', 'General'].map(intent => {
+                        const count = intent === 'All' ? posts.length : posts.filter(p => p.intent === intent).length;
+                        if (intent !== 'All' && count === 0) return null; // Hide empty intents
+                        return (
+                          <button
+                            key={intent}
+                            onClick={() => setActiveIntentFilter(intent)}
+                            className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-[11px] font-black transition-all border-2 ${activeIntentFilter === intent ? 'bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-100' : 'bg-white text-slate-600 border-slate-100 hover:border-orange-200 hover:text-orange-600'}`}
+                          >
+                            {intent} <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] ${activeIntentFilter === intent ? 'bg-orange-500/50 text-white' : 'bg-slate-50 text-slate-400'}`}>({count})</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+
+
+                {posts.filter(p => activeIntentFilter === 'All' || p.intent === activeIntentFilter).length === 0 && posts.length > 0 && (
+                  <div className="text-center py-10 bg-slate-50 rounded-3xl border border-slate-100">
+                    <Filter size={32} className="text-slate-300 mx-auto mb-3" />
+                    <p className="font-bold text-slate-500">No posts match this intent filter.</p>
+                  </div>
+                )}
+
+                {searchError && !isFetching && (
+                  <div className={`flex flex-col items-center justify-center py-16 rounded-[3rem] border shadow-sm space-y-5 px-8 text-center ${sgBg}`}>
+                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl ${sgIconBg}`}>
+                      {sgIsManual ? '🔐' : sgIsJail ? '⛔' : '🛡️'}
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-slate-900 leading-tight">Filter Results</h4>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Categorized by AI Intent</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      if (!user?.id) return;
-                      setPosts([]);
-                      setSelectedPost(null);
-                      try {
-                        await fetch('/api/user/clear-leads', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                          body: JSON.stringify({ userId: user.id })
-                        });
-                      } catch (err) {
-                        console.error('Failed to clear saved leads:', err);
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-6 py-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all text-xs font-black uppercase tracking-widest border border-red-100 shadow-sm"
-                  >
-                    <Trash2 size={16} />
-                    <span>Clear All Results</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
-                  {['All', 'Problem Solving', 'Seeking Alternative', 'Request Advice', 'Product Launch', 'General'].map(intent => {
-                    const count = intent === 'All' ? posts.length : posts.filter(p => p.intent === intent).length;
-                    if (intent !== 'All' && count === 0) return null; // Hide empty intents
-                    return (
-                      <button
-                        key={intent}
-                        onClick={() => setActiveIntentFilter(intent)}
-                        className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-[11px] font-black transition-all border-2 ${activeIntentFilter === intent ? 'bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-100' : 'bg-white text-slate-600 border-slate-100 hover:border-orange-200 hover:text-orange-600'}`}
-                      >
-                        {intent} <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] ${activeIntentFilter === intent ? 'bg-orange-500/50 text-white' : 'bg-slate-50 text-slate-400'}`}>({count})</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-
-
-            {posts.filter(p => activeIntentFilter === 'All' || p.intent === activeIntentFilter).length === 0 && posts.length > 0 && (
-              <div className="text-center py-10 bg-slate-50 rounded-3xl border border-slate-100">
-                <Filter size={32} className="text-slate-300 mx-auto mb-3" />
-                <p className="font-bold text-slate-500">No posts match this intent filter.</p>
-              </div>
-            )}
-
-            {searchError && !isFetching && (
-              <div className={`flex flex-col items-center justify-center py-16 rounded-[3rem] border shadow-sm space-y-5 px-8 text-center ${sgBg}`}>
-                <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl ${sgIconBg}`}>
-                  {sgIsManual ? '🔐' : sgIsJail ? '⛔' : '🛡️'}
-                </div>
-                <div>
-                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgLabelColor}`}>
-                    {sgIsManual ? 'System Protected by Admin' : sgIsJail ? 'Account Temporarily Restricted' : 'System Safeguard Active'}
-                  </p>
-                  <h3 className={`text-lg font-black mb-2 ${sgTitleColor}`}>
-                    {sgIsManual ? 'Reddit Access Paused' : sgIsJail ? 'Cooling Down...' : 'Auto-Protection Triggered'}
-                  </h3>
-                  <p className={`text-sm font-medium max-w-xs leading-relaxed ${sgMsgColor}`}>
-                    {sgIsManual
-                      ? 'The administrator has temporarily paused Reddit access for system maintenance and protection. Our team is actively working on it.'
-                      : sgIsJail
-                        ? 'Your account was temporarily restricted due to excessive errors. This protects your Reddit account from bans.'
-                        : 'Redigo detected unusual Reddit API activity and activated automatic protection to prevent potential bans.'}
-                  </p>
-                </div>
-                {sgCountdownStr ? (
-                  <div className={`flex flex-col items-center px-8 py-4 rounded-2xl ${sgCdBg}`}>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgCdLabelColor}`}>Resuming in</p>
-                    <p className={`text-4xl font-black tabular-nums ${sgCdNumColor}`}>{sgCountdownStr}</p>
-                  </div>
-                ) : sgIsManual ? (
-                  <div className="px-6 py-3 bg-amber-100 rounded-2xl">
-                    <p className="text-amber-600 text-xs font-black uppercase tracking-widest">Indefinite — Admin Control</p>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {posts.length === 0 && !isFetching && !searchError && (
-              <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
-                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200">
-                  <Search size={40} />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-xl font-bold text-slate-900">No posts found</h3>
-                  <p className="text-slate-500 text-sm">Try different keywords or a different subreddit.</p>
-                </div>
-              </div>
-            )}
-
-            {posts.filter(p => activeIntentFilter === 'All' || p.intent === activeIntentFilter).map(post => (
-              <div
-                key={post.id}
-                onClick={() => setSelectedPost(post)}
-                className={`p-5 md:p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer overflow-hidden ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
-              >
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-50">
-                  <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
-                    <span className="shrink-0 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-widest">r/{post.subreddit}</span>
-                    <span className="shrink-0 text-[10px] font-bold text-slate-400">u/{post.author}</span>
-                  </div>
-
-                  {/* AI Intel Badge (Now relative and better positioned) */}
-                  {(post.opportunityScore > 0 || post.intent) && (
-                    <div className="flex flex-col items-end gap-2 w-full md:w-auto">
-                      <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
-                        {post.opportunityScore > 50 && (
-                          <div className="flex items-center gap-1 px-3 py-1.5 bg-red-50 border border-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex-shrink-0 shadow-sm shadow-red-50">
-                            <Flame size={12} className="fill-current" /> Hot Lead
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 bg-white border border-slate-100 px-3 py-1.5 rounded-xl shadow-sm flex-shrink-0">
-                          <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">AI Score</div>
-                          <div className={`text-sm font-black ${post.opportunityScore > 70 ? 'text-emerald-600' : post.opportunityScore > 40 ? 'text-orange-500' : 'text-slate-500'}`}>
-                            {post.opportunityScore}
-                          </div>
-                          <div className="w-px h-4 bg-slate-100 mx-1"></div>
-                          <div className="text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
-                            {post.intent || 'General'}
-                          </div>
-                        </div>
-                      </div>
-                      {post.analysisReason && (
-                        <p className="text-[10px] text-slate-400 font-medium italic text-right max-w-[200px]">
-                          "{post.analysisReason}"
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-                  <div className="flex-1 min-w-0 space-y-4">
-                    <h3 className="text-base md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors break-words">{post.title}</h3>
-                    <p className="text-slate-500 text-sm max-h-[150px] overflow-y-auto custom-scrollbar leading-relaxed break-words pr-2">{post.selftext}</p>
-                    <div className="flex items-center gap-5 pt-4">
-                      {/* Footer Meta Data */}
-                      <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><ThumbsUp size={14} /> {post.ups}</div>
-                      <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><MessageSquarePlus size={14} /> {post.num_comments}</div>
-                      <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold">
-                        <Clock size={14} />
-                        {post.created_utc ? new Date(post.created_utc * 1000).toLocaleDateString() : 'Recent'}
-                      </div>
-                      {post.scannedComments && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCollapsedPosts(prev => ({ ...prev, [post.id]: !prev[post.id] }));
-                          }}
-                          className="flex items-center gap-1.5 text-orange-600 text-[10px] font-black uppercase tracking-wider bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors ml-auto"
-                        >
-                          <ChevronDown size={14} className={`transition-transform duration-300 ${collapsedPosts[post.id] ? '' : 'rotate-180'}`} />
-                          {collapsedPosts[post.id] ? 'Show Scanned' : 'Hide Scanned'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 w-full md:w-auto mt-4 md:mt-0 md:shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedPost(post); setIsWizardOpen(true); }}
-                      className="w-full md:w-48 bg-slate-900 text-white px-6 py-4 rounded-2xl text-sm font-black hover:bg-orange-600 transition-all flex flex-col items-center justify-center shadow-lg active:scale-95 group shrink-0"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Wand2 size={18} />
-                        <span>Wizard Reply</span>
-                      </div>
-                      <span className="text-[9px] text-orange-400 font-black uppercase tracking-[0.2em] mt-0.5 group-hover:text-white transition-colors">{costs.comment} PTS</span>
-                    </button>
-
-                    {!post.scannedComments && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeepScan(post); }}
-                        disabled={isScanning === post.id || post.num_comments === 0}
-                        title={post.num_comments === 0 ? "No comments to scan" : ""}
-                        className="w-full md:w-48 bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm border border-orange-100"
-                      >
-                        {isScanning === post.id ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
-                        <div className="flex flex-col items-center">
-                          <span>{isScanning === post.id ? 'Scanning...' : (post.num_comments === 0 ? 'No Comments' : 'Deep Scan')}</span>
-                          <span className="text-[8px] opacity-70">{post.num_comments === 0 ? '0' : (costs.deepScan || 0.5)} PTS</span>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Scanned Comments Results */}
-                {post.scannedComments && post.scannedComments.length > 0 && !collapsedPosts[post.id] && (
-                  <div className="mt-8 pt-6 border-t border-slate-50 space-y-4 animate-in slide-in-from-top-4 duration-500">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Sparkles size={12} className="text-orange-500" />
-                        {post.scannedComments.length} High-Intent Comments Found In Thread
+                      <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgLabelColor}`}>
+                        {sgIsManual ? 'System Protected by Admin' : sgIsJail ? 'Account Temporarily Restricted' : 'System Safeguard Active'}
+                      </p>
+                      <h3 className={`text-lg font-black mb-2 ${sgTitleColor}`}>
+                        {sgIsManual ? 'Reddit Access Paused' : sgIsJail ? 'Cooling Down...' : 'Auto-Protection Triggered'}
+                      </h3>
+                      <p className={`text-sm font-medium max-w-xs leading-relaxed ${sgMsgColor}`}>
+                        {sgIsManual
+                          ? 'The administrator has temporarily paused Reddit access for system maintenance and protection. Our team is actively working on it.'
+                          : sgIsJail
+                            ? 'Your account was temporarily restricted due to excessive errors. This protects your Reddit account from bans.'
+                            : 'Redigo detected unusual Reddit API activity and activated automatic protection to prevent potential bans.'}
                       </p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {post.scannedComments.map((comment: any) => (
-                        <div
-                          key={comment.id}
-                          className="bg-slate-50/50 hover:bg-white border border-slate-100 hover:border-orange-200 p-5 rounded-3xl transition-all shadow-sm group/comment relative"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-100 shadow-sm">u/</div>
-                              <span className="text-[11px] font-black text-slate-900">{comment.author}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 bg-orange-100 text-orange-700 px-2 py-1 rounded-lg text-[9px] font-black">
-                              SCORE: {comment.opportunityScore}
+                    {sgCountdownStr ? (
+                      <div className={`flex flex-col items-center px-8 py-4 rounded-2xl ${sgCdBg}`}>
+                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgCdLabelColor}`}>Resuming in</p>
+                        <p className={`text-4xl font-black tabular-nums ${sgCdNumColor}`}>{sgCountdownStr}</p>
+                      </div>
+                    ) : sgIsManual ? (
+                      <div className="px-6 py-3 bg-amber-100 rounded-2xl">
+                        <p className="text-amber-600 text-xs font-black uppercase tracking-widest">Indefinite — Admin Control</p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {posts.length === 0 && !isFetching && !searchError && (
+                  <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
+                    <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-200">
+                      <Search size={40} />
+                    </div>
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-slate-900">No posts found</h3>
+                      <p className="text-slate-500 text-sm">Try different keywords or a different subreddit.</p>
+                    </div>
+                  </div>
+                )}
+
+                {posts.filter(p => activeIntentFilter === 'All' || p.intent === activeIntentFilter).map(post => (
+                  <div
+                    key={post.id}
+                    onClick={() => setSelectedPost(post)}
+                    className={`p-5 md:p-7 rounded-[2.5rem] transition-all duration-500 border-2 relative group cursor-pointer overflow-hidden ${selectedPost?.id === post.id ? 'border-orange-500 bg-orange-50/10 shadow-xl' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                  >
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-50">
+                      <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-2 md:pb-0">
+                        <span className="shrink-0 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-[10px] font-black uppercase tracking-widest">r/{post.subreddit}</span>
+                        <span className="shrink-0 text-[10px] font-bold text-slate-400">u/{post.author}</span>
+                      </div>
+
+                      {/* AI Intel Badge (Now relative and better positioned) */}
+                      {(post.opportunityScore > 0 || post.intent) && (
+                        <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+                          <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
+                            {post.opportunityScore > 50 && (
+                              <div className="flex items-center gap-1 px-3 py-1.5 bg-red-50 border border-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex-shrink-0 shadow-sm shadow-red-50">
+                                <Flame size={12} className="fill-current" /> Hot Lead
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 bg-white border border-slate-100 px-3 py-1.5 rounded-xl shadow-sm flex-shrink-0">
+                              <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">AI Score</div>
+                              <div className={`text-sm font-black ${post.opportunityScore > 70 ? 'text-emerald-600' : post.opportunityScore > 40 ? 'text-orange-500' : 'text-slate-500'}`}>
+                                {post.opportunityScore}
+                              </div>
+                              <div className="w-px h-4 bg-slate-100 mx-1"></div>
+                              <div className="text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                                {post.intent || 'General'}
+                              </div>
                             </div>
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed mb-4 max-h-[100px] overflow-y-auto custom-scrollbar italic break-words pr-2">"{comment.body}"</p>
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-auto gap-3">
-                            <p className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2.5 py-1.5 rounded-md border border-orange-100 flex-1 break-words">💡 {comment.reason}</p>
+                          {post.analysisReason && (
+                            <p className="text-[10px] text-slate-400 font-medium italic text-right max-w-[200px]">
+                              "{post.analysisReason}"
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col md:flex-row items-start justify-between gap-8">
+                      <div className="flex-1 min-w-0 space-y-4">
+                        <h3 className="text-base md:text-xl font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors break-words">{post.title}</h3>
+                        <p className="text-slate-500 text-sm max-h-[150px] overflow-y-auto custom-scrollbar leading-relaxed break-words pr-2">{post.selftext}</p>
+                        <div className="flex items-center gap-5 pt-4">
+                          {/* Footer Meta Data */}
+                          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><ThumbsUp size={14} /> {post.ups}</div>
+                          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold"><MessageSquarePlus size={14} /> {post.num_comments}</div>
+                          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-bold">
+                            <Clock size={14} />
+                            {post.created_utc ? new Date(post.created_utc * 1000).toLocaleDateString() : 'Recent'}
+                          </div>
+                          {post.scannedComments && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const commentUrl = post.url.split('?')[0].replace(/\/$/, '') + '/' + comment.id;
-                                const pseudoPost = {
-                                  ...post,
-                                  id: comment.id,
-                                  url: commentUrl,
-                                  title: `Replying to comment by u/${comment.author}`,
-                                  selftext: comment.body,
-                                  author: comment.author,
-                                  isComment: true,
-                                  redditId: `t1_${comment.id}`
-                                };
-                                setSelectedPost(pseudoPost);
-                                setIsWizardOpen(true);
+                                setCollapsedPosts(prev => ({ ...prev, [post.id]: !prev[post.id] }));
                               }}
-                              className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all shadow-md"
+                              className="flex items-center gap-1.5 text-orange-600 text-[10px] font-black uppercase tracking-wider bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors ml-auto"
                             >
-                              Reply Now
+                              <ChevronDown size={14} className={`transition-transform duration-300 ${collapsedPosts[post.id] ? '' : 'rotate-180'}`} />
+                              {collapsedPosts[post.id] ? 'Show Scanned' : 'Hide Scanned'}
                             </button>
-                          </div>
+                          )}
                         </div>
-                      ))}
+                      </div>
+                      <div className="flex flex-col gap-2 w-full md:w-auto mt-4 md:mt-0 md:shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedPost(post); setIsWizardOpen(true); }}
+                          className="w-full md:w-48 bg-slate-900 text-white px-6 py-4 rounded-2xl text-sm font-black hover:bg-orange-600 transition-all flex flex-col items-center justify-center shadow-lg active:scale-95 group shrink-0"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Wand2 size={18} />
+                            <span>Wizard Reply</span>
+                          </div>
+                          <span className="text-[9px] text-orange-400 font-black uppercase tracking-[0.2em] mt-0.5 group-hover:text-white transition-colors">{costs.comment} PTS</span>
+                        </button>
+
+                        {!post.scannedComments && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeepScan(post); }}
+                            disabled={isScanning === post.id || post.num_comments === 0}
+                            title={post.num_comments === 0 ? "No comments to scan" : ""}
+                            className="w-full md:w-48 bg-orange-50 text-orange-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm border border-orange-100"
+                          >
+                            {isScanning === post.id ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
+                            <div className="flex flex-col items-center">
+                              <span>{isScanning === post.id ? 'Scanning...' : (post.num_comments === 0 ? 'No Comments' : 'Deep Scan')}</span>
+                              <span className="text-[8px] opacity-70">{post.num_comments === 0 ? '0' : (costs.deepScan || 0.5)} PTS</span>
+                            </div>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
 
-                {post.scannedComments && post.scannedComments.length === 0 && (
-                  <div className="mt-6 pt-6 border-t border-slate-50 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 italic">No direct opportunities identified in this thread's comments.</p>
+                    {/* Scanned Comments Results */}
+                    {post.scannedComments && post.scannedComments.length > 0 && !collapsedPosts[post.id] && (
+                      <div className="mt-8 pt-6 border-t border-slate-50 space-y-4 animate-in slide-in-from-top-4 duration-500">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Sparkles size={12} className="text-orange-500" />
+                            {post.scannedComments.length} High-Intent Comments Found In Thread
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {post.scannedComments.map((comment: any) => (
+                            <div
+                              key={comment.id}
+                              className="bg-slate-50/50 hover:bg-white border border-slate-100 hover:border-orange-200 p-5 rounded-3xl transition-all shadow-sm group/comment relative"
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-100 shadow-sm">u/</div>
+                                  <span className="text-[11px] font-black text-slate-900">{comment.author}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 bg-orange-100 text-orange-700 px-2 py-1 rounded-lg text-[9px] font-black">
+                                  SCORE: {comment.opportunityScore}
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-600 leading-relaxed mb-4 max-h-[100px] overflow-y-auto custom-scrollbar italic break-words pr-2">"{comment.body}"</p>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-auto gap-3">
+                                <p className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2.5 py-1.5 rounded-md border border-orange-100 flex-1 break-words">💡 {comment.reason}</p>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const commentUrl = post.url.split('?')[0].replace(/\/$/, '') + '/' + comment.id;
+                                    const pseudoPost = {
+                                      ...post,
+                                      id: comment.id,
+                                      url: commentUrl,
+                                      title: `Replying to comment by u/${comment.author}`,
+                                      selftext: comment.body,
+                                      author: comment.author,
+                                      isComment: true,
+                                      redditId: `t1_${comment.id}`
+                                    };
+                                    setSelectedPost(pseudoPost);
+                                    handleSendToAI(pseudoPost);
+                                  }}
+                                  className="bg-orange-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-md"
+                                >
+                                  Draft with AI Agent
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {post.scannedComments && post.scannedComments.length === 0 && (
+                      <div className="mt-6 pt-6 border-t border-slate-50 text-center">
+                        <p className="text-[10px] font-bold text-slate-400 italic">No direct opportunities identified in this thread's comments.</p>
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div >
-
-          {/* Assistant Panel */}
-          < div className="xl:col-span-4" >
+            )}
+          </div>
+          <div className="xl:col-span-4">
             <div className="sticky top-10 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col h-[calc(100vh-120px)] min-h-[600px]">
               <div className="p-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -2046,7 +2201,7 @@ export const Comments: React.FC = () => {
             </div>
           </div>
         </div>
-      </div >
+      </div>
 
       {/* Reply Wizard Overlay */}
       {
