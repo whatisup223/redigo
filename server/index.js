@@ -5242,7 +5242,14 @@ app.get('/api/user/reddit/profile', async (req, res) => {
 
   try {
     const token = req.headers['x-redigo-token'];
-    if (!token) return res.status(401).json({ error: 'Reddit account not linked or extension inactive' });
+    if (!token) {
+      return res.status(200).json({
+        error: 'Reddit account not linked or extension inactive',
+        karma: 0,
+        connected: false,
+        isSilenced: true // Internal flag to avoid console noise if needed
+      });
+    }
 
     const response = await fetch('https://oauth.reddit.com/api/v1/me', {
       headers: {
