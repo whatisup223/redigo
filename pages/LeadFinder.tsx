@@ -603,11 +603,15 @@ export const LeadFinder: React.FC = () => {
       };
       window.addEventListener('message', handleResponse);
 
+      // Format keywords for Reddit search: ( "kw1" OR "kw2" )
+      const formattedKw = searchKeywords.split(',').map(k => k.trim()).filter(k => k).map(k => `"${k}"`).join(' OR ');
+      const finalSearchQuery = `(${formattedKw})`;
+
       window.postMessage({
         source: 'REDIGO_WEB_APP',
         type: 'REDDIT_SEARCH',
         subreddit: targetSubreddit,
-        keywords: searchKeywords,
+        keywords: finalSearchQuery,
         sortBy: sortBy
       }, '*');
     });
