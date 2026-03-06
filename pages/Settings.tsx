@@ -1680,6 +1680,11 @@ export const Settings: React.FC = () => {
                                                 icon = <Search size={18} />;
                                                 colorClass = 'bg-orange-100 text-orange-600';
                                                 label = 'AI Deep Scan';
+                                            } else if (item.type === 'niche_explore') {
+                                                icon = <Globe size={18} />;
+                                                colorClass = 'bg-blue-100 text-blue-600';
+                                                label = 'Niche Discovery 🌐';
+                                                if (item.query) item.details = `Search: ${item.query}`;
                                             }
 
                                             return (
