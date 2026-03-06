@@ -102,6 +102,7 @@ interface AISettings {
         image: number;
         fetch?: number;
         deepScan?: number;
+        nicheExplore?: number;
     };
 }
 
@@ -272,7 +273,8 @@ Return ONLY a valid JSON array. No conversational text.
             post: 2,
             image: 5,
             fetch: 1,
-            deepScan: 0.5
+            deepScan: 0.5,
+            nicheExplore: 0
         }
     });
     const [stripeSettings, setStripeSettings] = useState<StripeSettings>({
@@ -2682,6 +2684,28 @@ Return ONLY a valid JSON array. No conversational text.
                                                                                 });
                                                                             }}
                                                                         />
+                                                                     <label className="block">
+                                                                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Explore Niches 🌐</span>
+                                                                         <input
+                                                                             type="number"
+                                                                             min="0"
+                                                                             step="0.5"
+                                                                             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                             value={aiSettings.creditCosts?.nicheExplore ?? 0}
+                                                                             onChange={(e) => {
+                                                                                 const val = parseFloat(e.target.value) || 0;
+                                                                                 setAiSettings({
+                                                                                     ...aiSettings,
+                                                                                     creditCosts: {
+                                                                                         comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5,
+                                                                                         ...aiSettings.creditCosts,
+                                                                                         nicheExplore: val
+                                                                                     }
+                                                                                 });
+                                                                             }}
+                                                                         />
+                                                                         <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make niche search free</p>
+                                                                     </label>
                                                                     </label>
                                                                 </div>
                                                             </div>

@@ -163,7 +163,7 @@ export const LeadFinder: React.FC = () => {
   const [nicheQuery, setNicheQuery] = useState('');
   const [nicheResults, setNicheResults] = useState<any[]>([]);
   const [isSearchingNiches, setIsSearchingNiches] = useState(false);
-  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5 });
+  const [costs, setCosts] = useState({ comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5, nicheExplore: 0 });
   const [isInitialCheckDone, setIsInitialCheckDone] = useState(false);
   const [showNoCreditsModal, setShowNoCreditsModal] = useState(false);
   const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
@@ -237,6 +237,16 @@ export const LeadFinder: React.FC = () => {
 
   const handleNicheSearch = async () => {
     if (!nicheQuery.trim()) return;
+
+    // Credit check for niche search
+    const nicheCost = costs.nicheExplore || 0;
+    if (nicheCost > 0) {
+      if ((user?.credits || 0) < nicheCost) {
+        setShowNoCreditsModal(true);
+        return;
+      }
+    }
+
     setIsSearchingNiches(true);
     setNicheResults([]);
     try {
@@ -244,6 +254,10 @@ export const LeadFinder: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setNicheResults(data);
+        // Deduct credits if cost > 0
+        if (nicheCost > 0 && user?.id) {
+          updateUser({ credits: Math.max(0, (user.credits || 0) - nicheCost) });
+        }
         if (data.length === 0) showToast('No matching subreddits found.', 'error');
         else showToast(`Found ${data.length} communities!`, 'success');
       } else {
@@ -922,7 +936,12 @@ export const LeadFinder: React.FC = () => {
                   className="bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all disabled:opacity-30 flex items-center gap-2 shadow-lg shadow-orange-200"
                 >
                   <Search size={16} className={isSearchingNiches ? 'animate-pulse' : ''} />
-                  <span>Explore Niches</span>
+                  <span className="flex flex-col items-center leading-tight">
+                    <span>Explore Niches</span>
+                    {(costs.nicheExplore || 0) > 0 && (
+                      <span className="text-[9px] text-orange-200 font-black tracking-[0.15em]">{costs.nicheExplore} PT</span>
+                    )}
+                  </span>
                 </button>
               </div>
             )}
