@@ -33,10 +33,10 @@ export const BlogList: React.FC = () => {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#fcfcfd] font-['Outfit'] pb-32">
+        <div className="min-h-screen bg-[#fcfcfd] font-['Outfit'] pb-32" style={{ paddingTop: 0 }}>
 
             {/* ── Hero Banner ─────────────────────────────────────────────── */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-red-500 pt-32 pb-24 px-6">
+            <div className="relative overflow-hidden bg-gradient-to-br from-orange-600 via-orange-500 to-red-500 pb-20 px-6" style={{ paddingTop: '7rem' }}>
                 {/* Decorative blobs */}
                 <div className="absolute -top-20 -left-20 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-orange-900/20 rounded-full blur-3xl pointer-events-none" />
@@ -64,23 +64,7 @@ export const BlogList: React.FC = () => {
                         Strategies to help you scale your SaaS natively on Reddit — without getting banned.
                     </p>
 
-                    {/* Stats strip */}
-                    <div className="flex items-center gap-8 mt-2 text-white/80 text-sm font-bold">
-                        <div className="flex flex-col items-center gap-1">
-                            <span className="text-3xl font-black text-white">{posts.length || 3}+</span>
-                            <span className="text-[11px] uppercase tracking-widest text-orange-100">Articles</span>
-                        </div>
-                        <div className="w-px h-10 bg-white/20" />
-                        <div className="flex flex-col items-center gap-1">
-                            <span className="text-3xl font-black text-white">100%</span>
-                            <span className="text-[11px] uppercase tracking-widest text-orange-100">Free to Read</span>
-                        </div>
-                        <div className="w-px h-10 bg-white/20" />
-                        <div className="flex flex-col items-center gap-1">
-                            <span className="text-3xl font-black text-white">AI</span>
-                            <span className="text-[11px] uppercase tracking-widest text-orange-100">Powered Tips</span>
-                        </div>
-                    </div>
+
                 </div>
             </div>
             {/* Smooth wave transition */}
