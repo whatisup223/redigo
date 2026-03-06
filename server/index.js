@@ -74,6 +74,61 @@ const initSettings = async () => {
 
 await initSettings();
 
+// Auto-seed blog posts if none exist
+const seedBlogPosts = async () => {
+  try {
+    if (mongoose.connection.readyState !== 1) return;
+    const count = await BlogPost.countDocuments();
+    if (count > 0) return; // Already seeded, skip
+
+    const posts = [
+      {
+        id: crypto.randomUUID(),
+        title: 'How to Get Your First 100 SaaS Customers from Reddit',
+        slug: 'how-to-get-first-100-saas-customers-reddit',
+        excerpt: 'Reddit is an absolute goldmine for early-stage SaaS founders. In this guide, we break down exactly how to find and pitch your ideal customers natively without getting banned or looking like a spammer.',
+        content: `<h2>The Reddit Advantage</h2><p>Getting your first 100 customers is the hardest part of building a SaaS. But what if there was a place where people actively complained about the exact problem your tool solves? That place is Reddit.</p><h3>1. Find the Right Subreddits</h3><p>Start by identifying niche communities. Don't just go to r/SaaS or r/Entrepreneur. If you built a tool for copywriters, go to r/copywriting. Use the search bar to find posts with keywords like <strong>"how do you guys manage"</strong> or <strong>"what is the best tool for"</strong>.</p><h3>2. The Bridge Approach</h3><p>Never just drop a link. Answer their question genuinely, provide massive value, and then casually mention your tool as a logical next step. This is the bridge.</p><h3>3. Automate the Hunt</h3><p>Instead of manual searching, use a tool like <strong>Redigo</strong> to automatically find high-intent leads using AI. It saves hours of scrolling and gets you straight to the people who are ready to buy.</p>`,
+        coverImage: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=1200&h=600',
+        author: 'Redigo Growth Team',
+        status: 'published',
+        tags: ['SaaS', 'Marketing', 'Growth'],
+        publishedAt: new Date(),
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Reddit Marketing Strategies in 2026: The Anti-Spam Playbook',
+        slug: 'reddit-marketing-strategies-anti-spam',
+        excerpt: 'The days of automated spamming on Reddit are over. To win right now, you need authenticity, value-first mentality, and precise AI targeting. Here is the modern playbook.',
+        content: `<h2>Stop Acting Like a Marketer</h2><p>Redditors hate marketers. If you sound like an ad, you will be downvoted and banned in minutes. The key is to act like a helpful power-user.</p><h3>Rule 1: No Corporate Speak</h3><p>Avoid words like "synergy", "leverage", or "game-changer". Speak like a normal human being. Use contractions and real formatting to make your post readable.</p><h3>Rule 2: The 90/10 Rule</h3><p>90% of your activity should be answering questions, sharing free resources, and participating in discussions. Only 10% should ever mention your product.</p><h3>Rule 3: Deep Search Intent</h3><p>Look for posts with high purchase intent. Instead of "how to do X", look for "I am tired of doing X manually" — these are your buyers.</p>`,
+        coverImage: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1200&h=600',
+        author: 'Redigo Growth Team',
+        status: 'published',
+        tags: ['Reddit Marketing', 'B2B', 'Lead Gen'],
+        publishedAt: new Date(),
+      },
+      {
+        id: crypto.randomUUID(),
+        title: 'Why Finding "Thirsty Leads" Beats Praying for Viral Growth',
+        slug: 'finding-thirsty-leads-better-than-viral-growth',
+        excerpt: 'Viral marketing is great for ego but terrible for predictable MRR. Instead of hoping for a post to blow up, find users who are already looking to buy your solution right now.',
+        content: `<h2>The Problem with Virality</h2><p>Everyone wants a viral Product Hunt launch or a tweet that brings in thousands of users. But what happens on day 3? The traffic dies. The signups stop. You are back to square one.</p><h3>Enter: The Thirsty Lead</h3><p>A thirsty lead is someone who is actively experiencing the pain point your product solves, right now. They are on Reddit asking questions, complaining about existing tools, or looking for recommendations.</p><h3>How to Find Them Systematically</h3><p>Instead of broadcasting to everyone, use AI-powered semantic search to filter out the noise and find these high-intent conversations. Reach out directly — be a savior, not a salesperson. That is how predictable growth is built.</p>`,
+        coverImage: 'https://images.unsplash.com/photo-1533750516457-a7f992034fec?auto=format&fit=crop&q=80&w=1200&h=600',
+        author: 'Redigo Editorial',
+        status: 'published',
+        tags: ['Startup', 'Sales', 'Lead Gen'],
+        publishedAt: new Date(),
+      },
+    ];
+
+    await BlogPost.insertMany(posts);
+    console.log('✅ Seeded 3 demo blog posts');
+  } catch (e) {
+    console.error('Blog seed error:', e.message);
+  }
+};
+
+await seedBlogPosts();
+
 // Emergency Check: Ensure primary admin is never suspended
 if (process.env.ADMIN_EMAIL && mongoose.connection.readyState === 1) {
   try {
