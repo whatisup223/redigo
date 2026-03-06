@@ -6305,7 +6305,7 @@ if (process.env.NODE_ENV === 'production') {
     }
 
     try {
-      let html = require('fs').readFileSync(path.join(__dirname, '../dist/index.html'), 'utf8');
+      let html = fs.readFileSync(path.join(__dirname, '../dist/index.html'), 'utf8');
       const verificationTag = settingsCache.system?.googleSiteVerification || '';
       if (verificationTag) {
         html = html.replace('</head>', `    <meta name="google-site-verification" content="${verificationTag}">\n</head>`);
