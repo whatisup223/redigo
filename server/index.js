@@ -5267,7 +5267,7 @@ app.get('/api/user/reddit/profile', async (req, res) => {
       linkKarma: data.link_karma,
       totalKarma: data.total_karma,
       hasModMail: data.has_mod_mail,
-      icon: data.icon_img
+      icon: (data.icon_img || "").replace(/&amp;/g, '&')
     });
   } catch (error) {
     console.error('Profile Fetch Error:', error);
@@ -5886,16 +5886,23 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
     }
 
     const data = await response.json();
-    const results = (data.data?.children || []).map(child => ({
-      name: child.data.display_name,
-      title: child.data.title,
-      subscribers: child.data.subscribers,
-      description: child.data.public_description,
-      icon: child.data.icon_img || child.data.community_icon,
-      over18: child.data.over18,
-      type: child.data.subreddit_type,
-      activeUsers: child.data.accounts_active
-    }));
+    const results = (data.data?.children || []).map(child => {
+      let icon = child.data.icon_img || child.data.community_icon || "";
+      if (icon) {
+        // Reddit API returns encoded entities, replace them for proper browser loading
+        icon = icon.replace(/&amp;/g, '&');
+      }
+      return {
+        name: child.data.display_name,
+        title: child.data.title,
+        subscribers: child.data.subscribers,
+        description: child.data.public_description,
+        icon: icon,
+        over18: child.data.over18,
+        type: child.data.subreddit_type,
+        activeUsers: child.data.accounts_active
+      };
+    });
 
     res.json(results);
   } catch (err) {

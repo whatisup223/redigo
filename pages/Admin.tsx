@@ -344,7 +344,8 @@ Return ONLY a valid JSON array. No conversational text.
     const [isRefunding, setIsRefunding] = useState(false);
 
     const toggleUserSuspension = async (userId: string | number, currentStatus: boolean, reason?: string) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch(`/api/admin/users/${userId}/suspend`, {
                 method: 'PATCH',
@@ -365,7 +366,8 @@ Return ONLY a valid JSON array. No conversational text.
     const handleProcessRefund = async (userId: string | number, transactionId: string, force = false) => {
         if (!force && !confirm('Are you sure you want to refund this transaction? This will also revoke associated credits and downgrade the user.')) return;
 
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setRefundingTxId(transactionId);
         setIsRefunding(true);
         try {
@@ -398,7 +400,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const fetchCancellationFeedback = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/cancellation-feedback', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -408,7 +411,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const fetchRefundPolicy = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/payment-policy', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -418,7 +422,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const saveRefundPolicy = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/payment-policy', {
                 method: 'POST',
@@ -474,7 +479,8 @@ Return ONLY a valid JSON array. No conversational text.
     const [isImageUploading, setIsImageUploading] = useState(false);
 
     const fetchDetailUser = async (userId: number, silent = false) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         if (!silent) setDetailLoading(true); else setDetailRefreshing(true);
         try {
             const res = await fetch(`/api/admin/users/${userId}/stats`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -502,7 +508,8 @@ Return ONLY a valid JSON array. No conversational text.
 
     // Fetch Data Function (Real Backend)
     const fetchData = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         const headers = { 'Authorization': `Bearer ${token}` };
         setLoading(true);
         try {
@@ -546,7 +553,8 @@ Return ONLY a valid JSON array. No conversational text.
         if (activeTab !== 'logs') return;
 
         const fetchLogs = async () => {
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
             try {
                 const res = await fetch('/api/admin/logs', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (res.ok) {
@@ -563,7 +571,8 @@ Return ONLY a valid JSON array. No conversational text.
     }, [activeTab]);
 
     const fetchAnalytics = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setAnalyticsLoading(true);
         try {
             const res = await fetch('/api/admin/analytics', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -581,7 +590,8 @@ Return ONLY a valid JSON array. No conversational text.
     const handleUpdateUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedUser) return;
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const payload: any = {
                 name: editForm.name,
@@ -615,7 +625,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleRestoreUser = async (userId: string | number) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setIsRestoringDetail(true);
         try {
             const res = await fetch(`/api/admin/users/${userId}/restore`, {
@@ -633,7 +644,8 @@ Return ONLY a valid JSON array. No conversational text.
 
     // Safeguard Functions
     const fetchSafeguard = async (forceInit = false) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/safeguard/status', { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
@@ -653,7 +665,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveSafeguard = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setIsSafeguardSaving(true);
         try {
             const res = await fetch('/api/admin/safeguard/config', {
@@ -673,7 +686,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleUnjailUser = async (uid: string) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/safeguard/unjail', {
                 method: 'POST',
@@ -687,7 +701,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleToggleKillSwitch = async (active: boolean) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         // Optimistic update: update UI immediately so button responds instantly
         setSafeguardConfig((prev: any) => ({ ...prev, isGlobalKillSwitchManual: active }));
         try {
@@ -720,7 +735,8 @@ Return ONLY a valid JSON array. No conversational text.
     }, [settingsTab, activeTab]);
 
     const handleRestoreDeletion = async (userId: string | number) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         if (!token) return;
         setIsRestoringDetail(true);
         try {
@@ -754,7 +770,8 @@ Return ONLY a valid JSON array. No conversational text.
     const executeDeleteUser = async () => {
         if (!userToDelete) return;
         setIsDeleting(true);
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch(`/api/admin/users/${userToDelete}`, {
                 method: 'DELETE',
@@ -791,7 +808,8 @@ Return ONLY a valid JSON array. No conversational text.
     }, [activeTab, analyticsTab]);
 
     const handleSaveSettings = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/ai-settings', {
                 method: 'POST',
@@ -813,7 +831,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveSystemSettings = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/system-settings', {
                 method: 'POST',
@@ -835,7 +854,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveStripeSettings = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/stripe-settings', {
                 method: 'POST',
@@ -857,7 +877,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSavePayPalSettings = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/paypal-settings', {
                 method: 'POST',
@@ -879,7 +900,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSavePlan = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         const isEditing = plans.some(p => p.id === planForm.id);
         const method = isEditing ? 'PUT' : 'POST';
         const url = isEditing ? `/api/plans/${planForm.id}` : '/api/plans';
@@ -912,7 +934,8 @@ Return ONLY a valid JSON array. No conversational text.
 
     const handleDeletePlan = async (id: string) => {
         if (!confirm('Are you sure you want to delete this plan?')) return;
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch(`/api/plans/${id}`, {
                 method: 'DELETE',
@@ -930,7 +953,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveRedditSettings = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             // Save basic reddit settings
             const res = await fetch('/api/admin/reddit-settings', {
@@ -964,7 +988,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveSMTPSettings = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/smtp-settings', {
                 method: 'POST',
@@ -986,7 +1011,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveEmailTemplates = async (updatedTemplates?: any) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setIsEmailSaving(true);
         try {
             const res = await fetch('/api/admin/email-templates', {
@@ -1015,7 +1041,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleTestEmail = async (templateId: string) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         const userEmail = prompt('Enter email to send test to:', user?.email || '');
         if (!userEmail) return;
 
@@ -1061,7 +1088,8 @@ Return ONLY a valid JSON array. No conversational text.
 
         setIsPasswordSaving(true);
         setPasswordMessage(null);
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
 
         try {
             const res = await fetch(`/api/users/${user.id}/password`, {
@@ -1092,7 +1120,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const fetchAnnouncements = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/announcements', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1104,7 +1133,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const handleSaveAnnouncement = async () => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setIsAnnSaving(true);
         try {
             const isEditing = !!annForm.id;
@@ -1134,7 +1164,8 @@ Return ONLY a valid JSON array. No conversational text.
 
     const handleDeleteAnnouncement = async (id: string) => {
         if (!confirm('Are you sure you want to delete this announcement?')) return;
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch(`/api/admin/announcements/${id}`, {
                 method: 'DELETE',
@@ -1148,7 +1179,8 @@ Return ONLY a valid JSON array. No conversational text.
 
     const handleClearLogs = async () => {
         if (!confirm('🚨 Are you absolutely sure you want to PERMANENTLY delete ALL system logs? This cannot be undone.')) return;
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         try {
             const res = await fetch('/api/admin/logs', {
                 method: 'DELETE',
@@ -1183,7 +1215,8 @@ Return ONLY a valid JSON array. No conversational text.
     };
 
     const fetchAnnStats = async (id: string) => {
-        const token = localStorage.getItem('token');
+        const t = localStorage.getItem('token');
+        const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
         setIsAnnStatsLoading(true);
         setIsAnnStatsModalOpen(true);
         try {
@@ -1207,7 +1240,8 @@ Return ONLY a valid JSON array. No conversational text.
 
         setIsImageUploading(true);
         try {
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : '';
             const res = await fetch('/api/admin/announcements/upload', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },

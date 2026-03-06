@@ -219,7 +219,7 @@ export const Dashboard: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+          'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
         },
         body: JSON.stringify({ userId: user.id, announcementId: announcement.id })
       });
@@ -237,7 +237,7 @@ export const Dashboard: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+          'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
         },
         body: JSON.stringify({ userId: user.id || (user as any)._id })
       });

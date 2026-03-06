@@ -70,7 +70,7 @@ export const Settings: React.FC = () => {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            'Authorization': (token && token !== 'null' && token !== 'undefined') ? `Bearer ${token}` : ''
                         },
                         body: JSON.stringify({ userId: user.id })
                     });
@@ -178,7 +178,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                    'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
                 },
                 body: JSON.stringify({
                     userId: user.id || user._id,
@@ -208,7 +208,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                    'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
                 },
                 body: JSON.stringify({
                     userId: user.id || user._id,
@@ -239,7 +239,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                    'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
                 },
                 body: JSON.stringify({ userId: user.id || user._id })
             });
@@ -484,7 +484,7 @@ export const Settings: React.FC = () => {
             try {
                 const [brandRes, plansRes] = await Promise.all([
                     fetch(`/api/user/brand-profile?userId=${user.id}`, {
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                        headers: (token && token !== 'null' && token !== 'undefined') ? { 'Authorization': `Bearer ${token}` } : {}
                     }),
                     fetch('/api/plans')
                 ]);
@@ -521,7 +521,7 @@ export const Settings: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                    'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
                 },
                 body: JSON.stringify({ userId: user.id, ...brandProfile })
             });
@@ -575,7 +575,7 @@ export const Settings: React.FC = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                    'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
                 },
                 body: JSON.stringify({
                     name: profileName,
@@ -618,7 +618,7 @@ export const Settings: React.FC = () => {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || localStorage.getItem('token')}`
+                    'Authorization': (() => { const t = token || localStorage.getItem('token'); return (t && t !== 'null' && t !== 'undefined') ? `Bearer ${t}` : ''; })()
                 },
                 body: JSON.stringify({
                     currentPassword: passwordData.currentPassword,

@@ -474,9 +474,9 @@ export const Library: React.FC = () => {
                                                 // Mark as Pending in DB for sync tracking if it was a Draft
                                                 if (!isPublished && item.status?.toLowerCase() === 'draft') {
                                                     try {
-                                                        const token = localStorage.getItem('token');
+                                                        const t = localStorage.getItem('token');
                                                         const authHeaders: HeadersInit = { 'Content-Type': 'application/json' };
-                                                        if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+                                                        if (t && t !== 'null' && t !== 'undefined') authHeaders['Authorization'] = `Bearer ${t}`;
 
                                                         await fetch('/api/item/status', {
                                                             method: 'POST',

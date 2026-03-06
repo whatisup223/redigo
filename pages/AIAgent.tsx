@@ -91,8 +91,9 @@ const toneActiveMap: Record<string, string> = {
 export const AIAgent: React.FC = () => {
     const { user, updateUser, syncUser } = useAuth();
     const getAuthHeaders = (): Record<string, string> => {
-        const token = localStorage.getItem('token');
-        return token ? { 'Authorization': `Bearer ${token}` } : {};
+        const t = localStorage.getItem('token');
+        if (!t || t === 'null' || t === 'undefined') return {};
+        return { 'Authorization': `Bearer ${t}` };
     };
     const [step, setStep] = useState(1);
     const isForcedRef = useRef(false);

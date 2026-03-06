@@ -146,8 +146,8 @@ export const Analytics: React.FC = () => {
       showToast('Checking your Reddit profile...', 'success');
       try {
         const userId = user.id || user._id;
-        const token = localStorage.getItem('token');
-        const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const t = localStorage.getItem('token');
+        const authHeaders: HeadersInit = (t && t !== 'null' && t !== 'undefined') ? { 'Authorization': `Bearer ${t}` } : {};
         // Invalidate cache by adding timestamp — forces fresh Reddit fetch
         const ts = Date.now();
         const syncUrl = activeTab === 'posts'
@@ -206,7 +206,7 @@ export const Analytics: React.FC = () => {
       try {
         const activeToken = localStorage.getItem('token');
         const authHeaders: HeadersInit = { 'Content-Type': 'application/json' };
-        if (activeToken) authHeaders['Authorization'] = `Bearer ${activeToken}`;
+        if (activeToken && activeToken !== 'null' && activeToken !== 'undefined') authHeaders['Authorization'] = `Bearer ${activeToken}`;
 
         const response = await fetch('/api/reddit/verify', {
           method: 'POST',
@@ -327,8 +327,8 @@ export const Analytics: React.FC = () => {
   const handleArchiveLink = async (id: string) => {
     if (!confirm('Are you sure you want to archive this tracking link? It will be hidden from your analytics view.')) return;
     try {
-      const token = localStorage.getItem('token');
-      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const t = localStorage.getItem('token');
+      const authHeaders: HeadersInit = (t && t !== 'null' && t !== 'undefined') ? { 'Authorization': `Bearer ${t}` } : {};
       const ts = Date.now();
       const res = await fetch(`/api/tracking/archive?_=${ts}`, {
         method: 'POST',
@@ -349,8 +349,8 @@ export const Analytics: React.FC = () => {
   const handleDeleteLink = async (id: string) => {
     if (!confirm('Are you sure you want to permanently delete this tracking link? This action cannot be undone.')) return;
     try {
-      const token = localStorage.getItem('token');
-      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const t = localStorage.getItem('token');
+      const authHeaders: HeadersInit = (t && t !== 'null' && t !== 'undefined') ? { 'Authorization': `Bearer ${t}` } : {};
       const ts = Date.now();
       const res = await fetch(`/api/tracking/delete?_=${ts}`, {
         method: 'POST',
@@ -372,8 +372,8 @@ export const Analytics: React.FC = () => {
     if (!confirm(`Are you sure you want to delete this ${type} from Reddit? This will remove it from Reddit and hide it from your history.`)) return;
     try {
       setToast({ message: 'Deleting from Reddit...', type: 'success' });
-      const token = localStorage.getItem('token');
-      const authHeaders: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const t = localStorage.getItem('token');
+      const authHeaders: HeadersInit = (t && t !== 'null' && t !== 'undefined') ? { 'Authorization': `Bearer ${t}` } : {};
       const ts = Date.now();
       const res = await fetch(`/api/reddit/delete?_=${ts}`, {
         method: 'POST',

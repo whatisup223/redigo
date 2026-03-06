@@ -67,7 +67,8 @@ export const Support: React.FC = () => {
         setIsLoading(true);
         try {
             const role = isAdmin ? 'admin' : 'user';
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : null;
             const headers: any = {};
             if (token && token !== 'null' && token !== 'undefined') {
                 headers['Authorization'] = `Bearer ${token}`;
@@ -119,7 +120,8 @@ export const Support: React.FC = () => {
         };
 
         try {
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : null;
             const res = await fetch('/api/support/tickets', {
                 method: 'POST',
                 headers: {
@@ -159,7 +161,8 @@ export const Support: React.FC = () => {
         }
 
         try {
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : null;
             const res = await fetch(`/api/support/tickets/${activeTicket.id}`, {
                 method: 'PUT',
                 headers: {
@@ -179,7 +182,8 @@ export const Support: React.FC = () => {
 
     const updateTicketStatus = async (ticketId: string, newStatus: Ticket['status']) => {
         try {
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : null;
             const res = await fetch(`/api/support/tickets/${ticketId}`, {
                 method: 'PUT',
                 headers: {
@@ -200,7 +204,8 @@ export const Support: React.FC = () => {
         if (!confirm('Are you sure you want to permanently delete this ticket? it will be removed from the database and the user will not see it anymore.')) return;
 
         try {
-            const token = localStorage.getItem('token');
+            const t = localStorage.getItem('token');
+            const token = (t && t !== 'null' && t !== 'undefined') ? t : null;
             if (!token || token === 'null' || token === 'undefined') return;
             const res = await fetch(`/api/support/tickets/${ticketId}`, {
                 method: 'DELETE',
