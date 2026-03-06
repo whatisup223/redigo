@@ -6296,14 +6296,25 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../dist')));
+  app.use(express.static(path.join(__dirname, '../dist'), { index: false }));
 
   app.get(/.*/, (req, res) => {
     // Prevent unhandled API routes from returning HTML, avoiding SyntaxError JSON parse crashes
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'Endpoint not found' });
     }
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
+
+    try {
+      let html = require('fs').readFileSync(path.join(__dirname, '../dist/index.html'), 'utf8');
+      const verificationTag = settingsCache.system?.googleSiteVerification || '';
+      if (verificationTag) {
+        html = html.replace('</head>', `    <meta name="google-site-verification" content="${verificationTag}">\n</head>`);
+      }
+      res.send(html);
+    } catch (err) {
+      // Fallback
+      res.sendFile(path.join(__dirname, '../dist/index.html'));
+    }
   });
 }
 
