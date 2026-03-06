@@ -257,19 +257,21 @@ export const LeadFinder: React.FC = () => {
     }
   };
 
-  const handleSendToAI = (post: any) => {
+  const handleSendToAI = (post: any, replyMode: 'reply-post' | 'reply-comment' = 'reply-post') => {
     // Save post to local storage for the AI agent to pick up
     localStorage.setItem('redditgo_current_lead', JSON.stringify({
       postId: post.id,
       redditId: post.redditId || post.id,
       title: post.title,
-      content: post.selftext || '',
+      content: post.selftext || post.body || '',
       subreddit: post.subreddit,
       url: post.url,
       author: post.author,
+      isComment: post.isComment || false,
+      replyMode,
       timestamp: Date.now()
     }));
-    navigate('/ai-agent?mode=reply');
+    navigate(`/ai-agent?mode=${replyMode}`);
   };
 
 
@@ -1185,7 +1187,7 @@ export const LeadFinder: React.FC = () => {
                       </div>
                       <div className="flex flex-col gap-2 w-full md:w-auto mt-4 md:mt-0 md:shrink-0">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setSelectedPost(post); handleSendToAI(post); }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedPost(post); handleSendToAI(post, 'reply-post'); }}
                           className="w-full md:w-48 bg-slate-900 text-white px-6 py-4 rounded-2xl text-sm font-black hover:bg-orange-600 transition-all flex flex-col items-center justify-center shadow-lg active:scale-95 group shrink-0"
                         >
                           <div className="flex items-center gap-2">
@@ -1254,7 +1256,7 @@ export const LeadFinder: React.FC = () => {
                                       redditId: `t1_${comment.id}`
                                     };
                                     setSelectedPost(pseudoPost);
-                                    handleSendToAI(pseudoPost);
+                                    handleSendToAI(pseudoPost, 'reply-comment');
                                   }}
                                   className="bg-orange-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-md"
                                 >

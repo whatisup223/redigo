@@ -140,6 +140,8 @@ export const AIAgent: React.FC = () => {
     const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
     const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
     const pingTimeoutRef = useRef<any>(null);
+    const [replyMode, setReplyMode] = useState<'new-post' | 'reply-post' | 'reply-comment'>('new-post');
+    const [leadContext, setLeadContext] = useState<any>(null);
 
     const currentPlan = plans.find(p => (p.name || '').toLowerCase() === (user?.plan || '').toLowerCase() || (p.id || '').toLowerCase() === (user?.plan || '').toLowerCase());
     const canGenerateImages = user?.role === 'admin' || (currentPlan && Boolean(currentPlan.allowImages));
@@ -207,25 +209,27 @@ export const AIAgent: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode');
 
-        if (mode === 'reply') {
+        if (mode === 'reply-post' || mode === 'reply-comment') {
+            setReplyMode(mode as 'reply-post' | 'reply-comment');
             const savedLead = localStorage.getItem('redditgo_current_lead');
             if (savedLead) {
                 try {
                     const lead = JSON.parse(savedLead);
+                    setLeadContext(lead);
+                    // Pre-fill description only (NOT subreddit — subreddit locked as read-only)
                     setPostData(prev => ({
                         ...prev,
                         subreddit: lead.subreddit || prev.subreddit,
-                        description: lead.selftext || lead.body || '',
-                        isReply: true,
-                        leadId: lead.id,
-                        postContext: lead
-                    } as any));
-                    showToast('Lead context loaded! Preparing reply strategist...', 'success');
+                        description: lead.content || lead.selftext || lead.body || '',
+                    }));
+                    const modeLabel = mode === 'reply-comment' ? 'comment' : 'post';
+                    showToast(`Replying to ${modeLabel} in r/${lead.subreddit} — context loaded!`, 'success');
                 } catch (e) {
                     console.error('Failed to parse lead data');
                 }
             }
         } else {
+            setReplyMode('new-post');
             const savedDraft = localStorage.getItem('redditgo_post_draft');
             if (savedDraft) {
                 try {
@@ -1038,9 +1042,18 @@ export const AIAgent: React.FC = () => {
                         <p className="text-slate-400 font-semibold text-sm">Welcome back, {user?.name?.split(' ')[0] || 'there'}</p>
                         <div className="flex items-center gap-2">
                             <span className="w-1.5 h-7 bg-orange-600 rounded-full" />
-                            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Post Agent</h1>
+                            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                                {replyMode === 'new-post' ? 'Post Agent' : 'Reply Strategist'}
+                            </h1>
                         </div>
-                        <p className="text-slate-400 font-medium text-sm pl-4">Design, generate &amp; publish viral Reddit threads in seconds.</p>
+                        <p className="text-slate-400 font-medium text-sm pl-4">
+                            {replyMode === 'new-post'
+                                ? 'Design, generate & publish viral Reddit threads in seconds.'
+                                : replyMode === 'reply-comment'
+                                    ? 'Craft a high-impact reply to this comment and drive engagement.'
+                                    : 'Write a compelling reply to this Reddit post and stand out.'
+                            }
+                        </p>
                     </div>
 
 
@@ -1133,18 +1146,53 @@ export const AIAgent: React.FC = () => {
                                             <h2 className="text-xl font-extrabold text-slate-900">Campaign Foundation</h2>
                                         </div>
 
+                                        {/* Reply Mode Context Banner */}
+                                        {replyMode !== 'new-post' && leadContext && (
+                                            <div className="bg-blue-50 border border-blue-100 rounded-3xl p-5 space-y-3 animate-in fade-in slide-in-from-top-4 duration-400">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center">
+                                                        <MessageSquare size={14} className="text-white" />
+                                                    </div>
+                                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                                                        {replyMode === 'reply-comment' ? '💬 Replying to Comment' : '📝 Replying to Post'}
+                                                    </p>
+                                                </div>
+                                                <p className="text-sm font-bold text-slate-800 leading-snug line-clamp-2">{leadContext.title}</p>
+                                                {leadContext.content && (
+                                                    <p className="text-xs text-slate-500 font-medium leading-relaxed italic border-l-2 border-blue-200 pl-3 line-clamp-3">
+                                                        "{leadContext.content}"
+                                                    </p>
+                                                )}
+                                                <div className="flex items-center gap-2 pt-1">
+                                                    <span className="text-[10px] font-black text-blue-500 bg-blue-100 px-2 py-1 rounded-lg">r/{leadContext.subreddit}</span>
+                                                    <span className="text-[10px] text-slate-400 font-bold">by u/{leadContext.author}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Subreddit + Goal */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
-                                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Target Community</label>
+                                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                                                    Target Community
+                                                    {replyMode !== 'new-post' && (
+                                                        <span className="ml-2 text-blue-500 font-black">🔒 Locked</span>
+                                                    )}
+                                                </label>
                                                 <div className="relative">
                                                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">r/</span>
                                                     <input
                                                         type="text"
                                                         placeholder="saas, marketing, tech..."
-                                                        className="w-full pl-9 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold transition-all"
+                                                        className={`w-full pl-9 pr-4 py-4 border rounded-2xl focus:outline-none font-bold transition-all ${replyMode !== 'new-post'
+                                                            ? 'bg-blue-50 border-blue-100 text-blue-700 cursor-not-allowed'
+                                                            : 'bg-slate-50 border-slate-100 focus:border-orange-500'
+                                                            }`}
                                                         value={postData.subreddit}
-                                                        onChange={(e) => setPostData({ ...postData, subreddit: e.target.value })}
+                                                        readOnly={replyMode !== 'new-post'}
+                                                        onChange={(e) => {
+                                                            if (replyMode === 'new-post') setPostData({ ...postData, subreddit: e.target.value });
+                                                        }}
                                                     />
                                                 </div>
                                             </div>

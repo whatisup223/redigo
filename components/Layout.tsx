@@ -404,9 +404,9 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: Zap, label: 'AI Writing Agent', path: '/ai-agent' },
     { icon: Search, label: 'Lead Finder', path: '/lead-finder' },
-    { icon: LayoutList, label: 'Content Library', path: '/library' }, // New Library link
+    { icon: Zap, label: 'AI Writing Agent', path: '/ai-agent' },
+    { icon: LayoutList, label: 'Content Library', path: '/library' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: CreditCard, label: 'Pricing', path: '/pricing' },
     { icon: LifeBuoy, label: 'Help & Support', path: '/support' },
