@@ -678,9 +678,24 @@ export const AIAgent: React.FC = () => {
             };
 
             const isReplyMode = replyMode !== 'new-post';
-            const generated = isReplyMode
+            // Adapt leadContext → RedditPost shape that generateRedditReply expects
+            const replyPostContext = isReplyMode && leadContext ? {
+                id: leadContext.redditId || leadContext.postId || '',
+                title: leadContext.title || '',
+                selftext: leadContext.content || leadContext.body || '',
+                subreddit: leadContext.subreddit || postData.subreddit,
+                author: leadContext.author || '',
+                permalink: leadContext.url ? leadContext.url.replace('https://www.reddit.com', '') : '',
+                url: leadContext.url || '',
+                score: 0,
+                num_comments: 0,
+                created_utc: 0,
+                isComment: replyMode === 'reply-comment',
+            } : null;
+
+            const generated = isReplyMode && replyPostContext
                 ? await generateRedditReply(
-                    leadContext,
+                    replyPostContext as any,
                     postData.subreddit,
                     postData.tone,
                     postData.targetAudience || 'General',

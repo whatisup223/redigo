@@ -2159,7 +2159,8 @@ Return ONLY a valid JSON array. No conversational text.
     post: 2,
     image: 5,
     fetch: 1,
-    deepScan: 0.5
+    deepScan: 0.5,
+    nicheExplore: 0
   },
   redditFetchCooldown: 30,
   redditPostCooldown: 300
@@ -2182,6 +2183,9 @@ aiSettings.creditCosts = {
   deepScan: (aiSettings.creditCosts?.deepScan !== undefined && aiSettings.creditCosts?.deepScan !== null && !isNaN(Number(aiSettings.creditCosts?.deepScan)))
     ? Number(aiSettings.creditCosts.deepScan)
     : (defaultAiSettings.creditCosts.deepScan || 0.5),
+  nicheExplore: (aiSettings.creditCosts?.nicheExplore !== undefined && aiSettings.creditCosts?.nicheExplore !== null && !isNaN(Number(aiSettings.creditCosts?.nicheExplore)))
+    ? Number(aiSettings.creditCosts.nicheExplore)
+    : (defaultAiSettings.creditCosts.nicheExplore || 0),
 };
 
 // Stripe Settings (In-memory storage for demo)
@@ -4019,7 +4023,10 @@ app.post('/api/admin/ai-settings', adminAuth, (req, res) => {
         : (aiSettings.creditCosts?.fetch ?? 1),
       deepScan: (newSettings.creditCosts.deepScan !== undefined && newSettings.creditCosts.deepScan !== null)
         ? Number(newSettings.creditCosts.deepScan)
-        : (aiSettings.creditCosts?.deepScan ?? 0.5)
+        : (aiSettings.creditCosts?.deepScan ?? 0.5),
+      nicheExplore: (newSettings.creditCosts.nicheExplore !== undefined && newSettings.creditCosts.nicheExplore !== null)
+        ? Number(newSettings.creditCosts.nicheExplore)
+        : (aiSettings.creditCosts?.nicheExplore ?? 0)
     };
   }
 
@@ -5867,8 +5874,9 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
     if (!q) return res.status(400).json({ error: 'Search query required' });
 
     // Safeguard check
+    const userId = req.query.userId || (req.user ? (req.user.id || req.user._id) : 'system');
     try {
-      checkSafeguard('system');
+      checkSafeguard(userId);
     } catch (e) {
       return res.status(423).json({ error: e.message, restrictionType: e.restrictionType || 'unknown', jailedAt: e.jailedAt || null, durationMinutes: e.durationMinutes || null, lockedUntil: e.lockedUntil || null });
     }
@@ -5877,7 +5885,7 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
 
     const response = await fetch(`https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(q)}&limit=25`, {
       headers: {
-        'User-Agent': getDynamicUserAgent('system', 'guest')
+        'User-Agent': getDynamicUserAgent(userId, req.user?.redditUsername || 'guest')
       }
     });
 
@@ -5904,7 +5912,24 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
       };
     });
 
-    res.json(results);
+    // ── CREDIT DEDUCTION ──
+    const cost = Number(aiSettings.creditCosts?.nicheExplore) || 0;
+    const user = req.user;
+    let finalCredits = user ? user.credits : 0;
+
+    if (user && cost > 0 && results.length > 0) {
+      const updatedUser = await User.findOneAndUpdate(
+        { id: user.id.toString() },
+        {
+          $inc: { credits: user.role === 'admin' ? 0 : -cost },
+          $push: { "usageStats.history": { date: new Date().toISOString(), type: 'niche_explore', cost, query: q } }
+        },
+        { new: true }
+      );
+      if (updatedUser) finalCredits = updatedUser.credits;
+    }
+
+    res.json({ results, credits: finalCredits });
   } catch (err) {
     console.error('[Subreddit Search Error]', err);
     res.status(500).json({ error: err.message });
@@ -5921,19 +5946,20 @@ app.get('/api/subreddit/about', async (req, res) => {
     console.log(`[Subreddit Check] Checking r/${cleanName} (Original: ${name})`);
 
     // Safeguard check
+    const userId = req.query.userId || (req.user ? (req.user.id || req.user._id) : 'system');
     try {
-      checkSafeguard('system');
+      checkSafeguard(userId);
     } catch (e) {
       return res.status(423).json({ error: e.message, restrictionType: e.restrictionType || 'unknown', jailedAt: e.jailedAt || null, durationMinutes: e.durationMinutes || null, lockedUntil: e.lockedUntil || null });
     }
 
     const response = await fetch(`https://www.reddit.com/r/${cleanName}/about.json`, {
       headers: {
-        'User-Agent': getDynamicUserAgent('system', 'guest')
+        'User-Agent': getDynamicUserAgent(userId, req.user?.redditUsername || 'guest')
       }
     });
 
-    reportRedditResult('system', response.ok, response.status);
+    reportRedditResult(userId, response.ok, response.status);
 
     if (!response.ok) {
       const errorText = await response.text();

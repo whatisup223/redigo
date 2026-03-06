@@ -238,28 +238,65 @@ export const LeadFinder: React.FC = () => {
   const handleNicheSearch = async () => {
     if (!nicheQuery.trim()) return;
 
-    // Credit check for niche search
     const nicheCost = costs.nicheExplore || 0;
-    if (nicheCost > 0) {
-      if ((user?.credits || 0) < nicheCost) {
-        setShowNoCreditsModal(true);
-        return;
-      }
+    if (nicheCost > 0 && (user?.credits || 0) < nicheCost && user?.role !== 'admin') {
+      setShowNoCreditsModal(true);
+      return;
     }
 
     setIsSearchingNiches(true);
     setNicheResults([]);
+    setSearchError(null);
+
+    // Start dynamic cooldown logic
+    setReloadCooldown(targetCooldown);
+    const cooldownTimer = setInterval(() => {
+      setReloadCooldown(prev => {
+        if (prev <= 1) { clearInterval(cooldownTimer); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+
     try {
-      const res = await fetch(`/api/subreddit/search?q=${encodeURIComponent(nicheQuery)}`, { headers: getAuthHeaders() });
+      const res = await fetch(`/api/subreddit/search?q=${encodeURIComponent(nicheQuery)}&userId=${user?.id}`, { headers: getAuthHeaders() });
+
+      if (res.status === 423) {
+        const errData = await res.json();
+        setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Request blocked by safeguards.', lockedUntil: errData.lockedUntil || null });
+        showToast(errData.error || 'Request blocked by safeguards.', 'error');
+        setIsSearchingNiches(false);
+        return;
+      }
+
+      if (res.status === 429) {
+        const errData = await res.json();
+        if (errData.error === 'RATELIMIT_COOLDOWN') {
+          showToast(errData.message, 'error');
+        } else {
+          setShowDailyLimitModal(true);
+        }
+        setIsSearchingNiches(false);
+        return;
+      }
+
+      if (res.status === 402) {
+        setShowNoCreditsModal(true);
+        setIsSearchingNiches(false);
+        return;
+      }
+
       if (res.ok) {
         const data = await res.json();
-        setNicheResults(data);
-        // Deduct credits if cost > 0
-        if (nicheCost > 0 && user?.id) {
-          updateUser({ credits: Math.max(0, (user.credits || 0) - nicheCost) });
+        const results = data.results || [];
+        setNicheResults(results);
+
+        // Sync real credits from server
+        if (data.credits !== undefined) {
+          updateUser({ credits: data.credits });
         }
-        if (data.length === 0) showToast('No matching subreddits found.', 'error');
-        else showToast(`Found ${data.length} communities!`, 'success');
+
+        if (results.length === 0) showToast('No matching subreddits found.', 'error');
+        else showToast(`Found ${results.length} communities!`, 'success');
       } else {
         const err = await res.json();
         showToast(err.error || 'Niche search failed', 'error');
@@ -523,7 +560,7 @@ export const LeadFinder: React.FC = () => {
       });
 
       // --- Subreddit Universal Pre-flight Check ---
-      const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}`);
+      const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}&userId=${user?.id}`);
 
       if (!subRes.ok) {
         if (!canUseExtension) {
@@ -932,13 +969,17 @@ export const LeadFinder: React.FC = () => {
                 </div>
                 <button
                   onClick={handleNicheSearch}
-                  disabled={isSearchingNiches || !nicheQuery.trim()}
-                  className="bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all disabled:opacity-30 flex items-center gap-2 shadow-lg shadow-orange-200"
+                  disabled={isSearchingNiches || !nicheQuery.trim() || reloadCooldown > 0}
+                  className="bg-orange-600 text-white px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-orange-200"
                 >
-                  <Search size={16} className={isSearchingNiches ? 'animate-pulse' : ''} />
+                  {reloadCooldown > 0 ? (
+                    <Clock size={16} className="animate-pulse" />
+                  ) : (
+                    <Search size={16} className={isSearchingNiches ? 'animate-pulse' : ''} />
+                  )}
                   <span className="flex flex-col items-center leading-tight">
-                    <span>Explore Niches</span>
-                    {(costs.nicheExplore || 0) > 0 && (
+                    <span>{reloadCooldown > 0 ? `Wait ${reloadCooldown}s` : 'Explore Niches'}</span>
+                    {(costs.nicheExplore || 0) > 0 && reloadCooldown === 0 && (
                       <span className="text-[9px] text-orange-200 font-black tracking-[0.15em]">{costs.nicheExplore} PT</span>
                     )}
                   </span>

@@ -2683,7 +2683,8 @@ Return ONLY a valid JSON array. No conversational text.
                                                                                     }
                                                                                 });
                                                                             }}
-                                                                        />
+                                                                     />
+                                                                     </label>
                                                                      <label className="block">
                                                                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Explore Niches 🌐</span>
                                                                          <input
@@ -2706,7 +2707,6 @@ Return ONLY a valid JSON array. No conversational text.
                                                                          />
                                                                          <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make niche search free</p>
                                                                      </label>
-                                                                    </label>
                                                                 </div>
                                                             </div>
                                                         </div>
