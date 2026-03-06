@@ -18,7 +18,7 @@ dotenv.config();
 
 // MongoDB Integration
 import mongoose from 'mongoose';
-import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog, Announcement, CancellationFeedback } from './models.js';
+import { User, TrackingLink, BrandProfile, Plan, Ticket, Setting, RedditReply, RedditPost, SystemLog, Announcement, CancellationFeedback, BlogPost } from './models.js';
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -6294,6 +6294,80 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
   }
 });
 
+// ── BLOG API ROUTES ────────────────────────────────────────────────────────────
+
+// Public: Get all published posts
+app.get('/api/blog/posts', async (req, res) => {
+  try {
+    const posts = await BlogPost.find({ status: 'published' }).sort({ publishedAt: -1, createdAt: -1 }).select('-content');
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+// Public: Get single post by slug
+app.get('/api/blog/posts/:slug', async (req, res) => {
+  try {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: 'published' });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    // Increment view count
+    post.views = (post.views || 0) + 1;
+    await post.save();
+
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin: Get all posts (including drafts)
+app.get('/api/admin/blog/posts', adminAuth, async (req, res) => {
+  try {
+    const posts = await BlogPost.find().sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Admin: Create post
+app.post('/api/admin/blog/posts', adminAuth, async (req, res) => {
+  try {
+    const post = new BlogPost({ ...req.body, id: crypto.randomUUID() });
+    if (post.status === 'published' && !post.publishedAt) post.publishedAt = new Date();
+    await post.save();
+    res.status(201).json(post);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin: Update post
+app.put('/api/admin/blog/posts/:id', adminAuth, async (req, res) => {
+  try {
+    const data = { ...req.body, updatedAt: new Date() };
+    if (data.status === 'published' && !data.publishedAt) data.publishedAt = new Date();
+    const post = await BlogPost.findOneAndUpdate({ id: req.params.id }, data, { new: true });
+    res.json(post);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin: Delete post
+app.delete('/api/admin/blog/posts/:id', adminAuth, async (req, res) => {
+  try {
+    await BlogPost.deleteOne({ id: req.params.id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist'), { index: false }));
@@ -6310,6 +6384,25 @@ if (process.env.NODE_ENV === 'production') {
       if (verificationTag) {
         html = html.replace('</head>', `    <meta name="google-site-verification" content="${verificationTag}">\n</head>`);
       }
+
+      // Dynamic SEO for Blog Posts
+      if (req.path.startsWith('/blog/') && req.path !== '/blog') {
+        const slug = req.path.split('/').pop();
+        try {
+          const post = await BlogPost.findOne({ slug, status: 'published' });
+          if (post) {
+            html = html.replace(/<title>.*?<\/title>/, `<title>${post.title} | RedditGo</title>`);
+            html = html.replace(/<meta name="description" content=".*?">/, `<meta name="description" content="${post.excerpt || post.title}">`);
+            if (post.coverImage) {
+              html = html.replace(/<meta property="og:image" content=".*?">/, `<meta property="og:image" content="${post.coverImage}">`);
+              html = html.replace(/<meta name="twitter:image" content=".*?">/, `<meta name="twitter:image" content="${post.coverImage}">`);
+            }
+          }
+        } catch (dbErr) {
+          console.error("Failed to fetch blog post for SEO:", dbErr);
+        }
+      }
+
       res.send(html);
     } catch (err) {
       // Fallback

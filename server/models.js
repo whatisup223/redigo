@@ -204,3 +204,22 @@ export const SystemLog = mongoose.model('SystemLog', SystemLogSchema);
 export const Announcement = mongoose.model('Announcement', AnnouncementSchema);
 export const CancellationFeedback = mongoose.model('CancellationFeedback', CancellationFeedbackSchema);
 
+const BlogPostSchema = new mongoose.Schema({
+    id: { type: String, required: true, unique: true },
+    title: { type: String, required: true },
+    slug: { type: String, required: true, unique: true },
+    content: { type: String, required: true },
+    excerpt: String,
+    coverImage: String,
+    author: { type: String, default: 'Admin' },
+    status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    tags: [String],
+    seoKeywords: String,
+    views: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+    publishedAt: Date
+});
+
+export const BlogPost = mongoose.model('BlogPost', BlogPostSchema);
+

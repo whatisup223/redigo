@@ -139,6 +139,7 @@ export const LandingPage: React.FC = () => {
             <button onClick={() => document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Testimonials</button>
             <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Pricing</button>
             <button onClick={() => document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">FAQ</button>
+            <Link to="/blog" className="hover:text-orange-600 transition-colors font-bold">Blog</Link>
           </div>
 
           <div className="flex items-center gap-4">

@@ -7,6 +7,7 @@ import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
 import { Analytics } from './pages/Analytics';
 import { Admin } from './pages/Admin';
+import { AdminBlog } from './pages/AdminBlog';
 import { Settings } from './pages/Settings';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { TermsOfService } from './pages/TermsOfService';
@@ -21,6 +22,8 @@ import { LeadFinder } from './pages/LeadFinder';
 import { AIAgent } from './pages/AIAgent';
 import { Support } from './pages/Support';
 import { Library } from './pages/Library';
+import { BlogList } from './pages/BlogList';
+import { BlogPost } from './pages/BlogPost';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ErrorPage } from './pages/ErrorPage';
@@ -66,6 +69,8 @@ const App: React.FC = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/blog" element={<BlogList />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -93,6 +98,7 @@ const App: React.FC = () => {
             <Route path="/admin/support" element={<ProtectedRoute adminOnly={true}><AdminLayout><Support /></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
             <Route path="/admin/logs" element={<ProtectedRoute adminOnly={true}><AdminLayout><Admin /></AdminLayout></ProtectedRoute>} />
+            <Route path="/admin/blog" element={<ProtectedRoute adminOnly={true}><AdminLayout><AdminBlog /></AdminLayout></ProtectedRoute>} />
 
             {/* Fallback */}
             <Route path="/404" element={<ErrorPage type="404" />} />

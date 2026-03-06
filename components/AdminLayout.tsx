@@ -21,6 +21,7 @@ import {
     Bell,
     TrendingDown,
     UserMinus,
+    FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -63,6 +64,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
         { icon: Activity, label: 'Analytics', path: '/admin/analytics' },
         { icon: Users, label: 'User Management', path: '/admin/users' },
         { icon: Bell, label: 'Communicate', path: '/admin/communicate' },
+        { icon: FileText, label: 'Blog management', path: '/admin/blog' },
         { icon: LifeBuoy, label: 'Support Center', path: '/admin/support' },
         { icon: Sliders, label: 'Configuration', path: '/admin/settings' },
         { icon: AlertCircle, label: 'System Logs', path: '/admin/logs' },
