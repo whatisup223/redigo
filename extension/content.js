@@ -5,14 +5,16 @@ let currentDraftId = null;
 let currentDraftType = null;
 let currentDraftUserId = null;
 let currentDraftParentId = null;
+let currentDraftIsComment = false;
 
 chrome.storage.local.get(['redigo_assistant_draft', 'redigo_loading'], (res) => {
   if (res.redigo_assistant_draft) {
-    const { title, text, imageUrl, itemId, userId, isPost, parentId } = res.redigo_assistant_draft;
+    const { title, text, imageUrl, itemId, userId, isPost, isComment, parentId } = res.redigo_assistant_draft;
     currentDraftId = itemId;
     currentDraftType = isPost ? 'post' : 'comment';
     currentDraftUserId = userId;
     currentDraftParentId = parentId;
+    currentDraftIsComment = isComment || false;
     injectFloatingAssistant(title, text, imageUrl, true);
   } else if (res.redigo_loading) {
     showRedigoLoader();
@@ -208,7 +210,7 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
     <div class="redigo-header">
       <div style="display:flex; align-items:center; gap:10px;">
         <div style="background:white; border-radius:8px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:#ea580c; font-size:14px;">🛡️</div>
-        <span>REDIGO ${currentDraftParentId ? 'COMMENT' : 'POST'} REPLY</span>
+        <span>${currentDraftIsComment ? 'COMMENT REPLY' : currentDraftParentId ? 'TARGETED REPLY' : (currentDraftType === 'post' ? 'NEW POST' : 'POST REPLY')}</span>
       </div>
       <div class="redigo-close" id="redigo-close">✕</div>
     </div>
@@ -221,7 +223,7 @@ function injectFloatingAssistant(title, text, imageUrl, fromStorage = false) {
       
       ${text ? `
         <span class="redigo-label">Content</span>
-        <button class="redigo-btn" id="redigo-copy-text">Copy Post Body</button>
+        <button class="redigo-btn" id="redigo-copy-text">${currentDraftType !== 'post' ? '📋 Copy Reply' : '📋 Copy Post Body'}</button>
       ` : ''}
 
       ${imageUrl ? `
@@ -318,6 +320,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     currentDraftType = request.isPost ? 'post' : 'comment';
     currentDraftUserId = request.userId;
     currentDraftParentId = request.parentId;
+    currentDraftIsComment = request.isComment || false;
     injectFloatingAssistant(request.title, request.text, request.imageUrl);
   }
 });

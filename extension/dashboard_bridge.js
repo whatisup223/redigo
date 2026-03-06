@@ -104,6 +104,7 @@ window.addEventListener('message', (event) => {
                     imageUrl: event.data.imageUrl,
                     targetUrl: event.data.targetUrl,
                     isPost: event.data.isPost || false,
+                    isComment: event.data.isComment || false,
                     parentId: event.data.parentId
                 },
                 (response) => {
@@ -190,7 +191,7 @@ if (isContextValid()) {
 // -- INBOUND RELAY: Chrome Extension -> React app
 // background.js uses chrome.tabs.sendMessage; React needs window.postMessage.
 if (typeof isContextValid === 'function' && isContextValid()) {
-    chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         if (!message || !message.type) return;
         if (message.type === 'REDIGO_POST_CONFIRMED') {
             window.postMessage({

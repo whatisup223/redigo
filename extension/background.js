@@ -17,6 +17,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 itemId: request.itemId,
                 userId: request.userId,
                 isPost: request.isPost,
+                isComment: request.isComment || false,
                 parentId: request.parentId
             }
         });
@@ -39,6 +40,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             title: request.title,
                             imageUrl: request.imageUrl,
                             isPost: request.isPost,
+                            isComment: request.isComment || false,
                             parentId: request.parentId
                         });
                     }, 1500); // 1.5s delay to ensure Reddit's heavy JS has populated the DOM
