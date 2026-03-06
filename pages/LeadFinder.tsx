@@ -213,22 +213,52 @@ export const LeadFinder: React.FC = () => {
       })
       .catch(console.error);
 
-    // Load saved leads on mount
-    fetch(`/api/user/saved-leads?userId=${user?.id}`, { headers: getAuthHeaders() })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setPosts(data);
-          showToast('Search results restored! 📂', 'success');
-        }
-      })
-      .catch(console.error);
+    if (user?.id) {
+      // Check current cooldown status from server
+      fetch(`/api/reddit/cooldown-status?userId=${user?.id}`, { headers: getAuthHeaders() })
+        .then(res => res.json())
+        .then(data => {
+          if (data.remainingFetch > 0) {
+            setReloadCooldown(data.remainingFetch);
+            // Re-start the timer if there's a cooldown
+            const cooldownTimer = setInterval(() => {
+              setReloadCooldown(prev => {
+                if (prev <= 1) { clearInterval(cooldownTimer); return 0; }
+                return prev - 1;
+              });
+            }, 1000);
+          }
+        })
+        .catch(console.error);
+
+      // Load saved leads on mount
+      fetch(`/api/user/saved-leads?userId=${user?.id}`, { headers: getAuthHeaders() })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setPosts(data);
+            showToast('Search results restored! 📂', 'success');
+          }
+        })
+        .catch(console.error);
+
+      // Load saved niches on mount
+      fetch(`/api/user/saved-niches?userId=${user?.id}`, { headers: getAuthHeaders() })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setNicheResults(data);
+            showToast('Niche results restored! 📂', 'success');
+          }
+        })
+        .catch(console.error);
+    }
 
     fetch('/api/plans')
       .then(res => res.json())
       .then(data => setPlans(data))
       .catch(console.error);
-  }, []);
+  }, [user?.id]);
 
 
 
@@ -237,12 +267,22 @@ export const LeadFinder: React.FC = () => {
 
   const handleNicheSearch = async () => {
     if (!nicheQuery.trim()) return;
+    if (reloadCooldown > 0) return;
 
     const nicheCost = costs.nicheExplore || 0;
     if (nicheCost > 0 && (user?.credits || 0) < nicheCost && user?.role !== 'admin') {
       setShowNoCreditsModal(true);
       return;
     }
+
+    // --- Extension Check ---
+    const needsExtCheck = !isExtensionActive();
+    if (needsExtCheck && !isForcedRef.current) {
+      setPendingAction(() => () => handleNicheSearch());
+      setShowExtensionWarning(true);
+      return;
+    }
+    isForcedRef.current = false;
 
     setIsSearchingNiches(true);
     setNicheResults([]);
@@ -270,8 +310,9 @@ export const LeadFinder: React.FC = () => {
 
       if (res.status === 429) {
         const errData = await res.json();
-        if (errData.error === 'RATELIMIT_COOLDOWN') {
-          showToast(errData.message, 'error');
+        if (errData.error === 'RATELIMIT_COOLDOWN' || errData.cooldown) {
+          showToast(errData.message || `Please wait ${errData.cooldown}s`, 'error');
+          if (errData.cooldown) setReloadCooldown(errData.cooldown);
         } else {
           setShowDailyLimitModal(true);
         }
@@ -703,7 +744,8 @@ export const LeadFinder: React.FC = () => {
           const errData = await response.json();
           setIsFetching(false);
           if (errData.error === 'DAILY_LIMIT_REACHED') { setShowDailyLimitModal(true); return; }
-          showToast(errData.error || 'Too many requests. Please wait.', 'error');
+          if (errData.cooldown) setReloadCooldown(errData.cooldown);
+          showToast(errData.message || errData.error || 'Too many requests. Please wait.', 'error');
           return;
         }
         if (!response.ok) throw new Error('Fetch failed');
@@ -997,18 +1039,54 @@ export const LeadFinder: React.FC = () => {
           <div className="space-y-6 w-full">
             {activeTab === 'discovery' ? (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Niche Results Summary */}
-                <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-                  <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                      <Globe size={32} />
+                {/* Niche Discovery Tools and Actions */}
+                {nicheResults.length > 0 && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                        <Globe size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900 leading-tight">Explore Markets</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Found {nicheResults.length} high-potential niches</p>
+                      </div>
                     </div>
-                    <div className="space-y-1 text-center md:text-left">
-                      <h2 className="text-2xl font-black text-slate-900">{isSearchingNiches ? 'Searching...' : nicheResults.length > 0 ? `Found ${nicheResults.length} Communities` : 'Niche Discovery'}</h2>
-                      <p className="text-sm font-medium text-slate-400">Discover active Reddit communities for your industry or product.</p>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id) return;
+                        setNicheResults([]);
+                        try {
+                          await fetch('/api/user/clear-niches', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                            body: JSON.stringify({ userId: user.id })
+                          });
+                        } catch (err) {
+                          console.error('Failed to clear saved niches:', err);
+                        }
+                      }}
+                      className="flex items-center justify-center gap-2 px-6 py-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all text-xs font-black uppercase tracking-widest border border-red-100 shadow-sm"
+                    >
+                      <Trash2 size={16} />
+                      <span>Clear Niche Results</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Niche Results Summary */}
+                {nicheResults.length > 0 && (
+                  <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-5">
+                      <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                        <Globe size={32} />
+                      </div>
+                      <div className="space-y-1 text-center md:text-left">
+                        <h2 className="text-2xl font-black text-slate-900">{isSearchingNiches ? 'Searching...' : `Found ${nicheResults.length} Communities`}</h2>
+                        <p className="text-sm font-medium text-slate-400">Discover active Reddit communities for your industry or product.</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {isSearchingNiches ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-50">

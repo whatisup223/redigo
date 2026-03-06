@@ -582,6 +582,25 @@ const redditPostLimiter = (req, res, next) => {
   next();
 };
 
+app.get('/api/reddit/cooldown-status', async (req, res) => {
+  const userId = req.query.userId || req.ip;
+  const now = Date.now();
+
+  const fetchCooldown = (Number(aiSettings.redditFetchCooldown) || 30) * 1000;
+  const lastFetch = fetchCooldowns.get(userId) || 0;
+  const remainingFetch = Math.max(0, Math.ceil((fetchCooldown - (now - lastFetch)) / 1000));
+
+  const postCooldown = (Number(aiSettings.redditPostCooldown) || 300) * 1000;
+  const lastPost = postCooldowns.get(userId) || 0;
+  const remainingPost = Math.max(0, Math.ceil((postCooldown - (now - lastPost)) / 1000));
+
+  res.json({
+    remainingFetch,
+    remainingPost,
+    targetFetchCooldown: Math.ceil(fetchCooldown / 1000)
+  });
+});
+
 // Generate limiter: prevents credit-bypass abuse on AI endpoint
 const generateLimiter = rateLimit({
   windowMs: 60 * 1000,       // 1 minute
@@ -1994,6 +2013,31 @@ app.post('/api/user/clear-leads', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'User ID required' });
     if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
     await User.updateOne({ id: userId.toString() }, { $set: { lastSearchLeads: [] } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/user/saved-niches', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
+    const user = await User.findOne({ id: userId.toString() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user.lastNicheResults || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/user/clear-niches', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+    if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
+    await User.updateOne({ id: userId.toString() }, { $set: { lastNicheResults: [] } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -5917,11 +5961,12 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
     const user = req.user;
     let finalCredits = user ? user.credits : 0;
 
-    if (user && cost > 0 && results.length > 0) {
+    if (userId && cost > 0 && results.length > 0) {
       const updatedUser = await User.findOneAndUpdate(
-        { id: user.id.toString() },
+        { id: userId.toString() },
         {
-          $inc: { credits: user.role === 'admin' ? 0 : -cost },
+          $inc: { credits: (req.user?.role === 'admin') ? 0 : -cost },
+          $set: { lastNicheResults: results },
           $push: { "usageStats.history": { date: new Date().toISOString(), type: 'niche_explore', cost, query: q } }
         },
         { new: true }
