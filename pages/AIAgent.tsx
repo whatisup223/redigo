@@ -677,10 +677,10 @@ export const AIAgent: React.FC = () => {
                 secondaryColor: postData.secondaryColor || user?.brandProfile?.secondaryColor || undefined
             };
 
-            const isReplyMode = (postData as any).isReply;
+            const isReplyMode = replyMode !== 'new-post';
             const generated = isReplyMode
                 ? await generateRedditReply(
-                    (postData as any).postContext,
+                    leadContext,
                     postData.subreddit,
                     postData.tone,
                     postData.targetAudience || 'General',
@@ -708,7 +708,11 @@ export const AIAgent: React.FC = () => {
             setPostData(prev => ({
                 ...prev,
                 id: generated.id,
-                title: isReplyMode ? `RE: ${(postData as any).postContext.title}` : (generated as any).title,
+                title: isReplyMode
+                    ? (replyMode === 'reply-comment'
+                        ? `RE: Comment by u/${leadContext?.author || 'user'}`
+                        : `RE: ${leadContext?.title || 'Post'}`)
+                    : (generated as any).title,
                 content: isReplyMode ? (generated as any).comment : (generated as any).content,
                 imagePrompt: generated.imagePrompt,
                 imageUrl: mode === 'both' ? '' : prev.imageUrl
@@ -771,10 +775,24 @@ export const AIAgent: React.FC = () => {
         // With extension: auto-paste. Without extension: open Reddit directly.
         setIsPosting(true);
         try {
-            const isReplyMode = (postData as any).isReply;
-            const targetUrl = isReplyMode
-                ? `https://www.reddit.com${(postData as any).postContext.permalink}?ref=redigo`
-                : `https://www.reddit.com/r/${postData.subreddit}/submit`;
+            const isReplyMode = replyMode !== 'new-post';
+
+            // Build the correct Reddit target URL
+            let targetUrl: string;
+            if (!isReplyMode) {
+                // New post → submit to subreddit
+                targetUrl = `https://www.reddit.com/r/${postData.subreddit}/submit`;
+            } else if (replyMode === 'reply-comment' && leadContext?.redditId) {
+                // Replying to a comment → open the comment's permalink
+                const commentId = (leadContext.redditId || '').replace('t1_', '');
+                const postRedditId = leadContext.postId || '';
+                targetUrl = leadContext.url
+                    || `https://www.reddit.com/r/${leadContext.subreddit}/comments/${postRedditId}/_/${commentId}?ref=redigo`;
+            } else {
+                // Replying to a post → open the post's permalink
+                targetUrl = leadContext?.url
+                    || `https://www.reddit.com/r/${postData.subreddit}/comments/${leadContext?.redditId || leadContext?.postId || ''}?ref=redigo`;
+            }
 
             const hasExtension = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
 
@@ -787,7 +805,8 @@ export const AIAgent: React.FC = () => {
                 text: postData.content,
                 imageUrl: postData.imageUrl,
                 targetUrl: targetUrl,
-                isPost: !isReplyMode
+                isPost: !isReplyMode,
+                isComment: replyMode === 'reply-comment'
             }, '*');
 
             // If no extension — open Reddit directly in a new tab
@@ -1652,29 +1671,34 @@ export const AIAgent: React.FC = () => {
                                 </div>
 
                                 <div className="space-y-6">
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headline</label>
-                                            <button
-                                                onClick={() => handleCopy(postData.title, 'Headline')}
-                                                className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
-                                            >
-                                                <Copy size={10} /> Copy
-                                            </button>
+                                    {/* Headline: only shown in new-post mode */}
+                                    {replyMode === 'new-post' && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headline</label>
+                                                <button
+                                                    onClick={() => handleCopy(postData.title, 'Headline')}
+                                                    className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
+                                                >
+                                                    <Copy size={10} /> Copy
+                                                </button>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={postData.title}
+                                                onChange={(e) => setPostData({ ...postData, title: e.target.value })}
+                                                className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-lg text-slate-900 focus:outline-none focus:border-orange-500"
+                                            />
                                         </div>
-                                        <input
-                                            type="text"
-                                            value={postData.title}
-                                            onChange={(e) => setPostData({ ...postData, title: e.target.value })}
-                                            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-lg text-slate-900 focus:outline-none focus:border-orange-500"
-                                        />
-                                    </div>
+                                    )}
 
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Thread Body</label>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                {replyMode === 'new-post' ? 'Thread Body' : replyMode === 'reply-comment' ? '💬 Comment Reply' : '📝 Post Reply'}
+                                            </label>
                                             <button
-                                                onClick={() => handleCopy(postData.content, 'Thread body')}
+                                                onClick={() => handleCopy(postData.content, replyMode === 'new-post' ? 'Thread body' : 'Reply')}
                                                 className="text-[10px] font-black text-slate-400 hover:text-orange-600 flex items-center gap-1 transition-colors"
                                             >
                                                 <Copy size={10} /> Copy
@@ -1811,13 +1835,36 @@ export const AIAgent: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="p-5 bg-slate-50 rounded-2xl space-y-1">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Posting to</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                            {replyMode === 'new-post' ? 'Posting to' : 'Replying in'}
+                                        </p>
                                         <p className="font-extrabold text-slate-900 text-lg">r/{postData.subreddit}</p>
+                                        {replyMode !== 'new-post' && leadContext && (
+                                            <div className="mt-2 space-y-1">
+                                                <p className="text-xs text-slate-500 font-medium">
+                                                    {replyMode === 'reply-comment'
+                                                        ? `💬 Replying to comment by u/${leadContext.author}`
+                                                        : `📝 Replying to post by u/${leadContext.author}`
+                                                    }
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 font-bold line-clamp-1 italic">"{leadContext.title || leadContext.content}"</p>
+                                                <a
+                                                    href={leadContext.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[10px] text-blue-500 font-black hover:underline flex items-center gap-1"
+                                                >
+                                                    View original on Reddit ↗
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="p-5 bg-slate-50 rounded-2xl space-y-1">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headline</p>
-                                        <p className="font-bold text-slate-900">{postData.title}</p>
-                                    </div>
+                                    {replyMode === 'new-post' && (
+                                        <div className="p-5 bg-slate-50 rounded-2xl space-y-1">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Headline</p>
+                                            <p className="font-bold text-slate-900">{postData.title}</p>
+                                        </div>
+                                    )}
                                     {postData.imageUrl && (
                                         <img src={postData.imageUrl} alt="Post visual" className="w-full rounded-2xl" />
                                     )}
@@ -1865,7 +1912,9 @@ export const AIAgent: React.FC = () => {
                                 >
                                     {isPosting
                                         ? <><RefreshCw className="animate-spin" size={24} /> Publishing...</>
-                                        : <><Send size={24} className="group-hover:translate-x-1 transition-transform" /> PUBLISH TO REDDIT</>
+                                        : replyMode === 'new-post'
+                                            ? <><Send size={24} className="group-hover:translate-x-1 transition-transform" /> PUBLISH TO REDDIT</>
+                                            : <><Send size={24} className="group-hover:translate-x-1 transition-transform" /> PUBLISH REPLY TO REDDIT</>
                                     }
                                 </button>
                             </div>
