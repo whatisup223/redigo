@@ -5933,6 +5933,21 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
       return res.status(423).json({ error: e.message, restrictionType: e.restrictionType || 'unknown', jailedAt: e.jailedAt || null, durationMinutes: e.durationMinutes || null, lockedUntil: e.lockedUntil || null });
     }
 
+    // ── POLICY CHECK ──
+    const userAgent = req.headers['user-agent'] || '';
+    const isMobile = /Mobile|Android|iPhone/i.test(userAgent);
+    const redditSettings = loadSettings().reddit || {};
+
+    if (isMobile) {
+      if (!redditSettings.mobileServerFetching) {
+        return res.status(403).json({ error: 'SERVER_FETCH_DISABLED_MOBILE', message: 'Server-side fetching is disabled for mobile. Please use a desktop browser with the extension.' });
+      }
+    } else {
+      if (!redditSettings.useServerFallback) {
+        return res.status(403).json({ error: 'SERVER_FETCH_DISABLED_DESKTOP', message: 'Server-side fetching is disabled. Please use the Chrome Extension.' });
+      }
+    }
+
     console.log(`[Subreddit Search] Searching for niches related to: ${q}`);
 
     const response = await fetch(`https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(q)}&limit=25`, {

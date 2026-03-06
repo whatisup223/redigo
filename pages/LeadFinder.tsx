@@ -367,6 +367,13 @@ export const LeadFinder: React.FC = () => {
           return;
         }
 
+        if (res.status === 403) {
+          const errData = await res.json();
+          showToast(errData.message || 'Server-side fetching is disabled here.', 'error');
+          setIsSearchingNiches(false);
+          return;
+        }
+
         if (res.status === 402) {
           setShowNoCreditsModal(true);
           setIsSearchingNiches(false);
