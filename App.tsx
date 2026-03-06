@@ -46,6 +46,13 @@ const App: React.FC = () => {
           `;
           document.head.appendChild(script2);
         }
+
+        if (data.googleSiteVerification) {
+          const meta = document.createElement('meta');
+          meta.name = 'google-site-verification';
+          meta.content = data.googleSiteVerification;
+          document.head.appendChild(meta);
+        }
       })
       .catch(console.error);
   }, []);

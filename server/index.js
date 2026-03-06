@@ -4020,7 +4020,8 @@ app.post('/api/admin/system-settings', adminAuth, (req, res) => {
 
 app.get('/api/public-settings', (req, res) => {
   res.json({
-    googleAnalyticsId: settingsCache.system?.googleAnalyticsId || ''
+    googleAnalyticsId: settingsCache.system?.googleAnalyticsId || '',
+    googleSiteVerification: settingsCache.system?.googleSiteVerification || ''
   });
 });
 

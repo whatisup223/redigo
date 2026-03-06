@@ -192,19 +192,19 @@ export const LandingPage: React.FC = () => {
           {/* Trust Badge / Version Pill */}
           <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md border border-slate-200/60 rounded-full pl-2 pr-4 py-1.5 text-sm font-bold text-slate-600 shadow-sm shadow-slate-200 hover:scale-105 transition-transform cursor-default animate-fade-in-up">
             <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">New</span>
-            <span>v2.0: The Redigo AI Assistant</span>
+            <span>v2.0: The RedditGo AI Assistant</span>
           </div>
 
           {/* Main Headline */}
           <h1 className="text-7xl md:text-9xl font-black text-slate-900 tracking-tighter leading-[0.85] max-w-5xl mx-auto animate-fade-in-up delay-100">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600 relative inline-block">
-              Reddit
+              Reddit AI
               <svg className="absolute w-full h-3 -bottom-1 left-0 text-orange-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                 <path d="M0 5 Q 50 10 100 5" stroke="currentColor" strokeWidth="8" fill="none" />
               </svg>
             </span> Growth. <br className="hidden md:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600 relative inline-block">
-              Mastered.
+              Redefined.
               <svg className="absolute w-full h-3 -bottom-1 left-0 text-orange-200 -z-10" viewBox="0 0 100 10" preserveAspectRatio="none">
                 <path d="M0 5 Q 50 10 100 5" stroke="currentColor" strokeWidth="8" fill="none" />
               </svg>
@@ -213,7 +213,7 @@ export const LandingPage: React.FC = () => {
 
           {/* Subheadline */}
           <p className="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed animate-fade-in-up delay-200">
-            Redigo is the professional assistant for founders and marketers. Extract high-intent leads, analyze sentiment, and generate authentic, value-first content while keeping your account 100% safe.
+            RedditGo is the #1 AI Reddit marketing tool for founders. Extract high-intent leads, generate authentic AI replies, and grow your brand on Reddit safely and professionally.
           </p>
 
           {/* Feature Highlights Row */}
@@ -291,7 +291,7 @@ export const LandingPage: React.FC = () => {
                     </div>
                     <div className="mt-auto p-4">
                       <div className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-slate-100 shadow-sm cursor-pointer hover:bg-slate-50">
-                        <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0"><img src="https://ui-avatars.com/api/?name=Alex&background=random" alt="Avatar" /></div>
+                        <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden shrink-0"><img src="https://ui-avatars.com/api/?name=Alex&background=random" alt="User Avatar - Alex Carter" /></div>
                         <div className="truncate">
                           <div className="text-xs font-bold text-slate-900 truncate">Alex Carter</div>
                           <div className="text-[9px] font-black text-green-600 uppercase flex items-center gap-1 mt-0.5"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> AGENCY PLAN</div>
@@ -313,7 +313,7 @@ export const LandingPage: React.FC = () => {
                           <div className="text-[10px] font-black text-orange-600 uppercase mt-0.5">AGENCY PLAN</div>
                         </div>
                         <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden relative border border-slate-200">
-                          <img src="https://ui-avatars.com/api/?name=Alex&background=random" alt="Avatar" />
+                          <img src="https://ui-avatars.com/api/?name=Alex&background=random" alt="Dashboard Profile Avatar" />
                           <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                         </div>
                       </div>
@@ -887,7 +887,7 @@ export const LandingPage: React.FC = () => {
 
                     <div className="flex items-center justify-center gap-4">
                       <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-orange-100 shadow-md">
-                        <img src={t.image} alt={t.name} className="w-full h-full object-cover" />
+                        <img src={t.image} alt={`Testimonial from ${t.name}`} className="w-full h-full object-cover" />
                       </div>
                       <div className="text-left">
                         <div className="font-bold text-slate-900 text-lg">{t.name}</div>
@@ -1110,6 +1110,70 @@ export const LandingPage: React.FC = () => {
         </div>
       </section >
 
+      {/* FAQ Section */}
+      <section id="faq" className="py-32 bg-slate-50 relative overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+        <div className="max-w-4xl mx-auto px-6 relative z-10">
+          <div className="text-center mb-16 space-y-4">
+            <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
+              Frequently Asked <span className="text-orange-600">Questions.</span>
+            </h2>
+            <p className="text-slate-500 text-lg font-medium">Everything you need to know about Redigo and Reddit growth.</p>
+          </div>
+
+          <div className="space-y-4">
+            {[
+              {
+                q: "Is Redigo safe for my Reddit account?",
+                a: "Yes, 100%. Redigo uses a secure browser extension bridge that posts from your own IP address and browser session. We never ask for your password and we don't use 'headless' bots that Reddit's filters can easily detect. Every action is human-approved."
+              },
+              {
+                q: "How does the AI lead extraction work?",
+                a: "Our engine scans subreddits of your choice for high-intent keywords and semantic phrases. It doesn't just look for words; it analyzes the context to see if someone is genuinely seeking a solution, complaining about a competitor, or asking for recommendations."
+              },
+              {
+                q: "Do I need a massive budget to start?",
+                a: "Not at all. You can start with our Free plan which includes 10 AI credits to test the waters. Our Professional and Agency plans are designed to scale as your business grows, providing more credits and advanced features like AI image generation."
+              },
+              {
+                q: "Can I use Redigo for multiple niches?",
+                a: "Absolutely. You can set up different Brand Profiles for different products or niches. The AI will adapt its tone, language, and lead-scoring criteria based on the profile you select for each extraction."
+              },
+              {
+                q: "What makes Redigo different from other automation tools?",
+                a: "Redigo is 'Human-in-the-loop'. Unlike tools that spam subreddits with low-quality posts, Redigo helps you find the right conversations and drafts value-first replies. You are the final editor, ensuring that every interaction is authentic and contributes positively to the community."
+              },
+              {
+                q: "How do AI credits work?",
+                a: "AI credits are used for high-level operations like lead extraction, sentiment analysis, and drafting replies. Each plan comes with a set amount of credits. If you run out, credits are replenished at the start of your billing cycle, or you can top up at any time."
+              }
+            ].map((item, i) => {
+              const [isOpen, setIsOpen] = useState(false);
+              return (
+                <div key={i} className="bg-white rounded-3xl border border-slate-200 overflow-hidden transition-all duration-300 hover:border-orange-200">
+                  <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="w-full px-8 py-6 flex items-center justify-between text-left focus:outline-none"
+                  >
+                    <span className="text-lg font-bold text-slate-900">{item.q}</span>
+                    <div className={`p-2 rounded-xl transition-all ${isOpen ? 'bg-orange-600 text-white rotate-180' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100'}`}>
+                      {isOpen ? <X size={18} /> : <HelpCircle size={18} />}
+                    </div>
+                  </button>
+                  <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
+                    <div className="px-8 pb-8 pt-2">
+                      <p className="text-slate-500 font-medium leading-relaxed border-t border-slate-50 pt-6">
+                        {item.a}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       < section className="py-24 bg-white relative overflow-hidden" >
         <div className="max-w-6xl mx-auto px-6">
@@ -1178,6 +1242,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-8 text-sm font-medium">
             <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
             <Link to="/terms" className="hover:text-slate-900 transition-colors">Terms of Service</Link>
+            <button onClick={() => document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-slate-900 transition-colors">FAQ</button>
           </div>
           <p className="text-xs text-slate-400 text-center max-w-lg">
             RedditGo operates in compliance with Reddit's <a href="https://support.reddithelp.com/hc/en-us/articles/42728983564564" target="_blank" rel="noopener noreferrer" className="underline hover:text-orange-600 transition-colors">Responsible Builder Policy</a> and Data API Terms. All content is user-initiated and human-approved.

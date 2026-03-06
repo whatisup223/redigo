@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /settings
+Disallow: /api
+Disallow: /library
+Disallow: /ai-agent
+Disallow: /lead-finder
+
+Sitemap: https://redditgo.online/sitemap.xml

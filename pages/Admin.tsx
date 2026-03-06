@@ -179,7 +179,7 @@ export const Admin: React.FC = () => {
     const activeTab = getActiveTab();
     const [analyticsTab, setAnalyticsTab] = useState<'overview' | 'churn'>('overview');
     const [settingsTab, setSettingsTab] = useState<'ai' | 'payments' | 'reddit' | 'plans' | 'security' | 'smtp' | 'email' | 'system' | 'safeguard'>('ai');
-    const [systemSettings, setSystemSettings] = useState({ googleAnalyticsId: '' });
+    const [systemSettings, setSystemSettings] = useState({ googleAnalyticsId: '', googleSiteVerification: '' });
     const [aiSubTab, setAiSubTab] = useState<'creative' | 'analyzer'>('creative');
 
     // Safeguard States
@@ -2683,30 +2683,30 @@ Return ONLY a valid JSON array. No conversational text.
                                                                                     }
                                                                                 });
                                                                             }}
-                                                                     />
-                                                                     </label>
-                                                                     <label className="block">
-                                                                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Explore Niches 🌐</span>
-                                                                         <input
-                                                                             type="number"
-                                                                             min="0"
-                                                                             step="0.5"
-                                                                             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
-                                                                             value={aiSettings.creditCosts?.nicheExplore ?? 0}
-                                                                             onChange={(e) => {
-                                                                                 const val = parseFloat(e.target.value) || 0;
-                                                                                 setAiSettings({
-                                                                                     ...aiSettings,
-                                                                                     creditCosts: {
-                                                                                         comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5,
-                                                                                         ...aiSettings.creditCosts,
-                                                                                         nicheExplore: val
-                                                                                     }
-                                                                                 });
-                                                                             }}
-                                                                         />
-                                                                         <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make niche search free</p>
-                                                                     </label>
+                                                                        />
+                                                                    </label>
+                                                                    <label className="block">
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Explore Niches 🌐</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            step="0.5"
+                                                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-sm"
+                                                                            value={aiSettings.creditCosts?.nicheExplore ?? 0}
+                                                                            onChange={(e) => {
+                                                                                const val = parseFloat(e.target.value) || 0;
+                                                                                setAiSettings({
+                                                                                    ...aiSettings,
+                                                                                    creditCosts: {
+                                                                                        comment: 1, post: 2, image: 5, fetch: 1, deepScan: 0.5,
+                                                                                        ...aiSettings.creditCosts,
+                                                                                        nicheExplore: val
+                                                                                    }
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                        <p className="text-[9px] text-slate-400 font-medium mt-1">Set 0 to make niche search free</p>
+                                                                    </label>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -3878,6 +3878,18 @@ Return ONLY a valid JSON array. No conversational text.
                                                                 placeholder="G-XXXXXXXXXX"
                                                             />
                                                             <p className="mt-2 text-xs text-slate-500 font-medium">This ID will be dynamically injected into your frontend to track user events, sessions, and conversions via Google Analytics 4.</p>
+                                                        </label>
+
+                                                        <label className="block">
+                                                            <span className="text-sm font-bold text-slate-700 mb-2 block">Google Site Verification</span>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-500 focus:outline-none transition-all font-mono text-sm"
+                                                                value={systemSettings?.googleSiteVerification || ''}
+                                                                onChange={(e) => setSystemSettings({ ...systemSettings, googleSiteVerification: e.target.value })}
+                                                                placeholder="fjaWMDPpm946..."
+                                                            />
+                                                            <p className="mt-2 text-xs text-slate-500 font-medium">Add your Google Search Console verification content value here (the 'content' attribute of the meta tag).</p>
                                                         </label>
                                                     </div>
                                                     <div className="pt-8 flex flex-col justify-end">
