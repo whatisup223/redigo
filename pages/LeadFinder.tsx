@@ -369,7 +369,11 @@ export const LeadFinder: React.FC = () => {
 
         if (res.status === 403) {
           const errData = await res.json();
-          showToast(errData.message || 'Server-side fetching is disabled here.', 'error');
+          setSearchError({
+            type: 'generic', // Use generic for policy messages unless we add a new icon
+            message: errData.message || 'Server-side fetching is disabled here.',
+            lockedUntil: null
+          });
           setIsSearchingNiches(false);
           return;
         }
@@ -1114,6 +1118,42 @@ export const LeadFinder: React.FC = () => {
         <div className="flex justify-center w-full max-w-5xl mx-auto">
           {/* Main Content Area */}
           <div className="space-y-6 w-full">
+            {/* Shared Safeguard/Error Display */}
+            {searchError && !isFetching && !isSearchingNiches && (
+              <div className={`flex flex-col items-center justify-center py-16 rounded-[3rem] border shadow-sm space-y-5 px-8 text-center ${sgBg}`}>
+                <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl ${sgIconBg}`}>
+                  {sgIsManual ? '🔐' : sgIsJail ? '⛔' : searchError.type === 'generic' ? '🚫' : '🛡️'}
+                </div>
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgLabelColor}`}>
+                    {sgIsManual ? 'System Protected by Admin' : sgIsJail ? 'Account Temporarily Restricted' : 'Access Restricted'}
+                  </p>
+                  <h3 className={`text-lg font-black mb-2 ${sgTitleColor}`}>
+                    {sgIsManual ? 'Reddit Access Paused' : sgIsJail ? 'Cooling Down...' : 'Action Required'}
+                  </h3>
+                  <p className={`text-sm font-medium max-w-xs leading-relaxed ${sgMsgColor}`}>
+                    {searchError.message}
+                  </p>
+                </div>
+                {sgCountdownStr ? (
+                  <div className={`flex flex-col items-center px-8 py-4 rounded-2xl ${sgCdBg}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgCdLabelColor}`}>Resuming in</p>
+                    <p className={`text-4xl font-black tabular-nums ${sgCdNumColor}`}>{sgCountdownStr}</p>
+                  </div>
+                ) : sgIsManual ? (
+                  <div className="px-6 py-3 bg-amber-100 rounded-2xl">
+                    <p className="text-amber-600 text-xs font-black uppercase tracking-widest">Indefinite — Admin Control</p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setSearchError(null)}
+                    className="px-6 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                  >
+                    Dismiss Message
+                  </button>
+                )}
+              </div>
+            )}
             {activeTab === 'discovery' ? (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Niche Discovery Tools and Actions */}
@@ -1219,8 +1259,8 @@ export const LeadFinder: React.FC = () => {
                     <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
                       <Search size={32} className="text-slate-200" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-900 mb-2">Ready to Explore?</h3>
-                    <p className="text-slate-400 text-sm font-medium max-w-xs mx-auto">Enter a niche keyword at the top to discover high-potential subreddits for your business.</p>
+                    <h3 className="text-xl font-black text-slate-900 mb-2">Unlock Your Ideal Communities 🌐</h3>
+                    <p className="text-slate-400 text-sm font-medium max-w-xs mx-auto">Type a keyword like 'SaaS' or 'Fitness' above to reveal high-potential niches where your perfect leads live and breathe.</p>
                   </div>
                 )}
               </div>
@@ -1288,38 +1328,9 @@ export const LeadFinder: React.FC = () => {
                   </div>
                 )}
 
-                {searchError && !isFetching && (
-                  <div className={`flex flex-col items-center justify-center py-16 rounded-[3rem] border shadow-sm space-y-5 px-8 text-center ${sgBg}`}>
-                    <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-3xl ${sgIconBg}`}>
-                      {sgIsManual ? '🔐' : sgIsJail ? '⛔' : '🛡️'}
-                    </div>
-                    <div>
-                      <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgLabelColor}`}>
-                        {sgIsManual ? 'System Protected by Admin' : sgIsJail ? 'Account Temporarily Restricted' : 'System Safeguard Active'}
-                      </p>
-                      <h3 className={`text-lg font-black mb-2 ${sgTitleColor}`}>
-                        {sgIsManual ? 'Reddit Access Paused' : sgIsJail ? 'Cooling Down...' : 'Auto-Protection Triggered'}
-                      </h3>
-                      <p className={`text-sm font-medium max-w-xs leading-relaxed ${sgMsgColor}`}>
-                        {sgIsManual
-                          ? 'The administrator has temporarily paused Reddit access for system maintenance and protection. Our team is actively working on it.'
-                          : sgIsJail
-                            ? 'Your account was temporarily restricted due to excessive errors. This protects your Reddit account from bans.'
-                            : 'Redigo detected unusual Reddit API activity and activated automatic protection to prevent potential bans.'}
-                      </p>
-                    </div>
-                    {sgCountdownStr ? (
-                      <div className={`flex flex-col items-center px-8 py-4 rounded-2xl ${sgCdBg}`}>
-                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${sgCdLabelColor}`}>Resuming in</p>
-                        <p className={`text-4xl font-black tabular-nums ${sgCdNumColor}`}>{sgCountdownStr}</p>
-                      </div>
-                    ) : sgIsManual ? (
-                      <div className="px-6 py-3 bg-amber-100 rounded-2xl">
-                        <p className="text-amber-600 text-xs font-black uppercase tracking-widest">Indefinite — Admin Control</p>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+
+
+
 
                 {posts.length === 0 && !isFetching && !searchError && (
                   <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
