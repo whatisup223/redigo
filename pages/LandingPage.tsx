@@ -138,6 +138,7 @@ export const LandingPage: React.FC = () => {
             <button onClick={() => document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Live Demo</button>
             <button onClick={() => document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Testimonials</button>
             <button onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">Pricing</button>
+            <button onClick={() => document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' })} className="hover:text-orange-600 transition-colors">FAQ</button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -166,6 +167,7 @@ export const LandingPage: React.FC = () => {
               <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('live-demo')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Live Demo</button>
               <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('testimonials')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Testimonials</button>
               <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">Pricing</button>
+              <button onClick={() => { setIsMobileMenuOpen(false); document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-left py-2 hover:text-orange-600 border-b border-slate-50 transition-colors">FAQ</button>
             </div>
 
             <div className="flex flex-col gap-3 pt-4">
@@ -1124,8 +1126,8 @@ export const LandingPage: React.FC = () => {
           <div className="space-y-4">
             {[
               {
-                q: "Is Redigo safe for my Reddit account?",
-                a: "Yes, 100%. Redigo uses a secure browser extension bridge that posts from your own IP address and browser session. We never ask for your password and we don't use 'headless' bots that Reddit's filters can easily detect. Every action is human-approved."
+                q: "Is RedditGo safe for my Reddit account?",
+                a: "Yes, 100%. RedditGo uses a secure browser extension bridge that posts from your own IP address and browser session. We never ask for your password and we don't use 'headless' bots that Reddit's filters can easily detect. Every action is human-approved."
               },
               {
                 q: "How does the AI lead extraction work?",
@@ -1136,40 +1138,20 @@ export const LandingPage: React.FC = () => {
                 a: "Not at all. You can start with our Free plan which includes 10 AI credits to test the waters. Our Professional and Agency plans are designed to scale as your business grows, providing more credits and advanced features like AI image generation."
               },
               {
-                q: "Can I use Redigo for multiple niches?",
+                q: "Can I use RedditGo for multiple niches?",
                 a: "Absolutely. You can set up different Brand Profiles for different products or niches. The AI will adapt its tone, language, and lead-scoring criteria based on the profile you select for each extraction."
               },
               {
-                q: "What makes Redigo different from other automation tools?",
-                a: "Redigo is 'Human-in-the-loop'. Unlike tools that spam subreddits with low-quality posts, Redigo helps you find the right conversations and drafts value-first replies. You are the final editor, ensuring that every interaction is authentic and contributes positively to the community."
+                q: "What makes RedditGo different from other automation tools?",
+                a: "RedditGo is 'Human-in-the-loop'. Unlike tools that spam subreddits with low-quality posts, RedditGo helps you find the right conversations and drafts value-first replies. You are the final editor, ensuring that every interaction is authentic and contributes positively to the community."
               },
               {
                 q: "How do AI credits work?",
                 a: "AI credits are used for high-level operations like lead extraction, sentiment analysis, and drafting replies. Each plan comes with a set amount of credits. If you run out, credits are replenished at the start of your billing cycle, or you can top up at any time."
               }
-            ].map((item, i) => {
-              const [isOpen, setIsOpen] = useState(false);
-              return (
-                <div key={i} className="bg-white rounded-3xl border border-slate-200 overflow-hidden transition-all duration-300 hover:border-orange-200">
-                  <button
-                    onClick={() => setIsOpen(!isOpen)}
-                    className="w-full px-8 py-6 flex items-center justify-between text-left focus:outline-none"
-                  >
-                    <span className="text-lg font-bold text-slate-900">{item.q}</span>
-                    <div className={`p-2 rounded-xl transition-all ${isOpen ? 'bg-orange-600 text-white rotate-180' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100'}`}>
-                      {isOpen ? <X size={18} /> : <HelpCircle size={18} />}
-                    </div>
-                  </button>
-                  <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
-                    <div className="px-8 pb-8 pt-2">
-                      <p className="text-slate-500 font-medium leading-relaxed border-t border-slate-50 pt-6">
-                        {item.a}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            ].map((item, i) => (
+              <FAQItem key={i} q={item.q} a={item.a} />
+            ))}
           </div>
         </div>
       </section>
@@ -1184,10 +1166,10 @@ export const LandingPage: React.FC = () => {
             <div className="relative z-10 max-w-3xl mx-auto space-y-8">
               <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
                 Work smarter on Reddit. <br />
-                Let Redigo draft — you decide.
+                Let RedditGo draft — you decide.
               </h2>
               <p className="text-orange-100 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
-                Set up your brand voice once. Your Redigo assistant helps you extract leads and drafts high-intent suggestions — you review and publish with a single click.
+                Set up your brand voice once. Your RedditGo assistant helps you extract leads and drafts high-intent suggestions — you review and publish with a single click.
               </p>
 
               <div className="flex flex-col items-center pt-4">
@@ -1237,7 +1219,7 @@ export const LandingPage: React.FC = () => {
       <footer className="py-12 bg-white text-slate-500 border-t border-slate-100">
         <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center gap-6">
           <div className="text-sm font-medium">
-            © 2026 Redigo. All rights reserved.
+            © 2026 RedditGo. All rights reserved.
           </div>
           <div className="flex items-center gap-8 text-sm font-medium">
             <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
@@ -1249,6 +1231,30 @@ export const LandingPage: React.FC = () => {
           </p>
         </div>
       </footer>
+    </div>
+  );
+};
+
+const FAQItem: React.FC<{ q: string; a: string }> = ({ q, a }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden transition-all duration-300 hover:border-orange-200">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-8 py-6 flex items-center justify-between text-left focus:outline-none"
+      >
+        <span className="text-lg font-bold text-slate-900">{q}</span>
+        <div className={`p-2 rounded-xl transition-all ${isOpen ? 'bg-orange-600 text-white rotate-180' : 'bg-slate-50 text-slate-400'}`}>
+          {isOpen ? <X size={18} /> : <HelpCircle size={18} />}
+        </div>
+      </button>
+      <div className={`transition-all duration-500 ease-in-out ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
+        <div className="px-8 pb-8 pt-2">
+          <p className="text-slate-500 font-medium leading-relaxed border-t border-slate-50 pt-6">
+            {a}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
