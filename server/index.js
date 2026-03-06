@@ -6372,7 +6372,7 @@ app.delete('/api/admin/blog/posts/:id', adminAuth, async (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist'), { index: false }));
 
-  app.get(/.*/, (req, res) => {
+  app.get(/.*/, async (req, res) => {
     // Prevent unhandled API routes from returning HTML, avoiding SyntaxError JSON parse crashes
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'Endpoint not found' });
