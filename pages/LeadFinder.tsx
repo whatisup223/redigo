@@ -298,52 +298,94 @@ export const LeadFinder: React.FC = () => {
     }, 1000);
 
     try {
-      const res = await fetch(`/api/subreddit/search?q=${encodeURIComponent(nicheQuery)}&userId=${user?.id}`, { headers: getAuthHeaders() });
+      const isMobile = /Mobile|Android|iPhone/i.test(navigator.userAgent);
+      const isExtActive = isExtensionActive();
+      const canUseExtension = redditSettings.useExtensionFetching && isExtActive && !isMobile;
 
-      if (res.status === 423) {
-        const errData = await res.json();
-        setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Request blocked by safeguards.', lockedUntil: errData.lockedUntil || null });
-        showToast(errData.error || 'Request blocked by safeguards.', 'error');
-        setIsSearchingNiches(false);
-        return;
-      }
+      let results: any[] = [];
+      let finalCredits = user?.credits || 0;
 
-      if (res.status === 429) {
-        const errData = await res.json();
-        if (errData.error === 'RATELIMIT_COOLDOWN' || errData.cooldown) {
-          showToast(errData.message || `Please wait ${errData.cooldown}s`, 'error');
-          if (errData.cooldown) setReloadCooldown(errData.cooldown);
-        } else {
-          setShowDailyLimitModal(true);
+      if (canUseExtension) {
+        try {
+          const rawData = await fetchNicheWithExtension(nicheQuery);
+          results = (rawData.data?.children || []).map((child: any) => {
+            let icon = child.data.icon_img || child.data.community_icon || "";
+            if (icon) icon = icon.replace(/&amp;/g, '&');
+            return {
+              name: child.data.display_name,
+              title: child.data.title,
+              subscribers: child.data.subscribers,
+              description: child.data.public_description,
+              icon: icon,
+              over18: child.data.over18,
+              type: child.data.subreddit_type,
+              activeUsers: child.data.accounts_active
+            };
+          });
+
+          // Sync with server for history/credits
+          const syncRes = await fetch('/api/subreddit/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({ results, q: nicheQuery, userId: user?.id })
+          });
+          const syncData = await syncRes.json();
+          if (syncData.credits !== undefined) finalCredits = syncData.credits;
+
+        } catch (extErr) {
+          if (redditSettings.useServerFallback) {
+            const res = await fetch(`/api/subreddit/search?q=${encodeURIComponent(nicheQuery)}&userId=${user?.id}`, { headers: getAuthHeaders() });
+            if (!res.ok) throw new Error('Search failed');
+            const data = await res.json();
+            results = data.results || [];
+            finalCredits = data.credits;
+          } else {
+            throw extErr;
+          }
         }
-        setIsSearchingNiches(false);
-        return;
-      }
-
-      if (res.status === 402) {
-        setShowNoCreditsModal(true);
-        setIsSearchingNiches(false);
-        return;
-      }
-
-      if (res.ok) {
-        const data = await res.json();
-        const results = data.results || [];
-        setNicheResults(results);
-
-        // Sync real credits from server
-        if (data.credits !== undefined) {
-          updateUser({ credits: data.credits });
-        }
-
-        if (results.length === 0) showToast('No matching subreddits found.', 'error');
-        else showToast(`Found ${results.length} communities!`, 'success');
       } else {
-        const err = await res.json();
-        showToast(err.error || 'Niche search failed', 'error');
+        // Direct Server Fetch
+        const res = await fetch(`/api/subreddit/search?q=${encodeURIComponent(nicheQuery)}&userId=${user?.id}`, { headers: getAuthHeaders() });
+
+        if (res.status === 423) {
+          const errData = await res.json();
+          setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Request blocked by safeguards.', lockedUntil: errData.lockedUntil || null });
+          showToast(errData.error || 'Request blocked by safeguards.', 'error');
+          setIsSearchingNiches(false);
+          return;
+        }
+
+        if (res.status === 429) {
+          const errData = await res.json();
+          if (errData.error === 'RATELIMIT_COOLDOWN' || errData.cooldown) {
+            showToast(errData.message || `Please wait ${errData.cooldown}s`, 'error');
+            if (errData.cooldown) setReloadCooldown(errData.cooldown);
+          } else {
+            setShowDailyLimitModal(true);
+          }
+          setIsSearchingNiches(false);
+          return;
+        }
+
+        if (res.status === 402) {
+          setShowNoCreditsModal(true);
+          setIsSearchingNiches(false);
+          return;
+        }
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+        results = data.results || [];
+        finalCredits = data.credits;
       }
-    } catch (e) {
-      showToast('Niche search failed', 'error');
+
+      setNicheResults(results);
+      if (finalCredits !== undefined) updateUser({ credits: finalCredits });
+
+      if (results.length === 0) showToast('No matching subreddits found.', 'error');
+      else showToast(`Found ${results.length} communities!`, 'success');
+
+    } catch (e: any) {
+      showToast(e.message || 'Niche search failed', 'error');
     } finally {
       setIsSearchingNiches(false);
     }
@@ -496,6 +538,34 @@ export const LeadFinder: React.FC = () => {
     } catch (err) {
       showToast('Auth failed', 'error');
     }
+  };
+
+  const fetchNicheWithExtension = (query: string): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', handleResponse);
+        reject(new Error('Extension timeout'));
+      }, 15000);
+
+      const handleResponse = (event: MessageEvent) => {
+        if (event.data.source === 'REDIGO_EXT' && event.data.type === 'NICHE_RESPONSE') {
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', handleResponse);
+          if (event.data.payload && event.data.payload.success) {
+            resolve(event.data.payload.data);
+          } else {
+            reject(new Error(event.data.payload?.error || 'Niche fetch failed'));
+          }
+        }
+      };
+      window.addEventListener('message', handleResponse);
+
+      window.postMessage({
+        source: 'REDIGO_WEB_APP',
+        type: 'REDDIT_NICHE_SEARCH',
+        query
+      }, '*');
+    });
   };
 
   const fetchWithExtension = (): Promise<any> => {
@@ -661,7 +731,7 @@ export const LeadFinder: React.FC = () => {
           const response = await fetch('/api/reddit/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-            body: JSON.stringify({ rawJson, keywords: searchKeywords, userId: user.id })
+            body: JSON.stringify({ rawJson, keywords: searchKeywords, userId: user.id, sortBy: sortBy })
           });
           if (response.status === 423) {
             const errData = await response.json();
@@ -688,7 +758,7 @@ export const LeadFinder: React.FC = () => {
           console.warn('[Hybrid] Extension fetch failed, checking fallback...', extErr);
           if (redditSettings.useServerFallback) {
             console.log('[Hybrid] Falling back to Server Fetching');
-            const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`, { headers: getAuthHeaders() });
+            const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}&t=all`, { headers: getAuthHeaders() });
 
             if (response.status === 423) {
               const errData = await response.json();
@@ -717,7 +787,7 @@ export const LeadFinder: React.FC = () => {
         }
       } else {
         console.log('[Hybrid] Using Server Fetching (Fallback, Mobile, or Extension Disabled)');
-        const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}`, { headers: getAuthHeaders() });
+        const response = await fetch(`/api/reddit/posts?subreddit=${targetSubreddit}&keywords=${searchKeywords}&userId=${user.id}&sort=${sortBy}&t=all`, { headers: getAuthHeaders() });
 
         if (response.status === 423) {
           const errData = await response.json();

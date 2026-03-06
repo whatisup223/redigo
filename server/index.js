@@ -5574,6 +5574,14 @@ app.post('/api/reddit/analyze', async (req, res) => {
           return keywordList.some(kw => searchContent.includes(kw));
         });
       }
+
+      // ── MANUAL SORTING (Safety Guard) ──────────────────────────────────────
+      const sortBy = req.body.sortBy || 'new';
+      if (sortBy === 'new') {
+        posts.sort((a, b) => (b.created_utc || 0) - (a.created_utc || 0));
+      } else if (sortBy === 'top') {
+        posts.sort((a, b) => (b.ups || 0) - (a.ups || 0));
+      }
     } catch (processErr) {
       console.error('[Analyze] Process Error:', processErr);
       return res.status(500).json({ error: 'Failed to process data.' });
@@ -5981,6 +5989,36 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
   }
 });
 
+// Sync results from Extension (Niche Discovery)
+app.post('/api/subreddit/search', async (req, res) => {
+  try {
+    const { results, q, userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+    const cost = Number(loadSettings().creditCosts?.nicheExplore) || 0;
+    const user = await User.findOne({ id: userId.toString() });
+
+    let finalCredits = user ? user.credits : 0;
+    if (user && cost > 0 && results && results.length > 0) {
+      const updatedUser = await User.findOneAndUpdate(
+        { id: userId.toString() },
+        {
+          $inc: { credits: user.role === 'admin' ? 0 : -cost },
+          $set: { lastNicheResults: results },
+          $push: { "usageStats.history": { date: new Date().toISOString(), type: 'niche_explore', cost, query: q } }
+        },
+        { new: true }
+      );
+      if (updatedUser) finalCredits = updatedUser.credits;
+    }
+
+    res.json({ success: true, credits: finalCredits });
+  } catch (err) {
+    console.error('[Subreddit Sync Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/subreddit/about', async (req, res) => {
   try {
     let { name } = req.query;
@@ -6138,6 +6176,13 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
       const searchContent = (post.title + ' ' + post.selftext).toLowerCase();
       return keywordList.some(kw => searchContent.includes(kw));
     });
+
+    // ── MANUAL SORTING (Safety Guard) ──────────────────────────────────────
+    if (sortBy === 'new') {
+      posts.sort((a, b) => (b.created_utc || 0) - (a.created_utc || 0));
+    } else if (sortBy === 'top') {
+      posts.sort((a, b) => (b.ups || 0) - (a.ups || 0));
+    }
 
     // ── NO RESULTS: RETURN EARLY WITHOUT DEDUCTION ─────────────────────────
     if (posts.length === 0) {
