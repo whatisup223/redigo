@@ -4711,7 +4711,7 @@ app.post('/api/generate', generateLimiter, async (req, res) => {
         $set: { lastUsageDate: today },
         $push: { "usageStats.history": { date: new Date().toISOString(), type, cost } }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
@@ -4945,7 +4945,7 @@ app.post('/api/generate-image', async (req, res) => {
         },
         $push: { "usageStats.history": { date: new Date().toISOString(), type: 'image', cost } }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
@@ -5921,7 +5921,7 @@ app.post('/api/reddit/analyze', async (req, res) => {
         $set: { lastUsageDate: today },
         $push: { 'usageStats.history': { date: new Date().toISOString(), type: 'fetch_extension', cost } }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
@@ -6272,7 +6272,7 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
           $set: { lastNicheResults: results },
           $push: { "usageStats.history": { date: new Date().toISOString(), type: 'niche_explore', cost, query: q } }
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (updatedUser) finalCredits = updatedUser.credits;
     }
@@ -6302,7 +6302,7 @@ app.post('/api/subreddit/search', async (req, res) => {
           $set: { lastNicheResults: results },
           $push: { "usageStats.history": { date: new Date().toISOString(), type: 'niche_explore', cost, query: q } }
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (updatedUser) finalCredits = updatedUser.credits;
     }
@@ -6548,7 +6548,7 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
         $set: { lastUsageDate: today },
         $push: { 'usageStats.history': { date: new Date().toISOString(), type: 'fetch', cost } }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) return res.status(402).json({ error: 'OUT_OF_CREDITS' });
@@ -6653,7 +6653,7 @@ app.put('/api/admin/blog/posts/:id', adminAuth, async (req, res) => {
   try {
     const data = { ...req.body, updatedAt: new Date() };
     if (data.status === 'published' && !data.publishedAt) data.publishedAt = new Date();
-    const post = await BlogPost.findOneAndUpdate({ id: req.params.id }, data, { new: true });
+    const post = await BlogPost.findOneAndUpdate({ id: req.params.id }, data, { returnDocument: 'after' });
     res.json(post);
   } catch (err) {
     res.status(400).json({ error: err.message });
