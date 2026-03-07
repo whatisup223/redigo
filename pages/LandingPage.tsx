@@ -195,8 +195,8 @@ export const LandingPage: React.FC = () => {
 
           {/* Trust Badge / Version Pill */}
           <div className="inline-flex items-center gap-2 bg-white/80 backdrop-blur-md border border-slate-200/60 rounded-full pl-2 pr-4 py-1.5 text-sm font-bold text-slate-600 shadow-sm shadow-slate-200 hover:scale-105 transition-transform cursor-default animate-fade-in-up">
-            <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">New</span>
-            <span>v2.0: The RedditGo AI Assistant</span>
+            <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">Beta</span>
+            <span>Public Beta Version</span>
           </div>
 
           {/* Main Headline */}
