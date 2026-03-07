@@ -86,7 +86,7 @@ const BrandProfileSchema = new mongoose.Schema({
     problem: String,
     primaryColor: String,
     secondaryColor: String
-});
+}, { strict: false });
 
 const PlanSchema = new mongoose.Schema({
     id: String,

@@ -2376,9 +2376,10 @@ app.post('/api/user/brand-profile', async (req, res) => {
       user.markModified('brandProfile');
 
       // Ensure tracking in BrandProfile collection for completeness, though User embedded is main
+      const { _id, id, ...cleanBrandData } = brandData; // Prevent Mongoose _id modification error
       await BrandProfile.findOneAndUpdate(
         { userId: userId.toString() },
-        { ...brandData, userId: userId.toString() },
+        { ...cleanBrandData, userId: userId.toString() },
         { upsert: true, new: true }
       );
 

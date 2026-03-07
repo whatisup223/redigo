@@ -470,17 +470,22 @@ export const Settings: React.FC = () => {
         });
     };
 
+    const initialSyncDone = useRef(false);
+    const initialFetchDone = useRef(false);
+
     useEffect(() => {
-        if (user) {
+        if (user && !initialSyncDone.current) {
             setProfileName(user.name || '');
             setAvatarUrl(user.avatar || '');
             setRedditUsername(user.redditUsername || '');
             if (user.brandProfile && Object.keys(user.brandProfile).length > 0) {
                 setBrandProfile(prev => ({ ...prev, ...user.brandProfile }));
             }
+            initialSyncDone.current = true;
         }
+
         const fetchData = async () => {
-            if (!user?.id) { setLoading(false); return; }
+            if (!user?.id || initialFetchDone.current) { setLoading(false); return; }
             try {
                 const [brandRes, plansRes] = await Promise.all([
                     fetch(`/api/user/brand-profile?userId=${user.id}`, {
@@ -505,10 +510,11 @@ export const Settings: React.FC = () => {
                 console.error("Failed to fetch settings:", err);
             } finally {
                 setLoading(false);
+                initialFetchDone.current = true;
             }
         };
         fetchData();
-    }, [user]);
+    }, [user, token]);
 
 
 
