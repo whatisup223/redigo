@@ -13,6 +13,7 @@
     "@google/genai": "^1.41.0",
     "@google/generative-ai": "^0.24.1",
     "@paypal/react-paypal-js": "^8.9.2",
+    "@tailwindcss/typography": "^0.5.19",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",

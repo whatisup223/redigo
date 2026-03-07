@@ -71,7 +71,7 @@ export const BlogPost: React.FC = () => {
     }
 
     return (
-        <article className="min-h-screen bg-[#fcfcfd] font-['Outfit'] pt-24 pb-32">
+        <article className="min-h-screen bg-[#fcfcfd] font-['Outfit'] pb-32">
             {post.coverImage && (
                 <div className="w-full h-[50vh] max-h-[500px] mb-12 relative overflow-hidden bg-slate-100">
                     <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover animate-in fade-in zoom-in-105 duration-1000" />
@@ -107,7 +107,15 @@ export const BlogPost: React.FC = () => {
                 </header>
 
                 <div
-                    className="prose prose-lg prose-slate prose-headings:font-black prose-headings:tracking-tight prose-a:text-orange-600 prose-a:no-underline hover:prose-a:underline prose-img:rounded-3xl prose-img:shadow-xl prose-img:border prose-img:border-slate-100 max-w-none prose-p:leading-relaxed prose-p:font-medium prose-p:text-slate-600"
+                    className="mt-12 text-slate-700
+                    [&>h2]:text-3xl [&>h2]:md:text-4xl [&>h2]:font-black [&>h2]:mt-16 [&>h2]:mb-8 [&>h2]:tracking-tight [&>h2]:text-slate-900 [&>h2]:leading-tight
+                    [&>h3]:text-2xl [&>h3]:md:text-3xl [&>h3]:font-bold [&>h3]:mt-12 [&>h3]:mb-6 [&>h3]:tracking-tight [&>h3]:text-slate-800 
+                    [&>p]:text-lg [&>p]:leading-relaxed [&>p]:mb-8 [&>p]:font-medium [&>p]:text-slate-600 
+                    [&>ul]:list-disc [&>ul]:pl-8 [&>ul]:mb-8 [&>ul>li]:mb-4 [&>ul>li]:text-lg [&>ul>li]:font-medium [&>ul>li]:text-slate-600 [&>ul>li]:leading-relaxed
+                    [&>ol]:list-decimal [&>ol]:pl-8 [&>ol]:mb-8 [&>ol>li]:mb-4 [&>ol>li]:text-lg [&>ol>li]:font-medium [&>ol>li]:text-slate-600 [&>ol>li]:leading-relaxed
+                    [&>strong]:text-slate-900 [&>strong]:font-bold
+                    [&>a]:text-orange-600 [&>a]:underline [&>a]:font-bold hover:[&>a]:text-orange-700
+                    [&>blockquote]:border-l-4 [&>blockquote]:border-orange-500 [&>blockquote]:pl-6 [&>blockquote]:italic [&>blockquote]:my-10 [&>blockquote]:text-slate-500 [&>blockquote]:text-xl"
                     dangerouslySetInnerHTML={{ __html: post.content }}
                 />
 
