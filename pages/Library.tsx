@@ -66,6 +66,20 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
 };
 
+// Normalize any Reddit URL to always be https://www.reddit.com/...
+const normalizeRedditUrl = (url: string): string => {
+    if (!url) return '';
+    // Strip any existing reddit.com domain prefix (handles double URLs, relative paths, etc.)
+    const path = url
+        .replace(/^https?:\/\/(www\.|new\.)?reddit\.com/i, '')
+        .replace(/^\/\/reddit\.com/i, '');
+    // If it looks like a relative path already, just prepend base
+    if (path.startsWith('/')) return `https://www.reddit.com${path}`;
+    // If it's already a full valid URL with different domain, return as-is
+    if (path.startsWith('http')) return path;
+    return `https://www.reddit.com/${path}`;
+};
+
 export const Library: React.FC = () => {
     const { user } = useAuth();
     const [items, setItems] = useState<LibraryItem[]>([]);
@@ -386,7 +400,7 @@ export const Library: React.FC = () => {
                                     <div className="flex items-center gap-1.5 overflow-hidden">
                                         {item.postUrl && (
                                             <a
-                                                href={item.postUrl}
+                                                href={normalizeRedditUrl(item.postUrl)}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-orange-50 hover:text-orange-600 hover:border-orange-100 transition-all border border-transparent"
@@ -431,15 +445,15 @@ export const Library: React.FC = () => {
                                                 let missingUrl = false;
 
                                                 if (isPublished && item.postUrl) {
-                                                    // If already live, just go to the link
-                                                    targetUrl = item.postUrl.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com');
+                                                    // If already live, normalize and go to the link
+                                                    targetUrl = normalizeRedditUrl(item.postUrl);
                                                 } else if (isPost) {
                                                     targetUrl = `https://www.reddit.com/r/${item.subreddit || 'saas'}/submit`;
                                                 } else {
                                                     if (item.postUrl && !item.postUrl.includes('/submit')) {
-                                                        targetUrl = item.postUrl.replace('://reddit.com', '://www.reddit.com').replace('://new.reddit.com', '://www.reddit.com');
-                                                    } else if (item.subreddit && item.postUrl) { // handle postId if stored as part of URL
-                                                        targetUrl = item.postUrl;
+                                                        targetUrl = normalizeRedditUrl(item.postUrl);
+                                                    } else if (item.subreddit && item.postUrl) {
+                                                        targetUrl = normalizeRedditUrl(item.postUrl);
                                                     } else {
                                                         missingUrl = true;
                                                     }
