@@ -6762,52 +6762,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ── ONE-TIME DATABASE CLEANUP ENDPOINT ────────────────────────────────────────
-// Run once at /api/admin/cleanup-intelligence then the endpoint deletes itself safely
-app.post('/api/admin/cleanup-intelligence', adminAuth, async (req, res) => {
-  try {
-    const db = mongoose.connection.db;
-    const results = {};
-
-    // 1. Remove vector + AI fields from User brandProfile
-    const userResult = await db.collection('users').updateMany({}, {
-      $unset: {
-        'brandProfile.vector': '',
-        'lastSearchLeads': ''
-      }
-    });
-    results.usersUpdated = userResult.modifiedCount;
-
-    // 2. Remove all Intelligence fields from RedditPost documents
-    const postResult = await db.collection('redditposts').updateMany({}, {
-      $unset: {
-        vector: '', opportunityScore: '', intent: '',
-        analysisReason: '', topics: '', clusterId: '',
-        isHot: '', competitors: '', isDiscovery: ''
-      }
-    });
-    results.postsUpdated = postResult.modifiedCount;
-
-    // 3. Drop new collections if they exist
-    const collections = await db.listCollections().toArray();
-    const names = collections.map(c => c.name);
-
-    if (names.includes('redditsearchcaches')) {
-      await db.collection('redditsearchcaches').drop();
-      results.droppedCollections = ['redditsearchcaches'];
-    } else {
-      results.droppedCollections = [];
-    }
-
-    console.log('✅ [CLEANUP] Database cleaned successfully:', results);
-    res.json({ success: true, message: 'Database cleaned successfully', results });
-  } catch (err) {
-    console.error('❌ [CLEANUP] Error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-// ─────────────────────────────────────────────────────────────────────────────
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
