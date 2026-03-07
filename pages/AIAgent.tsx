@@ -245,6 +245,34 @@ export const AIAgent: React.FC = () => {
         setIsInitialCheckDone(true);
     }, [window.location.search]);
 
+    const fetchAboutWithExtension = (subreddit: string): Promise<any> => {
+        return new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+                window.removeEventListener('message', handleResponse);
+                reject(new Error('Extension timeout'));
+            }, 10000);
+
+            const handleResponse = (event: MessageEvent) => {
+                if (event.data.source === 'REDIGO_EXT' && event.data.type === 'ABOUT_RESPONSE') {
+                    clearTimeout(timeoutId);
+                    window.removeEventListener('message', handleResponse);
+                    if (event.data.payload && event.data.payload.success) {
+                        resolve(event.data.payload.data);
+                    } else {
+                        reject(new Error(event.data.payload?.error || 'Subreddit info fetch failed'));
+                    }
+                }
+            };
+            window.addEventListener('message', handleResponse);
+
+            window.postMessage({
+                source: 'REDIGO_WEB_APP',
+                type: 'REDDIT_SUBREDDIT_ABOUT',
+                subreddit
+            }, '*');
+        });
+    };
+
     // ── Extension Real-time Detection ─────────────────────────────────────
     useEffect(() => {
         const handleExtMessage = (event: MessageEvent) => {
@@ -442,10 +470,46 @@ export const AIAgent: React.FC = () => {
         // --- Subreddit Image Pre-flight Check ---
         if (postData.subreddit) {
             try {
-                const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
-                if (subRes.ok) {
-                    const subData = await subRes.json();
-                    const data = subData.data || {};
+                let subInfo: any = null;
+                let passed = false;
+
+                if (isExtensionActive()) {
+                    try {
+                        subInfo = await fetchAboutWithExtension(postData.subreddit);
+                        passed = true;
+                    } catch (err) {
+                        console.warn('Extension pre-flight failed (image check)', err);
+                    }
+                }
+
+                if (!passed) {
+                    const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
+                    if (subRes.ok) {
+                        subInfo = await subRes.json();
+                        passed = true;
+                    } else {
+                        // Handle server errors
+                        if (subRes.status === 404) {
+                            const errData = await subRes.json();
+                            showToast(`${errData.message || 'Subreddit not found.'} [404]`, 'error');
+                            setIncludeImage(false);
+                            return;
+                        } else if (subRes.status === 423) {
+                            const errData = await subRes.json();
+                            showToast(errData.error || 'Blocked by safeguards.', 'error');
+                            setIncludeImage(false);
+                            setIsGeneratingImage(false);
+                            return;
+                        } else if (subRes.status === 429 || subRes.status === 403) {
+                            showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit or Private). Skipping image for safety. [${subRes.status}]`, 'error');
+                            setIncludeImage(false);
+                            return;
+                        }
+                    }
+                }
+
+                if (passed && subInfo) {
+                    const data = subInfo; // fetchAboutWithExtension returns data.data already
                     // Explicit block check: allow_images, allow_media, or submission_type
                     const isBlocked = data.allow_images === false ||
                         data.allow_images === 0 ||
@@ -459,22 +523,6 @@ export const AIAgent: React.FC = () => {
                         setIsGeneratingImage(false); // Stop progress spinner
                         return;
                     }
-                } else if (subRes.status === 404) {
-                    const errData = await subRes.json();
-                    showToast(`${errData.message || 'Subreddit not found.'} [404]`, 'error');
-                    setIncludeImage(false);
-                    return;
-                } else if (subRes.status === 423) {
-                    const errData = await subRes.json();
-                    showToast(errData.error || 'Blocked by safeguards.', 'error');
-                    setIncludeImage(false);
-                    setIsGeneratingImage(false);
-                    return;
-                } else if (subRes.status === 429 || subRes.status === 403) {
-                    // Reddit is blocking our server, safer to not charge for an image that might fail to post
-                    showToast(`Cannot verify image support for r/${postData.subreddit} (API Limit or Private). Skipping image for safety. [${subRes.status}]`, 'error');
-                    setIncludeImage(false);
-                    return;
                 }
             } catch (err) {
                 console.warn('Subreddit image support check failed (ignoring)', err);
@@ -573,10 +621,56 @@ export const AIAgent: React.FC = () => {
 
         // --- Subreddit Universal Pre-flight Check ---
         try {
-            const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
-            if (subRes.ok) {
-                const subData = await subRes.json();
-                const data = subData.data || {};
+            let subInfo: any = null;
+            let passed = false;
+
+            if (isExtensionActive()) {
+                try {
+                    subInfo = await fetchAboutWithExtension(postData.subreddit);
+                    passed = true;
+                } catch (err) {
+                    console.warn('Extension pre-flight failed (content gen)', err);
+                }
+            }
+
+            if (!passed) {
+                const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(postData.subreddit)}`);
+                if (subRes.ok) {
+                    subInfo = await subRes.json();
+                    passed = true;
+                } else {
+                    if (subRes.status === 404 || subRes.status === 403) {
+                        const errData = await subRes.json();
+                        const errMsg = errData.message || 'Subreddit not found or inaccessible.';
+                        setSearchError(errMsg);
+                        showToast(errMsg, 'error');
+                        setIsGenerating(false);
+                        setIsGeneratingImage(false);
+                        return;
+                    } else if (subRes.status === 423) {
+                        const errData = await subRes.json();
+                        showToast(errData.error || 'Blocked by safeguards.', 'error');
+                        setIsGenerating(false);
+                        setIsGeneratingImage(false);
+                        return;
+                    } else if (subRes.status === 429 || subRes.status === 500) {
+                        // Fail-safe: if we can't check, we skip image but maybe allow text? 
+                        if (isImageRequested) {
+                            showToast(`Unable to verify r/${postData.subreddit} image support. Image skipped for safety.`, 'error');
+                            isImageRequested = false;
+                            setIncludeImage(false);
+                            if (mode === 'image') {
+                                setIsGenerating(false);
+                                return;
+                            }
+                            mode = 'text';
+                        }
+                    }
+                }
+            }
+
+            if (passed && subInfo) {
+                const data = subInfo;
 
                 // If user requested an image, specifically check if the subreddit allows it
                 if (isImageRequested) {
@@ -597,33 +691,6 @@ export const AIAgent: React.FC = () => {
                         }
                         mode = 'text'; // Fallback to text
                     }
-                }
-            } else if (subRes.status === 404 || subRes.status === 403) {
-                const errData = await subRes.json();
-                const errMsg = errData.message || 'Subreddit not found or inaccessible.';
-                setSearchError(errMsg);
-                showToast(errMsg, 'error');
-                setIsGenerating(false);
-                setIsGeneratingImage(false);
-                return;
-            } else if (subRes.status === 423) {
-                const errData = await subRes.json();
-                showToast(errData.error || 'Blocked by safeguards.', 'error');
-                setIsGenerating(false);
-                setIsGeneratingImage(false);
-                return;
-            } else if (subRes.status === 429 || subRes.status === 500) {
-                // Fail-safe: if we can't check, we skip image but maybe allow text? 
-                // Let's be safe and only allow text if we can't verify.
-                if (isImageRequested) {
-                    showToast(`Unable to verify r/${postData.subreddit} image support. Image skipped for safety.`, 'error');
-                    isImageRequested = false;
-                    setIncludeImage(false);
-                    if (mode === 'image') {
-                        setIsGenerating(false);
-                        return;
-                    }
-                    mode = 'text';
                 }
             }
         } catch (err) {

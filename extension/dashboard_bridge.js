@@ -165,6 +165,50 @@ window.addEventListener('message', (event) => {
             window.postMessage({ source: 'REDIGO_EXT', type: 'CONTEXT_INVALIDATED', error: 'Please refresh the page.' }, '*');
         }
     }
+
+    // ── Handle Niche Search (Fetching subreddits via Extension) ──────────────
+    if (event.data.type === 'REDDIT_NICHE_SEARCH') {
+        try {
+            const { query } = event.data;
+            chrome.runtime.sendMessage(
+                {
+                    type: 'REDDIT_NICHE_SEARCH',
+                    query
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        window.postMessage({ source: 'REDIGO_EXT', type: 'NICHE_RESPONSE', payload: { success: false, error: 'Extension connection lost.' } }, '*');
+                    } else {
+                        window.postMessage({ source: 'REDIGO_EXT', type: 'NICHE_RESPONSE', payload: response }, '*');
+                    }
+                }
+            );
+        } catch (e) {
+            window.postMessage({ source: 'REDIGO_EXT', type: 'CONTEXT_INVALIDATED', error: 'Please refresh the page.' }, '*');
+        }
+    }
+
+    // ── Handle Subreddit About (Pre-flight check via Extension) ─────────────
+    if (event.data.type === 'REDDIT_SUBREDDIT_ABOUT') {
+        try {
+            const { subreddit } = event.data;
+            chrome.runtime.sendMessage(
+                {
+                    type: 'REDDIT_SUBREDDIT_ABOUT',
+                    subreddit
+                },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        window.postMessage({ source: 'REDIGO_EXT', type: 'ABOUT_RESPONSE', payload: { success: false, error: 'Extension connection lost.' } }, '*');
+                    } else {
+                        window.postMessage({ source: 'REDIGO_EXT', type: 'ABOUT_RESPONSE', payload: response }, '*');
+                    }
+                }
+            );
+        } catch (e) {
+            window.postMessage({ source: 'REDIGO_EXT', type: 'CONTEXT_INVALIDATED', error: 'Please refresh the page.' }, '*');
+        }
+    }
 });
 
 // -- INBOUND: Relay Chrome Extension messages ? React app --------------------

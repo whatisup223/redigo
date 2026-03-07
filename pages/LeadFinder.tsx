@@ -551,6 +551,34 @@ export const LeadFinder: React.FC = () => {
     }
   };
 
+  const fetchAboutWithExtension = (subreddit: string): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', handleResponse);
+        reject(new Error('Extension timeout'));
+      }, 10000);
+
+      const handleResponse = (event: MessageEvent) => {
+        if (event.data.source === 'REDIGO_EXT' && event.data.type === 'ABOUT_RESPONSE') {
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', handleResponse);
+          if (event.data.payload && event.data.payload.success) {
+            resolve(event.data.payload.data);
+          } else {
+            reject(new Error(event.data.payload?.error || 'Subreddit info fetch failed'));
+          }
+        }
+      };
+      window.addEventListener('message', handleResponse);
+
+      window.postMessage({
+        source: 'REDIGO_WEB_APP',
+        type: 'REDDIT_SUBREDDIT_ABOUT',
+        subreddit
+      }, '*');
+    });
+  };
+
   const fetchNicheWithExtension = (query: string): Promise<any> => {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -686,28 +714,47 @@ export const LeadFinder: React.FC = () => {
       });
 
       // --- Subreddit Universal Pre-flight Check ---
-      const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}&userId=${user?.id}`);
+      let subInfo: any = null;
+      let preFlightPassed = false;
 
-      if (!subRes.ok) {
-        if (!canUseExtension) {
-          if (subRes.status === 423) {
+      if (canUseExtension) {
+        try {
+          console.log('[Hybrid] Pre-flight Check via Extension...');
+          subInfo = await fetchAboutWithExtension(targetSubreddit);
+          preFlightPassed = true;
+          console.log('[Hybrid] Extension Pre-flight Success:', subInfo.display_name);
+        } catch (extPreErr) {
+          console.warn('[Hybrid] Extension pre-flight failed, falling back to server...', extPreErr);
+        }
+      }
+
+      if (!preFlightPassed) {
+        const subRes = await fetch(`/api/subreddit/about?name=${encodeURIComponent(targetSubreddit)}&userId=${user?.id}`);
+
+        if (!subRes.ok) {
+          if (!canUseExtension) {
+            if (subRes.status === 423) {
+              const errData = await subRes.json();
+              setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Reddit access restricted by safeguards.', lockedUntil: errData.lockedUntil || null });
+              showToast(errData.error || 'Reddit access restricted by safeguards.', 'error');
+              setIsFetching(false);
+              setReloadCooldown(0);
+              return;
+            }
+
             const errData = await subRes.json();
-            setSearchError({ type: errData.restrictionType || 'generic', message: errData.error || 'Reddit access restricted by safeguards.', lockedUntil: errData.lockedUntil || null });
-            showToast(errData.error || 'Reddit access restricted by safeguards.', 'error');
+            const errMsg = `${errData.message || 'Subreddit not found or inaccessible.'} [${subRes.status}]`;
+            setSearchError({ type: 'generic', message: errMsg, lockedUntil: null });
+            showToast(errMsg, 'error');
             setIsFetching(false);
             setReloadCooldown(0);
             return;
+          } else {
+            console.log(`[Hybrid] Server pre-flight failed (Status ${subRes.status}), but extension is active so we bravely proceed...`);
           }
-
-          const errData = await subRes.json();
-          const errMsg = `${errData.message || 'Subreddit not found or inaccessible.'} [${subRes.status}]`;
-          setSearchError({ type: 'generic', message: errMsg, lockedUntil: null });
-          showToast(errMsg, 'error');
-          setIsFetching(false);
-          setReloadCooldown(0);
-          return;
         } else {
-          console.log(`[Hybrid] Server pre-flight failed (Status ${subRes.status}), but extension is active so we bravely proceed...`);
+          subInfo = await subRes.json();
+          preFlightPassed = true;
         }
       }
 

@@ -156,6 +156,44 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.type === 'REDDIT_NICHE_SEARCH') {
+        const { query } = request;
+        const searchUrl = `https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(query)}&limit=100`;
+
+        fetch(searchUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`Reddit error: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                sendResponse({ success: true, data });
+            })
+            .catch(error => {
+                console.error('Extension Niche Search Error:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+        return true;
+    }
+
+    if (request.type === 'REDDIT_SUBREDDIT_ABOUT') {
+        const { subreddit } = request;
+        const aboutUrl = `https://www.reddit.com/r/${subreddit}/about.json`;
+
+        fetch(aboutUrl)
+            .then(response => {
+                if (!response.ok) throw new Error(`Reddit error: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                sendResponse({ success: true, data: data.data });
+            })
+            .catch(error => {
+                console.error('Extension About Error:', error);
+                sendResponse({ success: false, error: error.message });
+            });
+        return true;
+    }
+
     if (request.type === 'DOWNLOAD_IMAGE') {
         chrome.downloads.download({
             url: request.url,
