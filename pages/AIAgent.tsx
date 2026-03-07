@@ -415,7 +415,8 @@ export const AIAgent: React.FC = () => {
 
     const isExtensionActive = () => {
         const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
-        if (user?.role === 'admin' || isMobile) return true; // Admin or Mobile skip
+        if (isMobile) return false; // Mobile devices never have the extension
+        if (user?.role === 'admin') return true; // Admin skip
 
         // 1. Live detected state (Most reliable)
         if (extensionDetected === true) return true;

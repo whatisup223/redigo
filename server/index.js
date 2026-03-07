@@ -6200,11 +6200,24 @@ app.get('/api/subreddit/search', redditFetchLimiter, async (req, res) => {
 
     console.log(`[Subreddit Search] Searching for niches related to: ${q}`);
 
-    const response = await fetch(`https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(q)}&limit=25`, {
-      headers: {
-        'User-Agent': getDynamicUserAgent(userId, req.user?.redditUsername || 'guest')
-      }
+    const fetchHeaders = {
+      'User-Agent': getDynamicUserAgent(userId, req.user?.redditUsername || 'guest'),
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    };
+
+    let response = await fetch(`https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(q)}&limit=25`, {
+      headers: fetchHeaders
     });
+
+    if (response.status === 403) {
+      console.log(`[Subreddit Search] 403 on primary, trying fallback URL for query: ${q}`);
+      response = await fetch(`https://reddit.com/subreddits/search.json?q=${encodeURIComponent(q)}&limit=25&raw_json=1`, {
+        headers: fetchHeaders
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`Reddit API error: ${response.status}`);
@@ -6301,11 +6314,25 @@ app.get('/api/subreddit/about', async (req, res) => {
       return res.status(423).json({ error: e.message, restrictionType: e.restrictionType || 'unknown', jailedAt: e.jailedAt || null, durationMinutes: e.durationMinutes || null, lockedUntil: e.lockedUntil || null });
     }
 
-    const response = await fetch(`https://www.reddit.com/r/${cleanName}/about.json`, {
-      headers: {
-        'User-Agent': getDynamicUserAgent(userId, req.user?.redditUsername || 'guest')
-      }
+    const fetchHeaders = {
+      'User-Agent': getDynamicUserAgent(userId, req.user?.redditUsername || 'guest'),
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    };
+
+    let response = await fetch(`https://www.reddit.com/r/${cleanName}/about.json`, {
+      headers: fetchHeaders
     });
+
+    // FALLBACK: If 403, try without the /r/ prefix or with a different subdomain (some blocks are subdomain-specific)
+    if (response.status === 403) {
+      console.log(`[Subreddit Check] 403 on primary, trying fallback URL for r/${cleanName}...`);
+      response = await fetch(`https://reddit.com/r/${cleanName}/about.json?raw_json=1`, {
+        headers: fetchHeaders
+      });
+    }
 
     reportRedditResult(userId, response.ok, response.status);
 
@@ -6392,10 +6419,21 @@ app.get('/api/reddit/posts', redditFetchLimiter, async (req, res) => {
     }
 
     const fetchHeaders = {
-      'User-Agent': getDynamicUserAgent(userId, user.redditUsername)
+      'User-Agent': getDynamicUserAgent(userId, user.redditUsername),
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
     };
 
-    const response = await fetch(fetchUrl, { headers: fetchHeaders });
+    let response = await fetch(fetchUrl, { headers: fetchHeaders });
+
+    // FALLBACK: If 403, try a slightly modified URL which sometimes bypasses CDN rules
+    if (response.status === 403) {
+      console.log(`[Reddit Fetch] 403 on primary, trying fallback for User ${userId}...`);
+      const fallbackUrl = fetchUrl.includes('?') ? `${fetchUrl}&raw_json=1` : `${fetchUrl}?raw_json=1`;
+      response = await fetch(fallbackUrl, { headers: fetchHeaders });
+    }
 
     // Safeguard Report
     reportRedditResult(userId, response.ok, response.status);

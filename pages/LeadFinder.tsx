@@ -180,7 +180,8 @@ export const LeadFinder: React.FC = () => {
 
   const isExtensionActive = () => {
     const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
-    if (user?.role === 'admin' || isMobile) return true;
+    if (isMobile) return false; // Mobile devices never have the extension
+    if (user?.role === 'admin') return true; // Keep admin as true if needed, but usually even admin needs the extension
 
     if (extensionDetected === true) return true;
     const isInstalledInDOM = document.documentElement.getAttribute('data-redigo-extension') === 'installed';
