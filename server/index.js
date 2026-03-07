@@ -2380,7 +2380,7 @@ app.post('/api/user/brand-profile', async (req, res) => {
       await BrandProfile.findOneAndUpdate(
         { userId: userId.toString() },
         { ...cleanBrandData, userId: userId.toString() },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       await user.save();
@@ -5285,7 +5285,10 @@ app.post('/api/reddit/verify', async (req, res) => {
     const cleanUrl = normalizePath(url);
     const jsonUrl = cleanUrl.split('?')[0].replace(/\/$/, '') + '.json';
 
-    const response = await fetch(jsonUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+    const user = await User.findOne({ id: userId.toString() });
+    const userAgent = getDynamicUserAgent(userId, user?.redditUsername || 'system');
+
+    const response = await fetch(jsonUrl, { headers: { 'User-Agent': userAgent } });
     if (!response.ok) throw new Error('Failed to fetch reddit data for verify: ' + response.statusText);
     const data = await response.json();
 
