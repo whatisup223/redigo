@@ -5270,7 +5270,20 @@ app.post('/api/reddit/verify', async (req, res) => {
     if (!itemId || !url || !userId) return res.status(400).json({ error: 'Missing parameters' });
     if (!isOwnerOrAdmin(req, userId)) return res.status(403).json({ error: 'Access denied' });
 
-    const jsonUrl = url.split('?')[0].replace(/\/$/, '') + '.json';
+    // Normalize URL to fix any double-domain or malformed URLs stored in DB
+    const normalizePath = (rawUrl) => {
+      if (!rawUrl) return '';
+      const path = rawUrl
+        .replace(/^https?:\/\/(www\.|new\.)?reddit\.com/i, '')
+        .replace(/^\/\/reddit\.com/i, '');
+      if (path.startsWith('/')) return `https://www.reddit.com${path}`;
+      if (path.startsWith('http')) return path;
+      return `https://www.reddit.com/${path}`;
+    };
+
+    const cleanUrl = normalizePath(url);
+    const jsonUrl = cleanUrl.split('?')[0].replace(/\/$/, '') + '.json';
+
     const response = await fetch(jsonUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
     if (!response.ok) throw new Error('Failed to fetch reddit data for verify: ' + response.statusText);
     const data = await response.json();
